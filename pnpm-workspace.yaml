@@ -3,10 +3,13 @@ packages:
   - "crates/*"
   - "packages/*"
   - "packages/**/*"
+  - "services/*"
+  - "apps/*"
   - "e2e/**/*"
   - "e2e/*"
   - "!e2e/wasm"
 allowBuilds:
+  better-sqlite3: set this to true or false
   esbuild: true
 sharedWorkspaceLockfile: true
 autoInstallPeers: true

@@ -1,0 +1,22 @@
+{
+  "models": [
+    {
+      "name": "e5",
+      "url": "https://huggingface.co/Xenova/multilingual-e5-base/resolve/main/onnx/model.onnx",
+      "file": "e5.onnx",
+      "sha256": "TODO_PIN_SHA256"
+    },
+    {
+      "name": "e5-tokenizer",
+      "url": "https://huggingface.co/Xenova/multilingual-e5-base/resolve/main/tokenizer.json",
+      "file": "e5.tokenizer.json",
+      "sha256": "TODO_PIN_SHA256"
+    },
+    {
+      "name": "gliner-pii",
+      "url": "https://huggingface.co/onnx-community/gliner_small-v2.1/resolve/main/onnx/model.onnx",
+      "file": "gliner-pii.onnx",
+      "sha256": "TODO_PIN_SHA256"
+    }
+  ]
+}

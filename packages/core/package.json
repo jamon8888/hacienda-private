@@ -1,0 +1,19 @@
+{
+  "name": "@xberg-io/core",
+  "version": "1.0.0-rc.27",
+  "type": "module",
+  "private": true,
+  "description": "Shared TypeScript contracts for the Xberg document-intelligence app (thin consumer of @xberg-io/xberg-wasm).",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}
