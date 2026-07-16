@@ -11,13 +11,13 @@ function profile(over: Partial<DeviceProfile>): DeviceProfile {
 
 describe("selectScenario", () => {
   it("picks WebGPU + INT8 on a discrete GPU laptop", () => {
-    const s = selectScenario(profile({ webgpu: true, gpuVendor: "nvidia", gpuArchitecture: "turing", gpuMaxBufferBytes: 256 * 1024 * 1024, hardwareConcurrency: 8, deviceMemoryGb: 16 }));
+    const s = selectScenario(profile({ webgpu: true, webgl: true, gpuVendor: "nvidia", gpuArchitecture: "turing", gpuMaxBufferBytes: 256 * 1024 * 1024, hardwareConcurrency: 8, deviceMemoryGb: 16 }));
     expect(s.executionProviders).toEqual(["webgpu", "webgl", "wasm"]);
     expect(s.quant).toBe("int8");
     expect(s.numThreads).toBe(8);
   });
 
-  it("picks WASM-SIMD + INT4 on a low-RAM 4-thread laptop", () => {
+  it("picks WASM-only + INT4 on a low-RAM 4-thread laptop", () => {
     const s = selectScenario(profile({ webgpu: false, webgl: false, hardwareConcurrency: 4, deviceMemoryGb: 4 }));
     expect(s.executionProviders).toEqual(["wasm"]);
     expect(s.quant).toBe("int4");

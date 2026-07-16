@@ -14,12 +14,9 @@ export type ModelScenario = z.infer<typeof ModelScenarioSchema>;
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 
 export function selectScenario(p: DeviceProfile): ModelScenario {
-  // A WebGPU-capable device also exposes WebGL, so derive webgl from webgpu
-  // when the explicit webgl probe is unavailable (privacy masking / headless).
-  const webglAvailable = p.webgl || p.webgpu;
   const epChain: ModelScenario["executionProviders"] = [];
   if (p.webgpu) epChain.push("webgpu");
-  if (webglAvailable) epChain.push("webgl");
+  if (p.webgl) epChain.push("webgl");
   epChain.push("wasm"); // always available fallback
 
   const threads = clamp(p.hardwareConcurrency, 1, 8);
