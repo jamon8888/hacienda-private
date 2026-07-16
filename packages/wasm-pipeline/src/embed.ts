@@ -34,6 +34,7 @@ interface OrtTensor {
 let cachedSig: string | null = null;
 let sessionPromise: Promise<OrtSessionHandle> | null = null;
 let tokenizerPromise: Promise<CallableTokenizer> | null = null;
+let warnedDefaultScenario = false;
 
 interface OrtSessionHandle {
   run: (feeds: Record<string, OrtTensor>) => Promise<Record<string, OrtTensor>>;
@@ -48,6 +49,7 @@ async function getSession(scenario: ModelScenario = DEFAULT_SCENARIO): Promise<O
     ep: scenario.executionProviders,
     quant: scenario.quant,
     variant: scenario.modelVariant,
+    numThreads: scenario.numThreads,
   });
   if (!sessionPromise || sig !== cachedSig) {
     cachedSig = sig;
@@ -156,10 +158,20 @@ async function embedOne(text: string, prefix: Prefix, scenario: ModelScenario = 
   return vec;
 }
 
+// TODO(plan3 tasks 4-5): thread real selectScenario() output through ingest.ts/query.ts; remove DEFAULT_SCENARIO default
 export async function embedChunks(chunks: EmbeddableChunk[], scenario: ModelScenario = DEFAULT_SCENARIO): Promise<Float32Array[]> {
+  if (scenario === DEFAULT_SCENARIO && !warnedDefaultScenario) {
+    warnedDefaultScenario = true;
+    console.warn("[wasm-pipeline] embed called without a ModelScenario — using DEFAULT_SCENARIO; callers should pass selectScenario() output (see plan task 4-5)");
+  }
   return Promise.all(chunks.map((c) => embedOne(c.text, "passage", scenario)));
 }
 
+// TODO(plan3 tasks 4-5): thread real selectScenario() output through ingest.ts/query.ts; remove DEFAULT_SCENARIO default
 export async function embedQuery(text: string, scenario: ModelScenario = DEFAULT_SCENARIO): Promise<Float32Array> {
+  if (scenario === DEFAULT_SCENARIO && !warnedDefaultScenario) {
+    warnedDefaultScenario = true;
+    console.warn("[wasm-pipeline] embed called without a ModelScenario — using DEFAULT_SCENARIO; callers should pass selectScenario() output (see plan task 4-5)");
+  }
   return embedOne(text, "query", scenario);
 }
