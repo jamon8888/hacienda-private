@@ -158,7 +158,7 @@ async function embedOne(text: string, prefix: Prefix, scenario: ModelScenario = 
   return vec;
 }
 
-// TODO(plan3 task 6): thread real selectScenario() into query.ts; remove DEFAULT_SCENARIO default
+// DEFAULT_SCENARIO is a defensive fallback; ingest.ts and query.ts now pass a real selectScenario() output.
 export async function embedChunks(chunks: EmbeddableChunk[], scenario: ModelScenario = DEFAULT_SCENARIO): Promise<Float32Array[]> {
   if (scenario === DEFAULT_SCENARIO && !warnedDefaultScenario) {
     warnedDefaultScenario = true;
@@ -167,7 +167,7 @@ export async function embedChunks(chunks: EmbeddableChunk[], scenario: ModelScen
   return Promise.all(chunks.map((c) => embedOne(c.text, "passage", scenario)));
 }
 
-// TODO(plan3 task 6): thread real selectScenario() into query.ts; remove DEFAULT_SCENARIO default
+// DEFAULT_SCENARIO is a defensive fallback; ingest.ts and query.ts now pass a real selectScenario() output.
 export async function embedQuery(text: string, scenario: ModelScenario = DEFAULT_SCENARIO): Promise<Float32Array> {
   if (scenario === DEFAULT_SCENARIO && !warnedDefaultScenario) {
     warnedDefaultScenario = true;

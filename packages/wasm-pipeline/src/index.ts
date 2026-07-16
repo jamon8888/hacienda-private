@@ -25,10 +25,8 @@ export type { ModelScenario } from "./scenario";
 
 export {
   API_BASE,
-  E5_MODEL_URL,
   E5_TOKENIZER_URL,
   E5_TOKENIZER_CONFIG_URL,
-  GLINER_MODEL_URL,
   GLINER_TOKENIZER_URL,
   EMBED_DIM,
 } from "./constants";

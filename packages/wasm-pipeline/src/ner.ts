@@ -3,7 +3,7 @@ import type { Gliner, IEntityResult, InitConfig, IONNXWebSettings, ITransformers
 import { GLINER_TOKENIZER_URL, glinerModelUrl } from "./constants";
 import type { ModelScenario } from "./scenario";
 
-// TODO(plan3 task 6): thread real selectScenario() into query.ts; remove DEFAULT_SCENARIO default
+// DEFAULT_SCENARIO is a defensive fallback; ingest.ts and query.ts now pass a real selectScenario() output.
 const DEFAULT_SCENARIO: ModelScenario = {
   executionProviders: ["webgpu", "wasm"],
   quant: "int8",
