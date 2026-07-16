@@ -1,7 +1,7 @@
 import type { Matter, Folder, PiiEntity } from "@xberg-io/core";
 import { extractDocument, firstDocument } from "./runtime";
 import { defaultExtractionConfig, withTesseractOcr } from "./ocr";
-import { chunkExtraction, withChunking, chunkCitation, chunkPage } from "./chunk";
+import { chunkExtraction, withChunking, chunkCitation, chunkPage, chunkBoundingBox } from "./chunk";
 import { embedChunks } from "./embed";
 import { detectPii } from "./ner";
 import { buildIndex, serializeIndex, type IndexedChunk } from "./rag";
@@ -51,6 +51,7 @@ export async function ingestFolder(
       text: redacted,
       page: chunkPage(c),
       citation: chunkCitation(folder.id, c),
+      bbox: chunkBoundingBox(doc, c),
       vector: v,
     });
   }

@@ -1,4 +1,4 @@
-import { E5_MODEL_URL, E5_TOKENIZER_REPO, EMBED_DIM } from "./constants";
+import { E5_MODEL_URL, E5_TOKENIZER_URL, E5_TOKENIZER_CONFIG_URL, EMBED_DIM } from "./constants";
 
 export interface EmbeddableChunk {
   text: string;
@@ -48,21 +48,43 @@ async function getSession(): Promise<OrtSessionHandle> {
   return sessionPromise;
 }
 
+async function fetchJson(url: string): Promise<unknown> {
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`failed to fetch local tokenizer asset ${url}: ${res.status}`);
+  }
+  return res.json();
+}
+
+// Local tokenizer loading (no Hugging Face egress).
+//
+// The Node service (Plan 1 `services/mcp-server`) serves the e5 tokenizer assets from
+// its model cache at `${API_BASE}/models/e5.tokenizer.json` (+ companion `tokenizer_config.json`).
+// We fetch those JSON files directly from the same Node origin that serves `e5.onnx`, then build
+// the tokenizer in-process with `@xenova/transformers`' `XLMRobertaTokenizer` constructor.
+// `multilingual-e5-base` is XLM-RoBERTa based, and its `tokenizer_config.json` declares
+// `tokenizer_class: "XLMRobertaTokenizer"`, so we construct that class directly from the JSON —
+// no `from_pretrained(repoId)` call, and therefore no runtime request to huggingface.co / hf.co.
+// `env.allowRemoteModels` is forced off as a belt-and-suspenders guard so the library can never
+// fall back to a remote HF fetch.
 async function getTokenizer(): Promise<CallableTokenizer> {
   if (!tokenizerPromise) {
     tokenizerPromise = (async () => {
-      const { AutoTokenizer } = await import("@xenova/transformers");
-      // TODO(plan-mismatch): The plan serves a single `/models/e5.tokenizer.json`
-      // from Node, but transformers.js `AutoTokenizer` requires a full tokenizer
-      // directory (tokenizer.json + config + special_tokens_map). Until Node
-      // serves a directory, we pull the matching tokenizer from the HF repo
-      // `Xenova/multilingual-e5-base` (same weights as the served e5.onnx).
-      const tok = await AutoTokenizer.from_pretrained(E5_TOKENIZER_REPO);
+      const { env, XLMRobertaTokenizer } = await import("@xenova/transformers");
+      env.allowRemoteModels = false;
+      env.allowLocalModels = false;
+
+      const [tokenizerJSON, tokenizerConfig] = await Promise.all([
+        fetchJson(E5_TOKENIZER_URL),
+        fetchJson(E5_TOKENIZER_CONFIG_URL),
+      ]);
+      const tok = new XLMRobertaTokenizer(tokenizerJSON, tokenizerConfig);
       return tok as unknown as CallableTokenizer;
     })();
   }
   return tokenizerPromise;
 }
+
 
 async function embedOne(text: string, prefix: Prefix): Promise<Float32Array> {
   const [session, tok] = await Promise.all([getSession(), getTokenizer()]);

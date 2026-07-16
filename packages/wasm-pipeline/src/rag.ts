@@ -1,4 +1,4 @@
-import type { RetrievedChunk } from "@xberg-io/core";
+import type { RetrievedChunk, BoundingBox } from "@xberg-io/core";
 import type { EdgeVec } from "edgevec";
 import init, { EdgeVec as EdgeVecClass, EdgeVecConfig } from "edgevec";
 import { EMBED_DIM } from "./constants";
@@ -9,6 +9,7 @@ export interface IndexedChunk {
   text: string;
   page?: number;
   citation?: string;
+  bbox?: BoundingBox;
   vector: Float32Array;
 }
 
@@ -18,6 +19,7 @@ interface EdgeVecMetadata {
   text?: string;
   page?: number;
   citation?: string;
+  bbox?: string;
 }
 
 let edgevecReady: Promise<void> | null = null;
@@ -46,6 +48,7 @@ export async function buildIndex(matterId: string, items: IndexedChunk[]): Promi
     };
     if (item.page !== undefined) meta["page"] = item.page;
     if (item.citation !== undefined) meta["citation"] = item.citation;
+    if (item.bbox !== undefined) meta["bbox"] = JSON.stringify(item.bbox);
     db.insertWithMetadata(item.vector, meta);
   }
   await db.save(dbName(matterId));
@@ -70,11 +73,20 @@ export async function retrieve(
   for (const hit of hits) {
     const m = db.getAllMetadata(hit.id) as unknown as EdgeVecMetadata | undefined;
     if (!m) continue;
+    let bbox: BoundingBox | undefined;
+    if (m.bbox) {
+      try {
+        bbox = JSON.parse(m.bbox) as BoundingBox;
+      } catch {
+        bbox = undefined;
+      }
+    }
     out.push({
       doc_id: m.doc_id ?? "",
       chunk_index: m.chunk_index ?? 0,
       text: m.text ?? "",
       page: m.page,
+      bbox,
       score: hit.score,
       citation: m.citation ?? "",
     });

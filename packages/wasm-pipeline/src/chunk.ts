@@ -4,9 +4,11 @@ import type {
   WasmExtractionConfig,
   WasmChunkingConfig,
   WasmChunkerType,
+  WasmBoundingBox,
 } from "@xberg-io/xberg-wasm";
 import type { XbergWasm } from "./runtime";
 import { getWasm } from "./runtime";
+import type { BoundingBox } from "@xberg-io/core";
 
 export type ChunkerKind = "text" | "markdown" | "yaml" | "semantic";
 
@@ -63,3 +65,32 @@ export function chunkPage(chunk: WasmChunk): number | undefined {
 export function chunkCitation(docId: string, chunk: WasmChunk): string {
   return `${docId}#chunk-${chunk.metadata.chunkIndex}`;
 }
+
+// Map a wasm bounding box (x0,y0,x1,y1 corner coords) to the shared core
+// `BoundingBox` (x,y top-left + width/height) shape used by `RetrievedChunk`.
+export function toBoundingBox(box: WasmBoundingBox): BoundingBox {
+  const x = box.x0;
+  const y = box.y0;
+  return { x, y, w: box.x1 - x, h: box.y1 - y };
+}
+
+// Resolve a representative bounding box for a chunk. xberg's `WasmChunkMetadata`
+// does not carry a bbox, but the document structure (`doc.document.nodes`) exposes
+// `WasmDocumentNode`s with `bbox` + `page`. We pick the first node on the chunk's
+// page that has a bbox, using that as the chunk's spatial anchor.
+export function chunkBoundingBox(
+  doc: WasmExtractedDocument,
+  chunk: WasmChunk,
+): BoundingBox | undefined {
+  const page = chunk.metadata.firstPage;
+  const structure = doc.document;
+  if (!structure) return undefined;
+  const nodes = structure.nodes ?? [];
+  for (const node of nodes) {
+    if (page !== undefined && node.page !== page) continue;
+    const box = node.bbox;
+    if (box) return toBoundingBox(box);
+  }
+  return undefined;
+}
+
