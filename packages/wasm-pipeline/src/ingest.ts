@@ -14,8 +14,9 @@ function runPiiWhenIdle(text: string, piiTypes: readonly string[], scenario: Mod
   const run = () => detectPii(text, piiTypes, scenario);
   const w = typeof window !== "undefined" ? (window as Window & { requestIdleCallback?: (cb: () => void) => number }) : undefined;
   if (w?.requestIdleCallback) {
+    const ric = w.requestIdleCallback;
     return new Promise<PiiEntity[]>((resolve) => {
-      w.requestIdleCallback!(() => {
+      ric(() => {
         void run().then(resolve);
       });
     });
@@ -61,23 +62,37 @@ export async function ingestFolder(
 
   const items: IndexedChunk[] = [];
   const allEntries: RedactionEntry[] = [];
+  interface PiiTask {
+    item: IndexedChunk;
+    piiPromise: Promise<PiiEntity[]>;
+    index: number;
+  }
+  const piiTasks: PiiTask[] = [];
   for (const [i, c] of chunks.entries()) {
     const v = vectors[i];
     if (!v) continue;
-    const pii: PiiEntity[] = scenario.deferPii
-      ? await runPiiWhenIdle(c.content, piiTypes, scenario)
-      : await detectPii(c.content, piiTypes, scenario);
-    const { redacted, entries } = buildRedaction(c.content, pii, `C${i}`);
-    for (const e of entries) allEntries.push(e);
-    items.push({
+    const piiPromise = scenario.deferPii
+      ? runPiiWhenIdle(c.content, piiTypes, scenario)
+      : detectPii(c.content, piiTypes, scenario);
+    const entry: IndexedChunk = {
       docId: folder.id,
       chunkIndex: c.metadata.chunkIndex,
-      text: redacted,
+      text: c.content,
       page: chunkPage(c),
       citation: chunkCitation(folder.id, c),
       bbox: chunkBoundingBox(doc, c),
       vector: v,
-    });
+    };
+    items.push(entry);
+    piiTasks.push({ item: entry, piiPromise, index: i });
+  }
+
+  await Promise.all(piiTasks.map((t) => t.piiPromise));
+  for (const t of piiTasks) {
+    const pii = await t.piiPromise;
+    const { redacted, entries } = buildRedaction(t.item.text, pii, `C${t.index}`);
+    for (const e of entries) allEntries.push(e);
+    t.item.text = redacted;
   }
 
   const db = await buildIndex(matter.id, items);
