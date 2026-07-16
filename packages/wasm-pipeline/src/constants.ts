@@ -21,3 +21,16 @@ export const GLINER_MODEL_URL = `${API_BASE}/models/gliner-pii.onnx`;
 export const GLINER_TOKENIZER_URL = `${API_BASE}/models/gliner-tokenizer.json`;
 
 export const EMBED_DIM = 768;
+
+type Quant = "int8" | "int4" | "fp32";
+export type E5Variant = "e5-base" | "e5-small";
+
+export function e5ModelUrl(variant: E5Variant, quant: Quant): string {
+  // smallVariantsServed is gated OFF in scenario.ts; default path is e5-base.
+  const name = variant === "e5-small" ? "e5-small" : "e5";
+  return `${API_BASE}/models/${name}.${quant}.onnx`;
+}
+
+export function glinerModelUrl(quant: Quant): string {
+  return `${API_BASE}/models/gliner-pii.${quant}.onnx`;
+}

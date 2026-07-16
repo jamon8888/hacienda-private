@@ -1,8 +1,18 @@
-import { E5_MODEL_URL, E5_TOKENIZER_URL, E5_TOKENIZER_CONFIG_URL, EMBED_DIM } from "./constants";
+import { E5_TOKENIZER_URL, E5_TOKENIZER_CONFIG_URL, EMBED_DIM, e5ModelUrl } from "./constants";
+import type { ModelScenario } from "./scenario";
 
 export interface EmbeddableChunk {
   text: string;
 }
+
+const DEFAULT_SCENARIO: ModelScenario = {
+  executionProviders: ["webgpu", "wasm"],
+  quant: "int8",
+  numThreads: 4,
+  chunkSize: 1024,
+  deferPii: false,
+  modelVariant: "e5-base",
+};
 
 interface TokenizerOutput {
   input_ids: number[];
@@ -21,6 +31,7 @@ interface OrtTensor {
   type: string;
 }
 
+let cachedSig: string | null = null;
 let sessionPromise: Promise<OrtSessionHandle> | null = null;
 let tokenizerPromise: Promise<CallableTokenizer> | null = null;
 
@@ -32,14 +43,21 @@ interface OrtSessionHandle {
 
 type Prefix = "query" | "passage";
 
-async function getSession(): Promise<OrtSessionHandle> {
-  if (!sessionPromise) {
+async function getSession(scenario: ModelScenario = DEFAULT_SCENARIO): Promise<OrtSessionHandle> {
+  const sig = JSON.stringify({
+    ep: scenario.executionProviders,
+    quant: scenario.quant,
+    variant: scenario.modelVariant,
+  });
+  if (!sessionPromise || sig !== cachedSig) {
+    cachedSig = sig;
     sessionPromise = (async () => {
       const ort = await import("onnxruntime-web");
-      const resp = await fetch(E5_MODEL_URL);
+      ort.env.wasm.numThreads = scenario.numThreads;
+      const resp = await fetch(e5ModelUrl(scenario.modelVariant, scenario.quant));
       const buf = await resp.arrayBuffer();
       const session = await ort.InferenceSession.create(buf, {
-        executionProviders: ["webgpu", "wasm"],
+        executionProviders: scenario.executionProviders,
         graphOptimizationLevel: "all",
       });
       return session as unknown as OrtSessionHandle;
@@ -86,8 +104,8 @@ async function getTokenizer(): Promise<CallableTokenizer> {
 }
 
 
-async function embedOne(text: string, prefix: Prefix): Promise<Float32Array> {
-  const [session, tok] = await Promise.all([getSession(), getTokenizer()]);
+async function embedOne(text: string, prefix: Prefix, scenario: ModelScenario = DEFAULT_SCENARIO): Promise<Float32Array> {
+  const [session, tok] = await Promise.all([getSession(scenario), getTokenizer()]);
   const prefixed = prefix === "query" ? `query: ${text}` : `passage: ${text}`;
   const enc = tok(prefixed, { return_tensor: false });
   const inputIds = enc.input_ids;
@@ -138,10 +156,10 @@ async function embedOne(text: string, prefix: Prefix): Promise<Float32Array> {
   return vec;
 }
 
-export async function embedChunks(chunks: EmbeddableChunk[]): Promise<Float32Array[]> {
-  return Promise.all(chunks.map((c) => embedOne(c.text, "passage")));
+export async function embedChunks(chunks: EmbeddableChunk[], scenario: ModelScenario = DEFAULT_SCENARIO): Promise<Float32Array[]> {
+  return Promise.all(chunks.map((c) => embedOne(c.text, "passage", scenario)));
 }
 
-export async function embedQuery(text: string): Promise<Float32Array> {
-  return embedOne(text, "query");
+export async function embedQuery(text: string, scenario: ModelScenario = DEFAULT_SCENARIO): Promise<Float32Array> {
+  return embedOne(text, "query", scenario);
 }
