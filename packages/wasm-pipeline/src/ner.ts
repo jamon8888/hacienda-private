@@ -1,6 +1,18 @@
 import type { PiiEntity } from "@xberg-io/core";
 import type { Gliner, IEntityResult, InitConfig, IONNXWebSettings, ITransformersSettings } from "gliner";
-import { GLINER_MODEL_URL, GLINER_TOKENIZER_URL } from "./constants";
+import { GLINER_TOKENIZER_URL, glinerModelUrl } from "./constants";
+import type { ModelScenario } from "./scenario";
+
+// TODO(plan3 tasks 4-5): thread real selectScenario() output through ingest.ts/query.ts; remove DEFAULT_SCENARIO default
+const DEFAULT_SCENARIO: ModelScenario = {
+  executionProviders: ["webgpu", "wasm"],
+  quant: "int8",
+  numThreads: 4,
+  chunkSize: 1024,
+  deferPii: false,
+  modelVariant: "e5-base",
+};
+let warnedDefaultScenario = false;
 
 // Remote-model guard: gliner's `initialize()` calls `AutoTokenizer.from_pretrained(tokenizerPath)`
 // via `@xenova/transformers`. Turn off remote fetching up-front so it can never fall back to
@@ -29,6 +41,7 @@ export function listPiiTypes(): readonly string[] {
   return PII_TYPES;
 }
 
+let cachedSig: string | null = null;
 let modelPromise: Promise<Gliner> | null = null;
 
 // Local tokenizer loading (no Hugging Face egress).
@@ -43,8 +56,13 @@ let modelPromise: Promise<Gliner> | null = null;
 // NOTE (cross-plan dependency): this requires Plan 1's `services/mcp-server` ModelCache to serve a
 // GLiNER tokenizer file at `/models/gliner-tokenizer.json` (standard transformers tokenizer.json
 // layout). If the Node service serves it under a different name, update `GLINER_TOKENIZER_URL`.
-async function getModel(): Promise<Gliner> {
-  if (!modelPromise) {
+async function getModel(scenario: ModelScenario): Promise<Gliner> {
+  const sig = JSON.stringify({
+    quant: scenario.quant,
+    ep: scenario.executionProviders[0],
+  });
+  if (!modelPromise || sig !== cachedSig) {
+    cachedSig = sig;
     modelPromise = (async () => {
       const { Gliner: GlinerClass } = await import("gliner");
       await disableRemoteModels();
@@ -53,8 +71,8 @@ async function getModel(): Promise<Gliner> {
         useBrowserCache: false,
       };
       const onnxSettings: IONNXWebSettings = {
-        modelPath: GLINER_MODEL_URL,
-        executionProvider: "webgpu",
+        modelPath: glinerModelUrl(scenario.quant),
+        executionProvider: scenario.executionProviders[0],
       };
       const config: InitConfig = {
         tokenizerPath: GLINER_TOKENIZER_URL,
@@ -72,8 +90,13 @@ async function getModel(): Promise<Gliner> {
 export async function detectPii(
   text: string,
   types: readonly string[] = PII_TYPES,
+  scenario: ModelScenario = DEFAULT_SCENARIO,
 ): Promise<PiiEntity[]> {
-  const model = await getModel();
+  if (scenario === DEFAULT_SCENARIO && !warnedDefaultScenario) {
+    warnedDefaultScenario = true;
+    console.warn("[wasm-pipeline] detectPii called without a ModelScenario — using DEFAULT_SCENARIO; callers should pass selectScenario() output (see plan task 4-5)");
+  }
+  const model = await getModel(scenario);
   const result = await model.inference({
     texts: [text],
     entities: [...types],
