@@ -6,7 +6,7 @@ import { embedChunks } from "./embed";
 import { detectPii } from "./ner";
 import { buildIndex, serializeIndex, type IndexedChunk } from "./rag";
 import { buildRedaction, sealVault, type RedactionEntry } from "./redact";
-import { pushMirror } from "./mirror";
+import { pushMirror, serializeMirrorToBytes } from "./mirror";
 
 export interface IngestOptions {
   passphrase: string;
@@ -57,9 +57,10 @@ export async function ingestFolder(
   }
 
   const db = await buildIndex(matter.id, items);
-  const blob = await serializeIndex(db);
+  const indexBytes = await serializeIndex(db);
   const sealed = await sealVault(allEntries, options.passphrase);
-  await pushMirror(matter, blob, sealed.cipher, options.scopeToken);
+  const payload = serializeMirrorToBytes(indexBytes, sealed.cipher);
+  await pushMirror(matter, payload, options.scopeToken);
 
   return { accepted: items.length };
 }
