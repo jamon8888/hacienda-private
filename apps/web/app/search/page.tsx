@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { RetrievedChunkCard } from "@/components/RetrievedChunkCard";
 import { useAuth } from "@/lib/auth";
 import { queryRag } from "@xberg-io/wasm-pipeline";
-import type { RetrievedChunk } from "@xberg-io/core";
+import type { RetrievedChunk, Matter } from "@xberg-io/core";
 
 function SearchPageInner() {
   const searchParams = useSearchParams();
@@ -24,7 +24,8 @@ function SearchPageInner() {
     setLoading(true);
     setError(null);
     try {
-      const chunks = await queryRag(folderId, query.trim(), 8);
+      const matter: Matter = { id: folderId, name: folderId, created_at: new Date().toISOString() };
+      const chunks = await queryRag(matter, query.trim(), 8);
       setResults(chunks);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Search failed");

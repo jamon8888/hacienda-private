@@ -22,13 +22,12 @@
     "paths": {
       "@/*": ["./*"],
       "@xberg-io/wasm-pipeline": ["./lib/engine/index.ts"],
-      "@xberg-io/wasm-pipeline-real": ["../packages/wasm-pipeline/src/index.ts"]
+      "@xberg-io/wasm-pipeline-real": ["../../packages/wasm-pipeline/src/index.ts", "../../packages/wasm-pipeline/src/index"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
   "exclude": [
     "node_modules",
-    "lib/engine",
     "components/index.ts",
     "components/ui/command.tsx",
     "components/ui/dialog.tsx",
