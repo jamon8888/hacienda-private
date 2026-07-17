@@ -9,6 +9,24 @@ export interface RedactionEntry {
   end: number;
 }
 
+export interface RedactionSpan {
+  kind: string;
+  start: number;
+  end: number;
+}
+
+export interface RedactTextResult {
+  redacted: string;
+  tokens: RedactionToken[];
+}
+
+export interface RedactionToken {
+  token: string;
+  start: number;
+  end: number;
+  kind: string;
+}
+
 export interface SealedVault {
   cipher: Uint8Array;
   salt: Uint8Array;
@@ -136,4 +154,34 @@ async function deriveKey(passphrase: string, salt: Uint8Array): Promise<CryptoKe
     false,
     ["encrypt", "decrypt"],
   );
+}
+
+// In-house reversible redaction (T3): replace each detected span with a per-kind `<KIND_n>` token,
+// counting occurrences independently per kind (1-based). Pure string logic, no crypto. The matched
+// surface values are vaulted separately (T4) so a redacted document on disk reveals nothing.
+export function redactText(text: string, spans: RedactionSpan[]): RedactTextResult {
+  const sorted = [...spans]
+    .filter((s) => s.start >= 0 && s.end <= text.length && s.start < s.end)
+    .sort((a, b) => b.start - a.start);
+  const counters = new Map<string, number>();
+  let result = text;
+  const tokens: RedactionToken[] = [];
+  for (const span of sorted) {
+    const kind = span.kind.toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "UNKNOWN";
+    const n = (counters.get(kind) ?? 0) + 1;
+    counters.set(kind, n);
+    const token = `<${kind}_${n}>`;
+    result = result.slice(0, span.start) + token + result.slice(span.end);
+    tokens.push({ token, start: span.start, end: span.start + token.length, kind: span.kind });
+  }
+  return { redacted: result, tokens };
+}
+
+// Reverse redactText using the original surface values keyed by token.
+export function rehydrateText(redacted: string, tokens: { token: string; value: string }[]): string {
+  let out = redacted;
+  for (const t of tokens) {
+    out = out.split(t.token).join(t.value);
+  }
+  return out;
 }

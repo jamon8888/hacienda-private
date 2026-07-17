@@ -1,0 +1,115 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+
+  "instructions": ["AGENTS.md", ".ai-rulez/ground-truth-generation.md"],
+
+  "skills": {
+    "paths": [".ai-rulez/skills"]
+  },
+
+  "references": {
+    "ai-rulez": {
+      "path": ".ai-rulez",
+      "description": "Xberg AI knowledge base: per-domain DOMAIN.md, agents, rules, and context docs (crate structure, MIME routing, WASM constraints, config precedence, feature flags). Use for authoritative behavior before guessing."
+    }
+  },
+
+  "agent": {
+    "binding": {
+      "description": "Handles the Alef binding pipeline: regenerating Go/Java/C#/Node/Python/Ruby/PHP/WASM bindings, tracking freshness, applying rename mappings, and respecting no-ORT feature-flag constraints.",
+      "mode": "subagent",
+      "permission": {
+        "edit": "ask",
+        "bash": { "task alef:*": "allow", "task build*": "allow", "cargo *": "allow", "*": "ask" }
+      }
+    },
+    "extraction": {
+      "description": "Rust core extraction-engine work: MIME detection, extractor routing, fallback chains, SecurityLimits, caching, new-format wiring in crates/xberg/src/core.",
+      "mode": "subagent",
+      "hidden": true
+    },
+    "ocr": {
+      "description": "OCR integration work: Tesseract/Paddle/Candle/VLM backends, preprocessing, hOCR/table reconstruction, language registry, confidence in crates/xberg/src/ocr.",
+      "mode": "subagent",
+      "hidden": true
+    },
+    "plugin": {
+      "description": "Plugin-system work: Extractor/PostProcessor/Validator traits, priority-based registry, Python PyO3 FFI, GIL management in crates/xberg/src/plugins.",
+      "mode": "subagent",
+      "hidden": true
+    },
+    "xberg-dev": {
+      "description": "General Xberg developer helper: running task build/test/lint/coverage, alef regen + verify, version sync, and cross-cutting Rust/TS conventions.",
+      "mode": "subagent",
+      "permission": {
+        "edit": "ask",
+        "bash": { "task *": "allow", "cargo *": "allow", "git status*": "allow", "git diff*": "allow", "*": "ask" }
+      }
+    }
+  },
+
+  "command": {
+    "build": {
+      "description": "Build the Xberg Rust core (and optionally bindings) via `task build*`.",
+      "template": "Build the Xberg Rust core (and optionally bindings):\n!`task build`\nReport any build errors and suggest fixes."
+    },
+    "test": {
+      "description": "Run Xberg test suites via `task test*` / `task e2e*`.",
+      "template": "Run the Xberg test suite:\n!`task test`\nSummarize failures, if any, and suggest fixes."
+    },
+    "lint": {
+      "description": "Lint and format the whole Xberg workspace via `task lint` / `task format` / `task check`.",
+      "template": "Lint and check the whole Xberg workspace:\n!`task lint`\nSummarize any issues and suggest fixes."
+    },
+    "alef": {
+      "description": "Regenerate or verify Alef-managed bindings (task alef:generate / alef:verify).",
+      "template": "Verify Alef-managed bindings are up to date:\n!`task alef:verify`\nIf bindings are stale, regenerate them with `task alef:generate` and summarize what changed."
+    },
+    "e2e": {
+      "description": "Run end-to-end extraction tests across languages (task e2e:lang LANG=...).",
+      "template": "Run end-to-end extraction tests for language: $ARGUMENTS\n!`task e2e:lang LANG=$ARGUMENTS`\nSummarize failures, if any, and suggest fixes."
+    }
+  },
+
+  "mcp": {
+    "playwright": {
+      "type": "local",
+      "command": ["npx", "-y", "@playwright/mcp@latest"],
+      "enabled": true
+    }
+  },
+
+  "permission": {
+    "edit": "ask",
+    "bash": {
+      "task *": "allow",
+      "cargo *": "allow",
+      "git status*": "allow",
+      "git diff*": "allow",
+      "git log*": "allow",
+      "git branch*": "allow",
+      "npx *": "allow",
+      "pnpm *": "allow",
+      "git push*": "ask",
+      "git commit*": "ask",
+      "rm *": "ask",
+      "*": "ask"
+    },
+    "external_directory": {
+      "C:/Users/NMARCH~1/AppData/Local/Temp/opencode/**": "allow",
+      "*": "allow"
+    }
+  },
+
+  "tool_output": { "max_lines": 2000, "max_bytes": 51200 },
+
+  "compaction": { "auto": true, "tail_turns": 15 },
+
+  "plugin": [
+    "@xberg-io/opencode-xberg@0.2.3",
+    "@xberg-io/opencode-crawlberg@0.2.3",
+    "@xberg-io/opencode-html-to-markdown@0.2.3",
+    "@xberg-io/opencode-liter-llm@0.2.3",
+    "@xberg-io/opencode-tree-sitter-language-pack@0.2.3"
+  ]
+}

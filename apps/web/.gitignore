@@ -1,0 +1,11 @@
+# Next.js build output
+.next/
+out/
+
+# Test / typecheck artifacts
+tsc_out.txt
+tsc_err.txt
+build_out.txt
+build_err.txt
+test_out.txt
+test_err.txt

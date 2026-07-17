@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "xberg": {
+      "command": "xberg-mcp",
+      "args": ["mcp"]
+    }
+  }
+}

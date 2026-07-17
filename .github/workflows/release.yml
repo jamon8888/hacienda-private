@@ -1,0 +1,261 @@
+name: release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build web UI + bundle MCP server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: |
+          if [ -f pnpm-lock.yaml ]; then
+            pnpm install --frozen-lockfile
+          else
+            pnpm install
+          fi
+
+      - name: Build web UI (static export)
+        run: pnpm --filter web build
+
+      - name: Build MCP server (tsup ESM)
+        run: pnpm --filter mcp-server build
+
+      - name: Bundle web UI into MCP server public dir
+        run: cp -r apps/web/out services/mcp-server/public
+
+      - name: Vendor @xberg-io/xberg-wasm into public/wasm
+        run: |
+          if [ -d "node_modules/@xberg-io/xberg-wasm" ]; then
+            mkdir -p services/mcp-server/public/wasm
+            cp -r node_modules/@xberg-io/xberg-wasm services/mcp-server/public/wasm
+          else
+            echo "::warning::@xberg-io/xberg-wasm not installed; skipping wasm vendoring"
+          fi
+
+      - name: Zip web/out
+        run: |
+          cd apps/web
+          zip -r ../web-out.zip out
+
+      - name: Upload MCP server bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcp-server-bundle
+          path: services/mcp-server
+          if-no-files-found: error
+
+      - name: Upload web-out.zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-out
+          path: apps/web/web-out.zip
+
+  wrap:
+    name: Wrap standalone binaries
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Download MCP server bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: mcp-server-bundle
+          path: services/mcp-server
+
+      - name: Install dependencies
+        run: |
+          if [ -f pnpm-lock.yaml ]; then
+            pnpm install --frozen-lockfile
+          else
+            pnpm install
+          fi
+
+      - name: Smoke check (serve --version)
+        shell: bash
+        run: node services/mcp-server/dist/index.js serve --version
+
+      - name: Wrap windows
+        if: matrix.os == 'windows-latest'
+        run: pnpm dlx @yao-pkg/pkg@5.12.0 services/mcp-server/dist/index.js --targets node20-win-x64 --output xberg-mcp-windows.exe
+
+      - name: Wrap linux
+        if: matrix.os == 'ubuntu-latest'
+        run: pnpm dlx @yao-pkg/pkg@5.12.0 services/mcp-server/dist/index.js --targets node20-linux-x64 --output xberg-mcp-linux
+
+      - name: Wrap darwin
+        if: matrix.os == 'macos-latest'
+        run: pnpm dlx @yao-pkg/pkg@5.12.0 services/mcp-server/dist/index.js --targets node20-macos-x64 --output xberg-mcp-darwin
+
+      - name: Upload windows binary
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: xberg-mcp-windows.exe
+          path: xberg-mcp-windows.exe
+
+      - name: Upload linux binary
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: xberg-mcp-linux
+          path: xberg-mcp-linux
+
+      - name: Upload darwin binary
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: xberg-mcp-darwin
+          path: xberg-mcp-darwin
+
+  sign:
+    name: Code signing & notarization
+    needs: [wrap]
+    uses: ./.github/workflows/sign.yml
+    with:
+      artifact-prefix: xberg-mcp
+
+  release:
+    name: Publish GitHub Release
+    needs: [build, wrap, sign]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Task 9 — Version drift guard.
+      # Fails the job if root / apps/web / services/mcp-server / packages/wasm-pipeline
+      # versions are not all identical.
+      - name: Version drift guard
+        run: |
+          node -e '
+            const fs = require("fs");
+            const read = (p) => JSON.parse(fs.readFileSync(p, "utf8")).version;
+            const files = {
+              root: "package.json",
+              web: "apps/web/package.json",
+              mcp: "services/mcp-server/package.json",
+              wasm: "packages/wasm-pipeline/package.json",
+            };
+            const versions = {};
+            for (const [k, p] of Object.entries(files)) {
+              versions[k] = read(p);
+            }
+            const vals = Object.values(versions);
+            const ok = vals.every((v) => v === vals[0]);
+            if (!ok) {
+              console.error("Version drift detected:");
+              for (const [k, v] of Object.entries(versions)) {
+                console.error(`  ${k}: ${v}`);
+              }
+              console.error("All package.json versions must match the root version.");
+              process.exit(1);
+            }
+            console.log("Version drift guard passed: all at " + vals[0]);
+          '
+
+      # Task 7 — refuse to release with unpinned models (ModelCache fails closed on placeholders).
+      - name: Model pin guard
+        run: node services/mcp-server/release/scripts/check-pins.mjs
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: false
+
+      - name: Promote signed binaries for release
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -d artifacts/signed-binaries ]; then
+            # Flatten signed binaries over the wrap outputs so the release
+            # always ships the signed (or pass-through unsigned) artifacts.
+            cp -rn artifacts/signed-binaries/* artifacts/ 2>/dev/null || true
+          fi
+
+      - name: Compute SHA256 of all assets
+        id: sha
+        run: |
+          {
+            echo "assets<<EOF"
+            find artifacts -type f \( -name 'xberg-mcp-*' -o -name 'web-out.zip' \) -print0 | sort -z | while IFS= read -r -d '' f; do
+              sha=$(sha256sum "$f" | awk '{print $1}')
+              echo "$sha  $(basename "$f")"
+            done
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Generate release body
+        id: body
+        run: |
+          {
+            echo "body<<EOF"
+            echo "## Release ${GITHUB_REF_NAME}"
+            echo ""
+            echo "### Changes"
+            if [ -f CHANGELOG.md ]; then
+              awk '/^## \[/{c++} c==1{print} /^## \[Unreleased\]/{next}' CHANGELOG.md | sed '1{/^## \[/d}'
+            fi
+            echo ""
+            echo "### Git log"
+            git log --no-merges --pretty=format:"- %s (%h)" "$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")"..HEAD | head -50
+            echo ""
+            echo "### SHA256"
+            echo '```'
+            echo "${{ steps.sha.outputs.assets }}"
+            echo '```'
+            echo ""
+            echo "### GPG public key"
+            echo "Placeholder — attach the project GPG public key here for verifying Linux assets."
+            echo ""
+            echo "### Offline bundle"
+            echo "The \`xberg-mcp-offline.zip\` pre-populated model cache is produced by \`services/mcp-server/release/\` tooling (Task 7) and attached separately."
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          body: ${{ steps.body.outputs.body }}
+          files: |
+            artifacts/xberg-mcp-windows.exe/xberg-mcp-windows.exe
+            artifacts/xberg-mcp-linux/xberg-mcp-linux
+            artifacts/xberg-mcp-darwin/xberg-mcp-darwin
+            artifacts/web-out/web-out.zip
+            services/mcp-server/models/manifest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

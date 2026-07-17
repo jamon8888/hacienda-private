@@ -1,0 +1,17 @@
+{
+  "version": "1.0.0-rc.27",
+  "description": "Local lawyer document-intelligence server + MCP endpoint (zero toolchain).",
+  "homepage": "https://github.com/xberg-io/xberg",
+  "license": "MIT",
+  "architecture": {
+    "64bit": {
+      "url": "https://github.com/xberg-io/xberg/releases/latest/download/xberg-mcp-windows.exe",
+      "hash": "TODO_SHA256"
+    }
+  },
+  "bin": "xberg-mcp.exe",
+  "shortcuts": [
+    ["xberg-mcp.exe", "Xberg MCP"]
+  ],
+  "notes": "Run 'xberg-mcp serve' to open the UI, or 'xberg-mcp mcp' for Claude Desktop."
+}

@@ -1,0 +1,110 @@
+name: sign
+
+on:
+  workflow_call:
+    inputs:
+      artifact-prefix:
+        description: Artifact name prefix holding wrapped binaries
+        required: false
+        default: ""
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sign-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sign:
+    name: Code signing & notarization
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: false
+
+      - name: Windows Authenticode
+        if: ${{ secrets.WINDOWS_CODESIGN_P12 != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXE=$(find artifacts -name 'xberg-mcp-windows.exe' -type f | head -n1)
+          echo "$WINDOWS_CODESIGN_P12" | base64 -d > cert.p12
+          osslsigncode sign \
+            -pkcs12 cert.p12 \
+            -pass "$WINDOWS_CODESIGN_PASSWORD" \
+            -t http://timestamp.digicert.com \
+            -in "$EXE" -out "${EXE}.signed"
+          mv "${EXE}.signed" "$EXE"
+        env:
+          WINDOWS_CODESIGN_P12: ${{ secrets.WINDOWS_CODESIGN_P12 }}
+          WINDOWS_CODESIGN_PASSWORD: ${{ secrets.WINDOWS_CODESIGN_PASSWORD }}
+
+      - name: macOS codesign
+        if: ${{ secrets.APPLE_CERT_P12 != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "$APPLE_CERT_P12" | base64 -d > cert.p12
+          security create-keychain -p "$APPLE_CERT_PASSWORD" build.keychain
+          security import cert.p12 -k build.keychain -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
+          security list-keychains -d user -s build.keychain
+          BIN=$(find artifacts -name 'xberg-mcp-darwin' -type f | head -n1)
+          codesign --options runtime --timestamp --force --sign "$APPLE_TEAM_ID" "$BIN"
+
+      - name: macOS notarize + staple
+        if: ${{ secrets.APPLE_NOTARY_KEY != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN=$(find artifacts -name 'xberg-mcp-darwin' -type f | head -n1)
+          xcrun notarytool submit "$BIN" \
+            --key "$APPLE_NOTARY_KEY" \
+            --key-id "$APPLE_NOTARY_KEY_ID" \
+            --issuer "$APPLE_TEAM_ID" \
+            --wait
+          xcrun stapler staple "$BIN"
+        env:
+          APPLE_NOTARY_KEY: ${{ secrets.APPLE_NOTARY_KEY }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Linux GPG detached sign
+        if: ${{ secrets.LINUX_GPG_KEY != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "$LINUX_GPG_KEY" | base64 -d | gpg --import
+          BIN=$(find artifacts -name 'xberg-mcp-linux' -type f | head -n1)
+          gpg --detach-sign --armor -o "${BIN}.asc" "$BIN"
+        env:
+          LINUX_GPG_KEY: ${{ secrets.LINUX_GPG_KEY }}
+
+      - name: Pass-through unsigned artifacts when no signing secrets set
+        if: >-
+          ${{ secrets.WINDOWS_CODESIGN_P12 == '' && secrets.APPLE_CERT_P12 == '' && secrets.LINUX_GPG_KEY == '' }}
+        shell: bash
+        run: echo "No code-signing secrets configured; releasing unsigned binaries."
+
+      - name: Upload signed artifacts
+        if: >-
+          ${{ secrets.WINDOWS_CODESIGN_P12 != '' || secrets.APPLE_CERT_P12 != '' || secrets.LINUX_GPG_KEY != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-binaries
+          path: |
+            artifacts/**/xberg-mcp-windows.exe
+            artifacts/**/xberg-mcp-linux
+            artifacts/**/xberg-mcp-linux.asc
+            artifacts/**/xberg-mcp-darwin
+          if-no-files-found: ignore

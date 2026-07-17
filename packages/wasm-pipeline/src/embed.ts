@@ -1,8 +1,18 @@
-import { E5_MODEL_URL, E5_TOKENIZER_URL, E5_TOKENIZER_CONFIG_URL, EMBED_DIM } from "./constants";
+import { E5_TOKENIZER_URL, E5_TOKENIZER_CONFIG_URL, EMBED_DIM, e5ModelUrl } from "./constants";
+import type { ModelScenario } from "./scenario";
 
 export interface EmbeddableChunk {
   text: string;
 }
+
+const DEFAULT_SCENARIO: ModelScenario = {
+  executionProviders: ["webgpu", "wasm"],
+  quant: "int8",
+  numThreads: 4,
+  chunkSize: 1024,
+  deferPii: false,
+  modelVariant: "e5-base",
+};
 
 interface TokenizerOutput {
   input_ids: number[];
@@ -21,8 +31,10 @@ interface OrtTensor {
   type: string;
 }
 
+let cachedSig: string | null = null;
 let sessionPromise: Promise<OrtSessionHandle> | null = null;
 let tokenizerPromise: Promise<CallableTokenizer> | null = null;
+let warnedDefaultScenario = false;
 
 interface OrtSessionHandle {
   run: (feeds: Record<string, OrtTensor>) => Promise<Record<string, OrtTensor>>;
@@ -32,14 +44,22 @@ interface OrtSessionHandle {
 
 type Prefix = "query" | "passage";
 
-async function getSession(): Promise<OrtSessionHandle> {
-  if (!sessionPromise) {
+async function getSession(scenario: ModelScenario = DEFAULT_SCENARIO): Promise<OrtSessionHandle> {
+  const sig = JSON.stringify({
+    ep: scenario.executionProviders,
+    quant: scenario.quant,
+    variant: scenario.modelVariant,
+    numThreads: scenario.numThreads,
+  });
+  if (!sessionPromise || sig !== cachedSig) {
+    cachedSig = sig;
     sessionPromise = (async () => {
       const ort = await import("onnxruntime-web");
-      const resp = await fetch(E5_MODEL_URL);
+      ort.env.wasm.numThreads = scenario.numThreads;
+      const resp = await fetch(e5ModelUrl(scenario.modelVariant, scenario.quant));
       const buf = await resp.arrayBuffer();
       const session = await ort.InferenceSession.create(buf, {
-        executionProviders: ["webgpu", "wasm"],
+        executionProviders: scenario.executionProviders,
         graphOptimizationLevel: "all",
       });
       return session as unknown as OrtSessionHandle;
@@ -86,8 +106,8 @@ async function getTokenizer(): Promise<CallableTokenizer> {
 }
 
 
-async function embedOne(text: string, prefix: Prefix): Promise<Float32Array> {
-  const [session, tok] = await Promise.all([getSession(), getTokenizer()]);
+async function embedOne(text: string, prefix: Prefix, scenario: ModelScenario = DEFAULT_SCENARIO): Promise<Float32Array> {
+  const [session, tok] = await Promise.all([getSession(scenario), getTokenizer()]);
   const prefixed = prefix === "query" ? `query: ${text}` : `passage: ${text}`;
   const enc = tok(prefixed, { return_tensor: false });
   const inputIds = enc.input_ids;
@@ -138,10 +158,20 @@ async function embedOne(text: string, prefix: Prefix): Promise<Float32Array> {
   return vec;
 }
 
-export async function embedChunks(chunks: EmbeddableChunk[]): Promise<Float32Array[]> {
-  return Promise.all(chunks.map((c) => embedOne(c.text, "passage")));
+// DEFAULT_SCENARIO is a defensive fallback; ingest.ts and query.ts now pass a real selectScenario() output.
+export async function embedChunks(chunks: EmbeddableChunk[], scenario: ModelScenario = DEFAULT_SCENARIO): Promise<Float32Array[]> {
+  if (scenario === DEFAULT_SCENARIO && !warnedDefaultScenario) {
+    warnedDefaultScenario = true;
+    console.warn("[wasm-pipeline] embed called without a ModelScenario — using DEFAULT_SCENARIO; callers should pass selectScenario() output (see plan task 4-5)");
+  }
+  return Promise.all(chunks.map((c) => embedOne(c.text, "passage", scenario)));
 }
 
-export async function embedQuery(text: string): Promise<Float32Array> {
-  return embedOne(text, "query");
+// DEFAULT_SCENARIO is a defensive fallback; ingest.ts and query.ts now pass a real selectScenario() output.
+export async function embedQuery(text: string, scenario: ModelScenario = DEFAULT_SCENARIO): Promise<Float32Array> {
+  if (scenario === DEFAULT_SCENARIO && !warnedDefaultScenario) {
+    warnedDefaultScenario = true;
+    console.warn("[wasm-pipeline] embed called without a ModelScenario — using DEFAULT_SCENARIO; callers should pass selectScenario() output (see plan task 4-5)");
+  }
+  return embedOne(text, "query", scenario);
 }

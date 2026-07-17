@@ -1,0 +1,18 @@
+✓ Lockfile passes supply-chain policies (verified 50s ago)
+Progress: resolved 1, reused 0, downloaded 0, added 0
+apps/web                                 | [WARN] deprecated next@14.2.5
+Progress: resolved 107, reused 0, downloaded 0, added 0
+Progress: resolved 254, reused 0, downloaded 0, added 0
+Progress: resolved 340, reused 0, downloaded 0, added 0
+Progress: resolved 615, reused 0, downloaded 0, added 0
+Progress: resolved 833, reused 0, downloaded 0, added 0
+Progress: resolved 897, reused 0, downloaded 0, added 0
+Progress: resolved 904, reused 0, downloaded 0, added 0
+[WARN] 2 deprecated subdependencies found: prebuild-install@7.1.3, whatwg-encoding@3.1.1
+Progress: resolved 904, reused 0, downloaded 0, added 0, done
+
+Packages: +1
++
+[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: onnxruntime-node@1.19.2, protobufjs@6.11.6, protobufjs@7.6.5, sharp@0.32.6
+
+Run "pnpm approve-builds" to pick which dependencies should be allowed to run scripts.
