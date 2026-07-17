@@ -63,7 +63,24 @@ GitHub Actions (Ubuntu, real Chromium)
 
 Key invariants:
 - **One shared data dir** between the server (step 5) and the MCP process (step 7)
-  proves the UI→server→MCP chain is consistent.
+  proves the UI→server→MCP chain is consistent. Both processes are launched with
+  the **same `--data-dir`** so they share the SQLite file (`dbPath`) and the mirror
+  directory (`mirrorsDir`).
+- **`serve` persists everything to disk synchronously.** `MetadataStore` writes via
+  `better-sqlite3` with `journal_mode = WAL` (`store.ts:64`) — every mutation
+  (matter create/delete, consent, ingest, redaction, audit) is committed to SQLite
+  immediately; there is **no in-memory cache of SQLite rows**. Mirror bundles are
+  written to `<mirrorsDir>/<matterId>.bin` on `POST /rag/mirror` (`mirror.ts:82`).
+  Therefore a second process reading the same files sees all UI mutations.
+- **The MCP stdio process is a SEPARATE process** with its OWN `MirrorStore`
+  instance (`index.ts:236` → `createAppContext` → `new MirrorStore`). The two
+  processes share the **disk**, not memory. `ragQuery`/`listPii`/`rehydrateChunk`
+  resolve bundles via `getBundle` (`mirror.ts:147`), which reads from the on-disk
+  `.bin` when its in-memory map is empty — so a **freshly spawned MCP process reads
+  the live bundle the UI wrote**. WAL lets `serve` (writer) and the MCP process
+  (reader) run concurrently against the same SQLite file.
+- **`serve` MUST remain running** during the MCP e2e (step 7) so the UI's SQLite
+  state and mirror files are live; the MCP process reads them directly.
 - **Real models** are SHA256-pinned and already downloaded at pin time (T7 done).
   CI serves them from the local `models/` dir — **no HF egress in CI**.
 - **Cross-origin isolation** is asserted: Playwright setup checks
@@ -89,10 +106,30 @@ wired in. Required changes:
    search/documents callers) to build `Matter`/`Folder` from local/session state
    and pass `options.onProgress`. **Call the real API directly — no adapter layer.**
 3. **API contract test.** Add `packages/wasm-pipeline/src/contract.test.ts` that
-   imports the barrel and asserts the exported symbols the UI relies on exist with
-   compatible types (`extractDocument`, `redactDocument`, `queryRag`, `pushMirror`,
-   `detectPii`, `listPiiTypes`, `BrowserVault`, `assertLocalFirst`, `ingestFolder`).
-   This prevents the signature mismatch from silently regressing.
+   imports the barrel (`src/index.ts`) and asserts the exported symbols exist with
+   compatible types. Authoritative symbol table (all are real exports of the barrel):
+
+   | Symbol | Source module | Used by |
+   |--------|---------------|---------|
+   | `initWasm`, `extractDocument`, `getWasm`, `firstDocument`, `extractText` | `runtime` | UI (DocumentView) |
+   | `withTesseractOcr` | `ocr` | module harness (Section 5) |
+   | `chunkExtraction`, `withChunking`, `toBoundingBox` | `chunk` | internal |
+   | `embedChunks`, `embedQuery` | `embed` | module harness |
+   | `detectPii`, `listPiiTypes` | `ner` | UI (PiiPanel) + module harness |
+   | `buildIndex`, `loadIndex`, `retrieve`, `serializeIndex` | `rag` | module harness |
+   | `buildRedaction`/`rehydrate`, `sealVault`/`openVault`, `redactDocument`, `redactText`/`rehydrateText` | `redact` | UI (redact.spec) |
+   | `serializeMirror`, `serializeMirrorToBytes`, `pushMirror` | `mirror` | UI (folders-ingest) |
+   | `ingestFolder(matter, folder, file, options)` | `ingest` | UI (FolderView) — 4-arg source of truth |
+   | `queryRag(matter, query, topK)` | `query` | UI (search) |
+   | `BrowserVault` | `vault` | UI (redact/forget) |
+   | `assertLocalFirst` | `egress` | UI (search isolation) |
+   | `detectCapabilities`, `selectScenario` | `capabilities`/`scenario` | engine init |
+
+   The Section 5 module-harness names (`withTesseractOcr`, `embedChunks`,
+   `embedQuery`, `buildIndex`, `retrieve`, `serializeIndex`, `detectPii`) are all
+   confirmed real barrel exports — there is no separate/illustrative API. This
+   contract test prevents the `ingestFolder` signature mismatch from silently
+   regressing.
 4. **WebGPU in headless Chromium.** Playwright's bundled Chromium supports WebGPU
    with `--enable-unsafe-webgpu --use-angle=swiftshader`; if unavailable,
    `scenario.ts` falls back to WASM EP automatically. The e2e asserts
@@ -140,7 +177,10 @@ New `services/mcp-server/tests/e2e.mcp.test.ts`, run by a script (not the unit
 `vitest` config). It:
 
 1. Spawns `node dist/index.js mcp --data-dir <same dir the UI wrote to>` as a child
-   process using `StdioServerTransport`.
+   process using `StdioServerTransport`. This is a **fresh process** with its own
+   `MirrorStore`; because `serve` already wrote the bundle to `<mirrorsDir>/<id>.bin`
+   on disk, the MCP tools read it through the `getBundle` disk fallback
+   (`mirror.ts:147-156`) — no explicit `loadMirror` call needed for the read path.
 2. Uses `@modelcontextprotocol/sdk` client over stdio to call all 5 tools against the
    **real MirrorBundle the UI produced in Section 3**:
    - `rag_query` (read scope) → cited chunks matching the ingested fixture.
@@ -149,12 +189,17 @@ New `services/mcp-server/tests/e2e.mcp.test.ts`, run by a script (not the unit
      (vault passphrase supplied via env/stdio init from the UI run).
    - `ingest_folder` (ingest scope) → creates folder + ingest record.
    - `redact` (redact scope + consent) → records a redaction marker.
-3. **Forget proof:** after Section 3's `forget.spec.ts` deletes the matter, this step
-   (or a second MCP spawn) confirms `rag_query`/`list_pii` for that matter return
-   empty — proving live bundle + MCP share state.
+3. **Forget proof:** after Section 3's `forget.spec.ts` issues
+   `DELETE /matters/:id` (which calls `store.forgetMatter` + `mirror.forget`,
+   deleting the on-disk `.bin`), this step spawns a **second fresh MCP process**
+   against the same data dir and asserts `rag_query`/`list_pii` for that matter
+   **error with `not_found`** (the bundle file is gone). This proves the live bundle
+   and MCP share the same store and that deletion is reflected across processes
+   (the "live bundle" guarantee). The `serve` process stays alive through both steps
+   (WAL permits a writer + reader concurrently).
 
 Scopes/consent are granted via the same consent store the UI writes
-(`POST /consent`), so the stdio MCP process reads the same SQLite. This is the
+(`POST /consent`), so the stdio MCP process reads the same SQLite (WAL). This is the
 "live bundle" guarantee.
 
 ---
