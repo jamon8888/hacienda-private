@@ -14,7 +14,8 @@
   "scripts": {
     "build": "tsup src/index.ts --format esm --clean && tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test -c e2e/playwright.config.ts"
   },
   "dependencies": {
     "@xberg-io/xberg-wasm": "1.0.0-rc.26",
@@ -29,6 +30,7 @@
     "@types/node": "^22.0.0",
     "tsup": "^8.0.0",
     "typescript": "^7.0.2",
-    "vitest": "^2.0.5"
+    "vitest": "^2.0.5",
+    "@playwright/test": "^1.46.0"
   }
 }
