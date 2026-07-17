@@ -1,4 +1,5 @@
 import type { Matter, Folder, PiiEntity, RetrievedChunk } from "@xberg-io/core";
+import type { RedactionEntry } from "@xberg-io/wasm-pipeline-real";
 
 import {
   extractDocument,
@@ -11,9 +12,12 @@ import {
   chunkPage,
   chunkBoundingBox,
   embedChunks,
+  embedQuery,
+  retrieve,
   detectPii,
   listPiiTypes,
   buildRedaction,
+  redactDocument,
   sealVault,
   buildIndex,
   serializeIndex,
@@ -96,7 +100,7 @@ export async function ingestFolder(file: File, ctx: IngestContext): Promise<Inge
   emit(ctx, name, name, "embed", 0.6);
 
   const items: IndexedChunk[] = [];
-  const allEntries: { kind: string; start: number; end: number; token: string }[] = [];
+  const allEntries: RedactionEntry[] = [];
   for (const [i, c] of chunks.entries()) {
     const v = vectors[i];
     if (!v) continue;
@@ -131,7 +135,7 @@ export async function ingestFolder(file: File, ctx: IngestContext): Promise<Inge
         page: it.page,
         bbox: it.bbox,
         score: 1 - i * 0.01,
-        citation: it.citation,
+    citation: it.citation ?? "",
       })),
     }),
   );
@@ -150,7 +154,7 @@ export async function ingestFolder(file: File, ctx: IngestContext): Promise<Inge
     chunk_index: it.chunkIndex,
     text: it.text,
     score: 1,
-    citation: it.citation,
+    citation: it.citation ?? "",
     page: it.page,
     bbox: it.bbox,
   }));
@@ -159,8 +163,8 @@ export async function ingestFolder(file: File, ctx: IngestContext): Promise<Inge
   return {
     doc_id: name,
     name,
-    text: doc.text ?? "",
-    pages: doc.pages ?? 1,
+    text: doc.content ?? "",
+    pages: doc.pages?.length ?? 1,
     pii,
     chunks: retrieved,
     mirror: payload,
@@ -173,15 +177,13 @@ export async function extractDocumentForUi(file: File): Promise<ExtractedDocumen
   const result = await extractDocument(file, config);
   const doc = firstDocument(result);
   if (!doc) throw new Error(`no document extracted from ${file.name}`);
-  const pii = await detectPii(doc.text ?? "", listPiiTypes(), selectScenario(await detectCapabilities()));
-  return { doc_id: file.name, name: file.name, text: doc.text ?? "", pages: doc.pages ?? 1, pii };
+  const pii = await detectPii(doc.content ?? "", listPiiTypes(), selectScenario(await detectCapabilities()));
+  return { doc_id: file.name, name: file.name, text: doc.content ?? "", pages: doc.pages?.length ?? 1, pii };
 }
 
 export async function queryRagForUi(matter: Matter, query: string, topK = 8): Promise<RetrievedChunk[]> {
   const scenario = selectScenario(await detectCapabilities());
-  const { embedQuery } = await import("@xberg-io/wasm-pipeline-real");
   const vec = await embedQuery(query, scenario);
-  const { retrieve } = await import("@xberg-io/wasm-pipeline-real");
   return retrieve(matter.id, vec, topK);
 }
 
@@ -190,6 +192,5 @@ export async function redactDocumentForUi(
   pii: PiiEntity[],
   passphrase: string,
 ): Promise<{ redacted: string; entries: unknown[] }> {
-  const { redactDocument } = await import("@xberg-io/wasm-pipeline-real");
   return redactDocument(text, pii, passphrase);
 }
