@@ -10,7 +10,7 @@ async function getSubtle(): Promise<globalThis.SubtleCrypto> {
   const c = (globalThis as { crypto?: Crypto }).crypto;
   if (c && c.subtle) return c.subtle;
   // Node 24 fallback for test environments without a global webcrypto.
-  const { webcrypto } = await import("node:crypto");
+  const { webcrypto } = await import("crypto");
   if (webcrypto?.subtle) return webcrypto.subtle as unknown as globalThis.SubtleCrypto;
   throw new Error("no WebCrypto SubtleCrypto available");
 }

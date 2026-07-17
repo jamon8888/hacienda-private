@@ -202,6 +202,31 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
     return;
   }
 
+  // Serve the built web UI (SPA): existing files directly, client routes fall
+  // back to index.html so dynamic segments (/matters/<id>, /documents/<name>)
+  // resolve in the browser router.
+  if (method === "GET") {
+    const uiDir = resolveUiDir();
+    if (uiDir) {
+      const safe = normalize(pathname).replace(/^(\.\.[/\\])+/, "");
+      const candidate = join(uiDir, safe);
+      if (candidate.startsWith(uiDir) && existsSync(candidate) && statSync(candidate).isFile()) {
+        serveFile(res, candidate);
+        return;
+      }
+      const htmlCandidate = join(uiDir, `${safe.replace(/\/$/, "")}.html`);
+      if (htmlCandidate.startsWith(uiDir) && existsSync(htmlCandidate) && statSync(htmlCandidate).isFile()) {
+        serveFile(res, htmlCandidate);
+        return;
+      }
+      const indexPath = join(uiDir, "index.html");
+      if (existsSync(indexPath)) {
+        serveFile(res, indexPath);
+        return;
+      }
+    }
+  }
+
   res.writeHead(404, { "content-type": "text/plain" });
   res.end("not found");
 }
