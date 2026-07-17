@@ -99,12 +99,25 @@ wired in. Required changes:
    `resolve.alias['@xberg-io/wasm-pipeline'] -> lib/engine/index.ts` entry in
    `apps/web/next.config.mjs` so the real workspace package is used (already a
    workspace dependency).
-2. **Fix the `ingestFolder` contract mismatch.** `FolderView.tsx` calls
-   `ingestFolder(files, onProgress)` (2 args) but the barrel exports
-   `ingestFolder(matter, folder, file, options)` (4 args). Resolution: keep the
-   pipeline's 4-arg signature as source of truth; update `FolderView.tsx` (and
-   search/documents callers) to build `Matter`/`Folder` from local/session state
-   and pass `options.onProgress`. **Call the real API directly — no adapter layer.**
+2. **Fix the `ingestFolder` contract mismatch via a thin adapter.** The real barrel's
+   `ingestFolder(matter, folder, file, options)` returns ONLY `{ accepted: number }`
+   (opaque — it calls `pushMirror` internally) and takes a `Matter`/`Folder`/`passphrase`/
+   `scopeToken`, while the UI consumes a 2-arg `ingestFolder(files, onProgress)` that
+   expects a rich `IngestResult { text, pii, pages, chunks, mirror }` and uses
+   `IngestProgress` stages. Likewise `queryRag(folderId, q, topK)` (UI) vs
+   `queryRag(matter, q, topK)` (real), and `redactDocument(docId, entityIds)` (UI) vs
+   `redactDocument(text, pii, passphrase, prefix)` (real). The real `ingestFolder` is
+   therefore insufficient to drive the existing UI. **Resolution (deviation from the
+   initial "no adapter" note):** keep the `@xberg-io/wasm-pipeline` alias pointing at
+   `apps/web/lib/engine/index.ts`, but replace the stub with a real adapter that
+   IMPORTS the real package under a separate, non-aliased specifier
+   (`@xberg-io/wasm-pipeline-real`, aliased to `packages/wasm-pipeline/src/index.ts`)
+   and COMPOSES its exported lower-level functions (`extractDocument`, `chunkExtraction`,
+   `withChunking`, `withTesseractOcr`, `defaultExtractionConfig`, `embedChunks`,
+   `detectPii`, `buildRedaction`, `sealVault`, `buildIndex`, `serializeIndex`,
+   `pushMirror`, `detectCapabilities`, `selectScenario`) to produce the UI-shaped
+   `IngestResult` and emit `IngestProgress` per stage. This uses the package; it does
+   NOT reimplement engine logic (per AGENTS.md rule 1). The UI pages stay unchanged.
 3. **API contract test.** Add `packages/wasm-pipeline/src/contract.test.ts` that
    imports the barrel (`src/index.ts`) and asserts the exported symbols exist with
    compatible types. Authoritative symbol table (all are real exports of the barrel):
