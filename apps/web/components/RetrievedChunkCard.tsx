@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export function RetrievedChunkCard({ chunk }: { chunk: RetrievedChunk }) {
   return (
-    <Card>
+    <Card data-testid="retrieved-chunk">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">{chunk.citation}</CardTitle>
         <span className="text-xs text-muted-foreground">
