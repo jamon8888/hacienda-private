@@ -45,6 +45,7 @@
     "@radix-ui/react-tooltip": "^1.2.12",
     "@tanstack/react-virtual": "^3.14.6",
     "@xberg-io/core": "workspace:*",
+    "@xberg-io/wasm-pipeline": "workspace:*",
     "border-beam": "^1.0.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

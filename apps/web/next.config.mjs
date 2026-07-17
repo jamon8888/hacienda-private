@@ -25,13 +25,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const nextConfig = {
   reactStrictMode: true,
   output: "export",
-  transpilePackages: ["@xberg-io/core", "@xberg-io/wasm-pipeline"],
+  transpilePackages: ["@xberg-io/core", "@xberg-io/wasm-pipeline", "@xberg-io/wasm-pipeline-real"],
   webpack(config) {
     config.resolve = config.resolve ?? {};
     config.resolve.alias = {
       ...(config.resolve.alias ?? {}),
       "@": resolve(__dirname, "."),
       "@xberg-io/wasm-pipeline": resolve(__dirname, "lib/engine/index.ts"),
+      "@xberg-io/wasm-pipeline-real": resolve(__dirname, "../packages/wasm-pipeline/src/index.ts"),
     };
     return config;
   },
