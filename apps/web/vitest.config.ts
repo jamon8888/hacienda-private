@@ -10,6 +10,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@xberg-io/wasm-pipeline": resolve(rootDir, "lib/engine/index.ts"),
+      "@xberg-io/wasm-pipeline-real": resolve(rootDir, "../../packages/wasm-pipeline/src/index.ts"),
       "@": rootDir,
     },
   },
