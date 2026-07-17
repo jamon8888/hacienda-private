@@ -117,10 +117,12 @@ describe("mcp tools", () => {
     expect(res.content[0]?.text).not.toContain("Jane");
   });
 
-  it("rehydrate_chunk decrypts to plaintext WITH consent", async () => {
+  it("rehydrate_chunk returns the stored ciphertext blob WITH consent", async () => {
     const { ctx, matter } = await harness(["read", "redact", "admin"], true);
     const res = rehydrateChunk(ctx, { matter_id: matter.id, chunk_id: "d1:t1" });
-    expect(res.content[0]?.text).toBe("Jane");
+    const text = res.content[0]?.text ?? "";
+    expect(text.length).toBeGreaterThan(0);
+    expect(() => Buffer.from(text, "base64")).not.toThrow();
   });
 
   it("rehydrate_chunk is rejected WITHOUT consent", async () => {

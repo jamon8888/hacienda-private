@@ -88,7 +88,9 @@ export function rehydrateChunk(ctx: AppContext, args: RehydrateChunkArgs): ToolR
     authorize(ctx.tokenScopes, "redact", matter, args.matter_id);
     requireConsent(ctx.store, matter, "redact_rehydrate");
     const cipher = ctx.mirror.loadCipher(args.matter_id, args.chunk_id);
-    const text = ctx.vault.open(cipher).toString("utf8");
+    // The server stores the browser-sealed ciphertext; true decryption happens in the
+    // browser with the owner passphrase (WebCrypto). We return the ciphertext verbatim.
+    const text = Buffer.from(cipher).toString("base64");
     ctx.store.recordAudit(actorFor(ctx), "redact", "rehydrate_chunk", args.matter_id);
     return textResult(text);
   });
