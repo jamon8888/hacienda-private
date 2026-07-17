@@ -1,0 +1,2 @@
+John Doe can be reached at john.doe@example.com or +1 555 0100.
+The contract relates to the Acme matter and references invoice #12345.
