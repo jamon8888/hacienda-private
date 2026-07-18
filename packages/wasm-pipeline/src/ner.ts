@@ -37,6 +37,11 @@ const PII_TYPES = [
   "financial",
 ] as const;
 
+/**
+ * List the default PII entity types the detector recognizes.
+ *
+ * @returns A read-only array of supported PII type labels.
+ */
 export function listPiiTypes(): readonly string[] {
   return PII_TYPES;
 }
@@ -87,6 +92,17 @@ async function getModel(scenario: ModelScenario): Promise<Gliner> {
   return modelPromise;
 }
 
+/**
+ * Detect PII spans in a block of text using the local GLiNER model.
+ *
+ * Runs fully on-device (no Hugging Face egress) and returns character-offset
+ * spans mapped to the shared core {@link PiiEntity} shape.
+ *
+ * @param text - The text to scan.
+ * @param types - Entity types to look for (defaults to all supported types).
+ * @param scenario - Model/runtime scenario; defaults to a conservative fallback.
+ * @returns The detected PII entities with `kind`, `start`, `end`, and `text`.
+ */
 export async function detectPii(
   text: string,
   types: readonly string[] = PII_TYPES,

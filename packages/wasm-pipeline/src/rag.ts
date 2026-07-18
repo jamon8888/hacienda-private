@@ -3,6 +3,7 @@ import type { EdgeVec } from "edgevec";
 import init, { EdgeVec as EdgeVecClass, EdgeVecConfig } from "edgevec";
 import { EMBED_DIM } from "./constants";
 
+/** A chunk plus its embedding and citation metadata, ready for indexing. */
 export interface IndexedChunk {
   docId: string;
   chunkIndex: number;
@@ -35,6 +36,13 @@ function dbName(matterId: string): string {
   return `edgevec:${matterId}`;
 }
 
+/**
+ * Build a cosine EdgeVec index for a matter from indexed chunks and persist it.
+ *
+ * @param matterId - The matter the index belongs to (used as the DB name).
+ * @param items - The chunks (with vectors + metadata) to insert.
+ * @returns The populated, saved {@link EdgeVec} instance.
+ */
 export async function buildIndex(matterId: string, items: IndexedChunk[]): Promise<EdgeVec> {
   await ensureEdgeVec();
   const config = new EdgeVecConfig(EMBED_DIM);
@@ -55,11 +63,25 @@ export async function buildIndex(matterId: string, items: IndexedChunk[]): Promi
   return db;
 }
 
+/**
+ * Load a previously persisted EdgeVec index for a matter.
+ *
+ * @param matterId - The matter whose index should be loaded.
+ * @returns The loaded {@link EdgeVec} instance.
+ */
 export async function loadIndex(matterId: string): Promise<EdgeVec> {
   await ensureEdgeVec();
   return EdgeVecClass.load(dbName(matterId));
 }
 
+/**
+ * Retrieve the top-K most similar chunks for a query vector.
+ *
+ * @param matterId - The matter whose index to search.
+ * @param queryVec - The query embedding (array or `Float32Array`).
+ * @param topK - Maximum number of results to return.
+ * @returns Ranked {@link RetrievedChunk}s with score, citation, and optional bbox.
+ */
 export async function retrieve(
   matterId: string,
   queryVec: number[] | Float32Array,
@@ -94,6 +116,14 @@ export async function retrieve(
   return out;
 }
 
+/**
+ * Serialize an EdgeVec index into a single contiguous byte buffer.
+ *
+ * Drains the index's streaming save iterator and concatenates the chunks.
+ *
+ * @param db - The index to serialize.
+ * @returns The full serialized index as a {@link Uint8Array}.
+ */
 export async function serializeIndex(db: EdgeVec): Promise<Uint8Array> {
   const iter = db.save_stream();
   const parts: Uint8Array[] = [];

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { DeviceProfile } from "./capabilities";
 
+/** Zod schema for a chosen model/runtime scenario (EPs, quant, threads, etc.). */
 export const ModelScenarioSchema = z.object({
   executionProviders: z.array(z.enum(["webgpu", "webgl", "wasm"])),
   quant: z.enum(["int8", "int4", "fp32"]),
@@ -9,10 +10,21 @@ export const ModelScenarioSchema = z.object({
   deferPii: z.boolean(),
   modelVariant: z.enum(["e5-base", "e5-small"]),
 });
+/** A validated model/runtime scenario (inferred from {@link ModelScenarioSchema}). */
 export type ModelScenario = z.infer<typeof ModelScenarioSchema>;
 
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 
+/**
+ * Choose an embedding model/runtime scenario from a device profile.
+ *
+ * Builds the execution-provider chain (WebGPU → WebGL → WASM), and picks
+ * quantization, chunk size, model variant, and PII deferral based on GPU class,
+ * RAM, CPU threads, and form factor.
+ *
+ * @param p - The detected {@link DeviceProfile}.
+ * @returns A schema-validated {@link ModelScenario}.
+ */
 export function selectScenario(p: DeviceProfile): ModelScenario {
   const epChain: ModelScenario["executionProviders"] = [];
   if (p.webgpu) epChain.push("webgpu");

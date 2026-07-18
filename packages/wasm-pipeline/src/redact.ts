@@ -1,5 +1,6 @@
 import type { PiiEntity } from "@xberg-io/core";
 
+/** A single redacted span: its token, original surface value, and location. */
 export interface RedactionEntry {
   token: string;
   original: string;
@@ -9,17 +10,20 @@ export interface RedactionEntry {
   end: number;
 }
 
+/** A PII span to redact, expressed as a kind plus character offsets. */
 export interface RedactionSpan {
   kind: string;
   start: number;
   end: number;
 }
 
+/** Result of {@link redactText}: the redacted string and placed tokens. */
 export interface RedactTextResult {
   redacted: string;
   tokens: RedactionToken[];
 }
 
+/** A placed redaction token with its position and PII kind. */
 export interface RedactionToken {
   token: string;
   start: number;
@@ -27,11 +31,13 @@ export interface RedactionToken {
   kind: string;
 }
 
+/** AES-GCM ciphertext (IV-prefixed) plus the PBKDF2 salt used to seal a vault. */
 export interface SealedVault {
   cipher: Uint8Array;
   salt: Uint8Array;
 }
 
+/** Full output of {@link redactDocument}: redacted text, entries, and sealed vault. */
 export interface RedactionResult {
   redacted: string;
   entries: RedactionEntry[];
@@ -43,6 +49,17 @@ function normalizeCategory(kind: string): string {
   return cat === "" ? "UNKNOWN" : cat;
 }
 
+/**
+ * Replace PII spans with stable `{{CATEGORY_n}}` tokens (non-overlapping).
+ *
+ * Spans are validated, de-overlapped (keeping the rightmost on conflict), and
+ * numbered per category so the mapping is reversible via {@link rehydrate}.
+ *
+ * @param text - The source text.
+ * @param pii - Detected PII entities to redact.
+ * @param prefix - Optional token prefix to namespace tokens (e.g. per chunk).
+ * @returns The redacted text and the ordered redaction entries.
+ */
 export function buildRedaction(
   text: string,
   pii: PiiEntity[],
@@ -83,6 +100,13 @@ export function buildRedaction(
   return { redacted: result, entries };
 }
 
+/**
+ * Reverse {@link buildRedaction} by substituting tokens back to originals.
+ *
+ * @param redacted - The redacted text.
+ * @param entries - The redaction entries produced during redaction.
+ * @returns The rehydrated text.
+ */
 export function rehydrate(redacted: string, entries: RedactionEntry[]): string {
   let out = redacted;
   for (const en of entries) {
@@ -91,6 +115,13 @@ export function rehydrate(redacted: string, entries: RedactionEntry[]): string {
   return out;
 }
 
+/**
+ * Encrypt redaction entries into a passphrase-sealed AES-GCM vault.
+ *
+ * @param entries - The redaction entries to protect.
+ * @param passphrase - The passphrase used to derive the encryption key.
+ * @returns The {@link SealedVault} (IV-prefixed ciphertext plus salt).
+ */
 export async function sealVault(
   entries: RedactionEntry[],
   passphrase: string,
@@ -111,6 +142,13 @@ export async function sealVault(
   return { cipher, salt };
 }
 
+/**
+ * Decrypt a sealed vault back into its redaction entries.
+ *
+ * @param sealed - The sealed vault (ciphertext + salt).
+ * @param passphrase - The passphrase originally used to seal it.
+ * @returns The recovered redaction entries.
+ */
 export async function openVault(
   sealed: SealedVault,
   passphrase: string,
@@ -127,6 +165,15 @@ export async function openVault(
   return JSON.parse(json) as RedactionEntry[];
 }
 
+/**
+ * Redact text and seal the recovered originals into a vault in one step.
+ *
+ * @param text - The source text.
+ * @param pii - Detected PII entities to redact.
+ * @param passphrase - Passphrase used to seal the vault of originals.
+ * @param prefix - Optional token prefix (see {@link buildRedaction}).
+ * @returns The redacted text, redaction entries, and sealed vault.
+ */
 export async function redactDocument(
   text: string,
   pii: PiiEntity[],
@@ -159,6 +206,16 @@ async function deriveKey(passphrase: string, salt: Uint8Array): Promise<CryptoKe
 // In-house reversible redaction (T3): replace each detected span with a per-kind `<KIND_n>` token,
 // counting occurrences independently per kind (1-based). Pure string logic, no crypto. The matched
 // surface values are vaulted separately (T4) so a redacted document on disk reveals nothing.
+/**
+ * Replace spans with per-kind `<KIND_n>` tokens using pure string logic.
+ *
+ * Unlike {@link buildRedaction}, this carries no crypto; the original surface
+ * values are expected to be vaulted separately. Reverse with {@link rehydrateText}.
+ *
+ * @param text - The source text.
+ * @param spans - The spans to redact (kind + offsets).
+ * @returns The redacted text and the placed tokens.
+ */
 export function redactText(text: string, spans: RedactionSpan[]): RedactTextResult {
   const sorted = [...spans]
     .filter((s) => s.start >= 0 && s.end <= text.length && s.start < s.end)
@@ -178,6 +235,13 @@ export function redactText(text: string, spans: RedactionSpan[]): RedactTextResu
 }
 
 // Reverse redactText using the original surface values keyed by token.
+/**
+ * Reverse {@link redactText} using original surface values keyed by token.
+ *
+ * @param redacted - The redacted text.
+ * @param tokens - Pairs of `{ token, value }` mapping tokens to originals.
+ * @returns The rehydrated text.
+ */
 export function rehydrateText(redacted: string, tokens: { token: string; value: string }[]): string {
   let out = redacted;
   for (const t of tokens) {

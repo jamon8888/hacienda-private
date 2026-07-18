@@ -1,6 +1,7 @@
 import { E5_TOKENIZER_URL, E5_TOKENIZER_CONFIG_URL, EMBED_DIM, e5ModelUrl } from "./constants";
 import type { ModelScenario } from "./scenario";
 
+/** Minimal shape required to embed a chunk: just its text. */
 export interface EmbeddableChunk {
   text: string;
 }
@@ -159,6 +160,13 @@ async function embedOne(text: string, prefix: Prefix, scenario: ModelScenario = 
 }
 
 // DEFAULT_SCENARIO is a defensive fallback; ingest.ts and query.ts now pass a real selectScenario() output.
+/**
+ * Embed a batch of chunks as normalized `passage:`-prefixed e5 vectors.
+ *
+ * @param chunks - The chunks to embed (text only).
+ * @param scenario - Model/runtime scenario; defaults to a conservative fallback.
+ * @returns One L2-normalized {@link Float32Array} embedding per input chunk.
+ */
 export async function embedChunks(chunks: EmbeddableChunk[], scenario: ModelScenario = DEFAULT_SCENARIO): Promise<Float32Array[]> {
   if (scenario === DEFAULT_SCENARIO && !warnedDefaultScenario) {
     warnedDefaultScenario = true;
@@ -168,6 +176,13 @@ export async function embedChunks(chunks: EmbeddableChunk[], scenario: ModelScen
 }
 
 // DEFAULT_SCENARIO is a defensive fallback; ingest.ts and query.ts now pass a real selectScenario() output.
+/**
+ * Embed a single search query as a normalized `query:`-prefixed e5 vector.
+ *
+ * @param text - The query text.
+ * @param scenario - Model/runtime scenario; defaults to a conservative fallback.
+ * @returns An L2-normalized {@link Float32Array} query embedding.
+ */
 export async function embedQuery(text: string, scenario: ModelScenario = DEFAULT_SCENARIO): Promise<Float32Array> {
   if (scenario === DEFAULT_SCENARIO && !warnedDefaultScenario) {
     warnedDefaultScenario = true;

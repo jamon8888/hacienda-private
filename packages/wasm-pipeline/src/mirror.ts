@@ -8,6 +8,7 @@ import { API_BASE } from "./constants";
 // vault must be embedded inside that binary blob — we bundle index + vault into a single
 // `MirrorBundle` and serialize it as JSON-wrapped binary so the server can later hand the blob back
 // verbatim to `loadIndex` (Plan 4 cross-plan dependency).
+/** A PII span in the mirror payload: token-only, optionally owner-decryptable. */
 export interface MirrorPiiSpan {
   doc_id: string;
   kind: string;
@@ -19,6 +20,7 @@ export interface MirrorPiiSpan {
   ciphertext?: string;
 }
 
+/** A redacted, citeable chunk carried in the mirror payload for server RAG. */
 export interface MirrorChunk {
   doc_id: string;
   chunk_index: number;
@@ -29,6 +31,7 @@ export interface MirrorChunk {
   citation: string;
 }
 
+/** The complete mirror payload bundling index bytes, vault bytes, PII, and chunks. */
 export interface MirrorBundle {
   version: 1;
   index: number[]; // raw EdgeVec bytes (browser uses)
@@ -37,6 +40,15 @@ export interface MirrorBundle {
   chunks: MirrorChunk[]; // server answers rag_query from this (cited)
 }
 
+/**
+ * Assemble a {@link MirrorBundle} from raw index/vault bytes and metadata.
+ *
+ * @param index - Serialized EdgeVec index bytes.
+ * @param vault - Serialized curtain-vault bytes.
+ * @param pii - PII spans (token-only) to mirror.
+ * @param chunks - Redacted, citeable chunks to mirror.
+ * @returns The versioned mirror bundle object.
+ */
 export function serializeMirror(
   index: Uint8Array,
   vault: Uint8Array,
@@ -52,6 +64,15 @@ export function serializeMirror(
   };
 }
 
+/**
+ * Serialize a mirror bundle to UTF-8 JSON bytes for upload.
+ *
+ * @param index - Serialized EdgeVec index bytes.
+ * @param vault - Serialized curtain-vault bytes.
+ * @param pii - PII spans (token-only) to mirror.
+ * @param chunks - Redacted, citeable chunks to mirror.
+ * @returns The bundle encoded as a {@link Uint8Array}.
+ */
 export function serializeMirrorToBytes(
   index: Uint8Array,
   vault: Uint8Array,
@@ -62,6 +83,14 @@ export function serializeMirrorToBytes(
   return new TextEncoder().encode(JSON.stringify(bundle));
 }
 
+/**
+ * Upload a serialized mirror payload to the Node service for a matter.
+ *
+ * @param matter - The matter the mirror belongs to.
+ * @param payload - The serialized mirror bytes (see {@link serializeMirrorToBytes}).
+ * @param scopeToken - Bearer scope token authorizing the mirror write.
+ * @throws Error if the server responds with a non-OK status.
+ */
 export async function pushMirror(
   matter: Matter,
   payload: Uint8Array,

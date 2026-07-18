@@ -28,6 +28,7 @@ function runPiiWhenIdle(text: string, piiTypes: readonly string[], scenario: Mod
   });
 }
 
+/** Caller-supplied options controlling a single {@link ingestFolder} run. */
 export interface IngestOptions {
   passphrase: string;
   scopeToken: string;
@@ -35,6 +36,19 @@ export interface IngestOptions {
   language?: string[];
 }
 
+/**
+ * Run the full browser ingest pipeline for one file into a matter/folder.
+ *
+ * Extracts and chunks the document, embeds chunks, detects and redacts PII,
+ * builds and serializes the EdgeVec index, seals the redaction vault, and
+ * pushes the resulting mirror bundle to the Node service.
+ *
+ * @param matter - The owning matter.
+ * @param folder - The folder the document belongs to (used as its doc id).
+ * @param file - The document as a `File` or `Uint8Array`.
+ * @param options - Passphrase, scope token, and chunk/language settings.
+ * @returns The number of chunks accepted into the index.
+ */
 export async function ingestFolder(
   matter: Matter,
   folder: Folder,

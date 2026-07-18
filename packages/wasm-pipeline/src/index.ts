@@ -1,3 +1,13 @@
+/**
+ * Public entry point (barrel) for the `@xberg-io/wasm-pipeline` package.
+ *
+ * Re-exports the browser-side document-intelligence pipeline: WASM runtime,
+ * OCR/chunking config, embeddings, PII detection, EdgeVec RAG, reversible
+ * redaction, mirror serialization, ingest/query orchestration, the browser
+ * vault, the local-first egress guard, and device-capability/scenario helpers.
+ *
+ * @module
+ */
 export { initWasm, extractDocument, getWasm, firstDocument, extractText } from "./runtime";
 export type {
   WasmExtractionConfig,

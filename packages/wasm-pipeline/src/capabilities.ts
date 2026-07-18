@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+/** Zod schema describing a detected device's compute capabilities. */
 export const DeviceProfileSchema = z.object({
   webgpu: z.boolean(),
   webgl: z.boolean(),
@@ -13,6 +14,7 @@ export const DeviceProfileSchema = z.object({
   formFactor: z.enum(["desktop", "mobile", "tablet"]),
   platform: z.string(),
 });
+/** A validated device capability profile (inferred from {@link DeviceProfileSchema}). */
 export type DeviceProfile = z.infer<typeof DeviceProfileSchema>;
 
 const SIMD_WASM = Uint8Array.from([0,97,115,109,1,0,0,0,1,5,1,96,0,1,123,3,2,1,0,10,10,1,8,0,65,0,253,15,253,98,11]);
@@ -51,6 +53,15 @@ interface GpuLike {
   requestAdapter(opts?: { powerPreference?: "low-power" | "high-performance" }): Promise<GpuAdapterLike | null>;
 }
 
+/**
+ * Probe the current environment for GPU/WASM/CPU/memory capabilities.
+ *
+ * Detects WebGPU (with adapter info), WebGL, WASM SIMD, hardware concurrency,
+ * device memory, and form factor, returning a schema-validated profile used to
+ * pick an embedding scenario.
+ *
+ * @returns A validated {@link DeviceProfile} for the current device.
+ */
 export async function detectCapabilities(): Promise<DeviceProfile> {
   const nav = typeof navigator !== "undefined" ? navigator : ({} as Navigator);
   const gpu = (nav as unknown as { gpu?: GpuLike }).gpu;

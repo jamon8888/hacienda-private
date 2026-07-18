@@ -28,14 +28,28 @@ function fromBase64(b64: string): Uint8Array {
   return out;
 }
 
+/** Base64-encoded AES-GCM output: the IV and ciphertext for a single value. */
 export interface CipherBundle {
   iv: string;
   ct: string;
 }
 
+/**
+ * Dependency-free WebCrypto AES-GCM vault for the browser engine.
+ *
+ * Keys are derived from a passphrase via PBKDF2 (SHA-256). This is the browser
+ * owner's vault, distinct from the Node service's offline-rehydration vault.
+ */
 export class BrowserVault {
   constructor(private readonly key: CryptoKey) {}
 
+  /**
+   * Derive an AES-GCM key from a passphrase and salt via PBKDF2.
+   *
+   * @param passphrase - The user passphrase.
+   * @param salt - Per-vault random salt.
+   * @returns A non-extractable AES-GCM `CryptoKey`.
+   */
   static async deriveKey(passphrase: string, salt: Uint8Array): Promise<CryptoKey> {
     const subtle = await getSubtle();
     const baseKey = await subtle.importKey(
@@ -54,6 +68,12 @@ export class BrowserVault {
     );
   }
 
+  /**
+   * Encrypt plaintext bytes with a fresh random IV.
+   *
+   * @param plaintext - The bytes to encrypt.
+   * @returns A base64 {@link CipherBundle} (IV + ciphertext).
+   */
   async encrypt(plaintext: Uint8Array): Promise<CipherBundle> {
     const subtle = await getSubtle();
     const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -65,6 +85,12 @@ export class BrowserVault {
     return { iv: toBase64(iv), ct: toBase64(new Uint8Array(buf)) };
   }
 
+  /**
+   * Decrypt a {@link CipherBundle} back into plaintext bytes.
+   *
+   * @param bundle - The base64 IV + ciphertext to decrypt.
+   * @returns The decrypted bytes.
+   */
   async decrypt(bundle: CipherBundle): Promise<Uint8Array> {
     const subtle = await getSubtle();
     const iv = fromBase64(bundle.iv);
@@ -77,6 +103,13 @@ export class BrowserVault {
     return new Uint8Array(buf);
   }
 
+  /**
+   * Decrypt an IV-prefixed base64 ciphertext blob to a UTF-8 string.
+   *
+   * @param cipherB64 - Base64 of `IV(12 bytes) || ciphertext`.
+   * @returns The decrypted plaintext string.
+   * @throws Error if the input is shorter than the 12-byte IV.
+   */
   async rehydrate(cipherB64: string): Promise<string> {
     const bytes = fromBase64(cipherB64);
     if (bytes.length < 12) throw new Error("ciphertext too short");

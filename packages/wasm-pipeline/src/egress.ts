@@ -4,6 +4,16 @@
 
 const DEFAULT_ALLOWED_HOSTS = ["localhost", "127.0.0.1"];
 
+/**
+ * Assert that a URL targets only local-first (or explicitly allowlisted) hosts.
+ *
+ * Enforces the no-egress invariant: rejects non-http(s) schemes and any host
+ * outside `localhost`/`127.0.0.1` plus the provided allowlist.
+ *
+ * @param url - The URL to validate.
+ * @param allowedHosts - Extra permitted hostnames (defaults to localhost only).
+ * @throws Error if the URL is malformed, non-http(s), or targets a remote host.
+ */
 export function assertLocalFirst(url: string, allowedHosts: string[] = DEFAULT_ALLOWED_HOSTS): void {
   let parsed: URL;
   try {
