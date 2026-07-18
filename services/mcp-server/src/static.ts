@@ -45,7 +45,8 @@ export const PLACEHOLDER_HTML = `<!doctype html>
 
 /** Insert `window.__XBERG_TOKEN__` so the same-origin UI can read the session token. */
 export function injectToken(html: string, token: string): string {
-  const tag = `<script>window.__XBERG_TOKEN__=${JSON.stringify(token)};</script>`;
+  const safe = JSON.stringify(token).replace(/</g, "\\u003c");
+  const tag = `<script>window.__XBERG_TOKEN__=${safe};</script>`;
   if (html.includes("<head>")) {
     return html.replace("<head>", `<head>${tag}`);
   }

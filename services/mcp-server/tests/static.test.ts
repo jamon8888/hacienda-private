@@ -22,4 +22,10 @@ describe("injectToken", () => {
     const out = injectToken(PLACEHOLDER_HTML, "tok");
     expect(out).toContain("__XBERG_TOKEN__");
   });
+
+  it("escapes < so a </script> in the token cannot break out", () => {
+    const out = injectToken("<head></head>", "</script><script>alert(1)</script>");
+    expect(out).not.toContain("</script><script>alert(1)");
+    expect(out).toContain("\\u003c/script>");
+  });
 });
