@@ -19,12 +19,26 @@
     "incremental": true,
     "noEmit": true,
     "plugins": [{ "name": "next" }],
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./*"],
-      "@xberg-io/wasm-pipeline": ["./lib/engine/index.ts"]
+      "@xberg-io/wasm-pipeline": ["./lib/engine/index.ts"],
+      "@xberg-io/wasm-pipeline-real": ["../../packages/wasm-pipeline/src/index.ts", "../../packages/wasm-pipeline/src/index"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "components/index.ts",
+    "components/ui/command.tsx",
+    "components/ui/dialog.tsx",
+    "components/ui/dropdown-menu.tsx",
+    "components/ui/select.tsx",
+    "components/ui/spinner.tsx",
+    "components/ui/docx-annotation-card.tsx",
+    "components/ui/docx-viewer.tsx",
+    "components/ui/file-system.tsx",
+    "components/ui/pdf-viewer.tsx",
+    "components/ui/xlsx-viewer.tsx",
+    "components/blocks/file-system-block.tsx"
+  ]
 }

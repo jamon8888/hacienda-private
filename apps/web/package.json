@@ -9,7 +9,8 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -45,6 +46,7 @@
     "@radix-ui/react-tooltip": "^1.2.12",
     "@tanstack/react-virtual": "^3.14.6",
     "@xberg-io/core": "workspace:*",
+    "@xberg-io/wasm-pipeline": "workspace:*",
     "border-beam": "^1.0.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -69,7 +71,7 @@
     "jsdom": "^24.1.1",
     "postcss": "^8.4.40",
     "tailwindcss": "^3.4.7",
-    "typescript": "^7.0.2",
+    "typescript": "^5.7.3",
     "vitest": "^4.1.10"
   }
 }
