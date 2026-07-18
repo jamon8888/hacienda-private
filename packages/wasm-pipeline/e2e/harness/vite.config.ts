@@ -11,6 +11,11 @@ import { defineConfig } from "vite";
 const MCP_TARGET = process.env["E2E_MCP_TARGET"] ?? "http://localhost:8787";
 const HARNESS_PORT = Number(process.env["E2E_HARNESS_PORT"] ?? 5178);
 
+/**
+ * Vite plugin that sends COOP/COEP headers on every dev-server response so the
+ * harness page is cross-origin isolated (required for SharedArrayBuffer and
+ * multi-threaded onnxruntime-web).
+ */
 const crossOriginIsolation = {
   name: "cross-origin-isolation",
   configureServer(server: { middlewares: { use: (fn: (req: unknown, res: { setHeader: (k: string, v: string) => void }, next: () => void) => void) => void } }) {

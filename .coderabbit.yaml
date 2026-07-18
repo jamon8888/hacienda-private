@@ -1,0 +1,34 @@
+# CodeRabbit configuration
+# https://docs.coderabbit.ai/reference/yaml-template
+version: 2
+language: en-US
+
+reviews:
+  profile: chill
+  # Pre-merge docstring-coverage check should apply to shipped source only.
+  # Test and E2E harness files are intentionally exempt — test code is not
+  # expected to carry API docstrings.
+  finishing_touches:
+    docstrings:
+      enabled: true
+
+  path_filters:
+    # Exclude generated/vendored and test artifacts from review + checks.
+    - "!**/dist/**"
+    - "!**/*.min.js"
+    - "!**/*.lock"
+
+  path_instructions:
+    - path: "**/e2e/**"
+      instructions: >-
+        This is Playwright E2E test/harness code. Do not require or count
+        docstrings here for docstring-coverage; focus on correctness and
+        flakiness, not documentation coverage.
+    - path: "**/*.test.ts"
+      instructions: >-
+        This is unit test code (vitest). Do not require or count docstrings
+        here for docstring-coverage.
+    - path: "**/*.spec.ts"
+      instructions: >-
+        This is spec/test code. Do not require or count docstrings here for
+        docstring-coverage.

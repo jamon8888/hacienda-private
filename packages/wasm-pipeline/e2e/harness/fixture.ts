@@ -3,6 +3,10 @@ import { test as base, expect, type Page } from "@playwright/test";
 // Shared fixture for browser E2E specs. Navigates to the Vite harness page and
 // waits until `window.XbergPipeline` (the full library) is attached, so specs
 // can immediately call `page.evaluate(() => window.XbergPipeline.*)`.
+/**
+ * Playwright test extended with a `harness` fixture: a `Page` already navigated
+ * to the Vite harness with the wasm-pipeline library loaded on `window`.
+ */
 export const test = base.extend<{ harness: Page }>({
   harness: async ({ page }, use) => {
     await page.goto("/");
