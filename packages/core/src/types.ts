@@ -11,11 +11,34 @@ export interface Matter {
   created_at: string;
 }
 
+export type FolderStatus = "pending" | "processing" | "done" | "error";
+
 export interface Folder {
   id: string;
   matter_id: string;
   name: string;
   path?: string;
+  status: FolderStatus;
+  last_ingested_at?: string;
+  document_count: number;
+  pii_count: number;
+}
+
+export type IngestSource = "mcp" | "browser";
+
+export interface Document {
+  id: string;
+  folder_id: string;
+  matter_id: string;
+  path: string;
+  content_hash: string;
+  status: FolderStatus;
+  pages: number;
+  chunk_count: number;
+  pii_count: number;
+  ingested_via: IngestSource;
+  error_message?: string;
+  created_at: string;
 }
 
 export interface PiiEntity {

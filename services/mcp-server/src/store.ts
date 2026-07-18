@@ -6,7 +6,10 @@ import type {
   AuthScopes,
   ConsentGrant,
   ConsentRecord,
+  Document,
   Folder,
+  FolderStatus,
+  IngestSource,
   Matter,
 } from "@xberg-io/core";
 import { AppError } from "./error.js";
@@ -24,6 +27,22 @@ CREATE TABLE IF NOT EXISTS folders (
   path TEXT NULL,
   created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS documents (
+  id TEXT PRIMARY KEY,
+  folder_id TEXT NOT NULL REFERENCES folders(id),
+  matter_id TEXT NOT NULL REFERENCES matters(id),
+  path TEXT NOT NULL,
+  content_hash TEXT NOT NULL,
+  status TEXT NOT NULL,
+  pages INTEGER NOT NULL DEFAULT 0,
+  chunk_count INTEGER NOT NULL DEFAULT 0,
+  pii_count INTEGER NOT NULL DEFAULT 0,
+  ingested_via TEXT NOT NULL,
+  error_message TEXT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_documents_folder ON documents(folder_id);
+CREATE INDEX IF NOT EXISTS idx_documents_hash ON documents(folder_id, content_hash);
 CREATE TABLE IF NOT EXISTS consent (
   id TEXT PRIMARY KEY,
   subject TEXT NOT NULL,
@@ -55,6 +74,13 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 `;
 
+function ensureColumn(db: Database.Database, table: string, column: string, definition: string): void {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
 export class MetadataStore {
   private readonly db: Database.Database;
 
@@ -63,6 +89,8 @@ export class MetadataStore {
     this.db = new Database(dbPath);
     this.db.pragma("journal_mode = WAL");
     this.db.exec(SCHEMA);
+    ensureColumn(this.db, "folders", "status", "TEXT NOT NULL DEFAULT 'pending'");
+    ensureColumn(this.db, "folders", "last_ingested_at", "TEXT NULL");
   }
 
   close(): void {
@@ -100,6 +128,9 @@ export class MetadataStore {
       matter_id: matterId,
       name,
       path,
+      status: "pending",
+      document_count: 0,
+      pii_count: 0,
     };
     this.db
       .prepare("INSERT INTO folders (id, matter_id, name, path, created_at) VALUES (?, ?, ?, ?, ?)")
@@ -109,14 +140,101 @@ export class MetadataStore {
 
   getFolders(matterId: string): Folder[] {
     return this.db
-      .prepare("SELECT id, matter_id, name, path FROM folders WHERE matter_id = ? ORDER BY name")
+      .prepare(
+        `SELECT f.id, f.matter_id, f.name, f.path, f.status, f.last_ingested_at,
+                COUNT(d.id) AS document_count,
+                COALESCE(SUM(d.pii_count), 0) AS pii_count
+         FROM folders f
+         LEFT JOIN documents d ON d.folder_id = f.id
+         WHERE f.matter_id = ?
+         GROUP BY f.id
+         ORDER BY f.name`,
+      )
       .all(matterId) as Folder[];
   }
 
   getFolder(id: string): Folder | undefined {
     return this.db
-      .prepare("SELECT id, matter_id, name, path FROM folders WHERE id = ?")
+      .prepare(
+        `SELECT f.id, f.matter_id, f.name, f.path, f.status, f.last_ingested_at,
+                COUNT(d.id) AS document_count,
+                COALESCE(SUM(d.pii_count), 0) AS pii_count
+         FROM folders f
+         LEFT JOIN documents d ON d.folder_id = f.id
+         WHERE f.id = ?
+         GROUP BY f.id`,
+      )
       .get(id) as Folder | undefined;
+  }
+
+  createDocument(input: {
+    folder_id: string;
+    matter_id: string;
+    path: string;
+    content_hash: string;
+    ingested_via: IngestSource;
+  }): Document {
+    if (!this.getFolder(input.folder_id)) {
+      throw new AppError("not_found", `folder ${input.folder_id} not found`);
+    }
+    const doc: Document = {
+      id: randomUUID(),
+      folder_id: input.folder_id,
+      matter_id: input.matter_id,
+      path: input.path,
+      content_hash: input.content_hash,
+      status: "processing",
+      pages: 0,
+      chunk_count: 0,
+      pii_count: 0,
+      ingested_via: input.ingested_via,
+      created_at: new Date().toISOString(),
+    };
+    this.db
+      .prepare(
+        `INSERT INTO documents
+         (id, folder_id, matter_id, path, content_hash, status, pages, chunk_count, pii_count, ingested_via, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(doc.id, doc.folder_id, doc.matter_id, doc.path, doc.content_hash, doc.status, doc.pages, doc.chunk_count, doc.pii_count, doc.ingested_via, doc.created_at);
+    return doc;
+  }
+
+  findDocumentByHash(folderId: string, contentHash: string): Document | undefined {
+    return this.db
+      .prepare(
+        `SELECT id, folder_id, matter_id, path, content_hash, status, pages, chunk_count, pii_count, ingested_via, error_message, created_at
+         FROM documents WHERE folder_id = ? AND content_hash = ?`,
+      )
+      .get(folderId, contentHash) as Document | undefined;
+  }
+
+  updateDocumentStatus(
+    id: string,
+    status: FolderStatus,
+    fields: { pages?: number; chunk_count?: number; pii_count?: number; error_message?: string } = {},
+  ): void {
+    this.db
+      .prepare(
+        `UPDATE documents SET status = ?, pages = COALESCE(?, pages), chunk_count = COALESCE(?, chunk_count),
+         pii_count = COALESCE(?, pii_count), error_message = ? WHERE id = ?`,
+      )
+      .run(status, fields.pages ?? null, fields.chunk_count ?? null, fields.pii_count ?? null, fields.error_message ?? null, id);
+  }
+
+  getDocumentsByFolder(folderId: string): Document[] {
+    return this.db
+      .prepare(
+        `SELECT id, folder_id, matter_id, path, content_hash, status, pages, chunk_count, pii_count, ingested_via, error_message, created_at
+         FROM documents WHERE folder_id = ? ORDER BY created_at`,
+      )
+      .all(folderId) as Document[];
+  }
+
+  updateFolderStatus(folderId: string, status: FolderStatus): void {
+    this.db
+      .prepare("UPDATE folders SET status = ?, last_ingested_at = ? WHERE id = ?")
+      .run(status, new Date().toISOString(), folderId);
   }
 
   recordIngest(
