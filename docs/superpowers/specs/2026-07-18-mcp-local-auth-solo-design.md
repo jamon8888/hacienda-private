@@ -2,7 +2,7 @@
 
 **Date :** 2026-07-18
 **Issue :** [#8](https://github.com/jamon8888/hacienda-private/issues/8) — *no authenticated-subject/identity model*
-**Branche du code visé :** `plan5-security-gdpr` (PR #6) — **pas encore sur `main`**
+**Code de référence :** branche `plan5-security-gdpr` (PR #6, **CLOSED** par le propriétaire — voir §6). Le fix se construit sur `main`.
 **Statut :** design validé, prêt pour plan d'implémentation
 
 ---
@@ -124,9 +124,25 @@ non sensible), mais `GET /` **injecte** le token pour l'UI :
 ```
 
 Le serveur intercepte déjà `GET /` → l'injection s'y fait par un passage de template sur le
-`index.html` servi. L'UI web lit `window.__XBERG_TOKEN__` et l'envoie en `Bearer` sur ses appels
-API. Un onglet cross-origin ne peut **pas** lire ce HTML (SOP) **et** est bloqué par la garde
-d'origine → double défense.
+`index.html` servi (lecture + insertion du `<script>` en tête de `<head>`, avant le bundle de
+l'app). L'UI web lit `window.__XBERG_TOKEN__` et l'envoie en `Bearer` sur ses appels API. Un onglet
+cross-origin ne peut **pas** lire ce HTML (SOP) **et** est bloqué par la garde d'origine → double
+défense.
+
+**Décision : injection plutôt qu'endpoint `GET /session/token` séparé.** Raison de sécurité, non
+d'ergonomie : avec l'injection, la **confidentialité du token repose sur la Same-Origin Policy**
+(un invariant du navigateur), pas sur notre propre code de parsing d'en-têtes. Un endpoint séparé
+`GET /session/token` devrait s'appuyer *entièrement* sur la garde d'origine pour rester secret — si
+cette garde a un bug/bypass, le token fuite. L'injection place la SOP comme rempart principal et la
+garde d'origine comme défense-en-profondeur, pas l'inverse. Pour une profession réglementée, la
+phrase d'audit *« la confidentialité du credential repose sur la Same-Origin Policy du navigateur »*
+est plus forte et plus simple à défendre que *« … sur la correction de notre vérification
+d'en-tête »*.
+
+*Durcissement futur documenté (hors périmètre) :* cookie `HttpOnly; SameSite=Strict` — le token ne
+transiterait jamais par le JS (immunité au vol par XSS). Écarté ici car il réintroduit des
+considérations CSRF (cookie ambiant) et complique les clients non-navigateur (CLI/MCP), alors que
+le `Bearer` couvre les deux surfaces simplement.
 
 **Pas de CORS permissif** : aucune en-tête `Access-Control-Allow-Origin: *`.
 
@@ -160,22 +176,44 @@ process par le client propriétaire est la frontière d'authentification.*
 | Attaquant ayant déjà l'accès fichier au home de l'utilisateur | ❌ (hors périmètre) | Pourrait lire vault/SQLite de toute façon — même frontière de confiance |
 | Multi-utilisateur / multi-tenant | ❌ (par design) | Non-objectif ; `subject="owner"` unique |
 
-## 6. Stratégie de portage vers `main`
+## 6. État de PR #6 et stratégie de portage vers `main`
 
-Le code visé est sur `plan5-security-gdpr`, pas sur `main` (où `mcp/` n'a qu'un `mod.ts` de stubs
-et `AppContext` n'a pas de `tokenScopes`). Écrire le fix sans dire comment il atterrit est
-précisément ce qui a bloqué jusqu'ici. Séquence retenue :
+**Situation réelle (vérifiée) :** PR #6 est **déjà `CLOSED`** par le propriétaire (`jamon8888`), le
+2026-07-18, **délibérément**. Son commentaire de fermeture précise que :
 
-1. **Rebaser/réconcilier `plan5-security-gdpr` sur `main`** d'abord — `main` a avancé (capability
-   detection, scénarios adaptatifs, e2e web UI). Le fix s'écrit sur une branche à jour, pas sur un
-   `plan5` divergent.
-2. **Implémenter le fix** (Principal + garde d'origine + token) dans cette branche réconciliée.
-3. **PR unique** « feat(mcp-server): local single-owner auth (Principal, origin guard, session token) »
-   qui *remplace/absorbe* PR #6 sur ce volet, plutôt que de merger PR #6 tel quel puis patcher.
-4. Fermer l'issue #8 en référençant cette PR.
+- le **no-egress guard** et le **vault AES-GCM navigateur** (BrowserVault, PBKDF2) sont **déjà
+  consolidés sur `main`** (commit `0a368aa822`) ;
+- la partie « scoped tokens » **n'a jamais été réellement implémentée** sur la branche (les 4 no-ops
+  de l'issue #8) et est volontairement **déférée à #8**, comme *« un vrai design d'identité
+  par-requête, pas un copier-coller »* ;
+- la branche `plan5-security-gdpr` est **conservée** (ni mergée, ni supprimée).
 
-Décision de merge (PR #6 tel quel vs. remplacé) à confirmer au moment du plan, mais le design
-suppose **remplacement**, pas empilement.
+**Conséquence : il n'y a aucune décision « merger vs remplacer PR #6 » à prendre — le propriétaire
+l'a déjà tranchée.** Ce design est aligné avec sa demande explicite. Aucun travail de l'associé
+n'est écrasé : sa substance (egress + vault) vit déjà sur `main`.
+
+**Séquence retenue :**
+
+1. Travailler **directement sur `main`** (qui contient déjà egress + vault). Ne PAS réconcilier ni
+   merger `plan5` : la branche sert seulement de **référence** pour la forme des 3 fichiers
+   `mcp/{scopes,tools,consent}.ts`.
+2. **Porter ces 3 fichiers sur `main` réécrits** avec le modèle `Principal` (§4). Sur `main`, `mcp/`
+   n'a aujourd'hui qu'un `mod.ts` de stubs → ce portage donne aussi leurs vrais corps aux outils.
+3. **Corriger, pendant le portage, les 2 findings CodeRabbit** valides sur le `tools.ts` de plan5
+   (voir §6.1) — ne pas les réintroduire.
+4. **PR unique** sur `main` : `feat(mcp-server): local single-owner auth (Principal, origin guard, session token)`, référençant et **fermant #8**.
+
+### 6.1 Findings CodeRabbit hérités à corriger au portage
+
+De la revue de PR #6 (encore valides, car ces fichiers ne sont pas sur `main`) :
+
+- **`recordRedaction` absente de `MetadataStore`** (`tools.ts` `redact`) → ne compile pas.
+  Ajouter la méthode dans `store.ts` (ou câbler l'API existante) en préservant le flux d'audit.
+- **`top_k` non borné** (`registerTools`, `rag_query`) → `z.number().int().positive().max(100).optional()`
+  pour éviter un `LIMIT -1` non borné (épuisement mémoire) et le cas `0` qui contourne le défaut `?? 8`.
+
+*(Un 3ᵉ finding — caractères invisibles dans `egress.test.ts` — concerne un fichier déjà consolidé
+sur `main` ; hors périmètre de ce design, à vérifier séparément.)*
 
 ## 7. Périmètre
 
