@@ -8,9 +8,7 @@ describe("assertLocalFirst egress guard", () => {
   });
 
   it("allows pinned model-repo hosts via allowlist", () => {
-    expect(() =>
-      assertLocalFirst("https://huggingface.co/x/model.onnx", ["huggingface.co"]),
-    ).not.toThrow();
+    expect(() => assertLocalFirst("https://huggingface.co/x/model.onnx", ["huggingface.co"])).not.toThrow();
   });
 
   it("rejects remote hosts", () => {
