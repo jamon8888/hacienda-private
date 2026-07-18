@@ -51,6 +51,16 @@ export interface PiiEntity {
 
 export type PiiReport = PiiEntity[];
 
+export interface DocumentPiiEntity {
+  id: string;
+  document_id: string;
+  kind: string;
+  start: number;
+  end: number;
+  text: string;
+  reviewed: boolean;
+}
+
 export interface BoundingBox {
   x: number;
   y: number;

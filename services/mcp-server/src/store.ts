@@ -7,6 +7,7 @@ import type {
   ConsentGrant,
   ConsentRecord,
   Document,
+  DocumentPiiEntity,
   Folder,
   FolderStatus,
   IngestSource,
@@ -43,6 +44,16 @@ CREATE TABLE IF NOT EXISTS documents (
 );
 CREATE INDEX IF NOT EXISTS idx_documents_folder ON documents(folder_id);
 CREATE INDEX IF NOT EXISTS idx_documents_hash ON documents(folder_id, content_hash);
+CREATE TABLE IF NOT EXISTS document_pii (
+  id TEXT PRIMARY KEY,
+  document_id TEXT NOT NULL REFERENCES documents(id),
+  kind TEXT NOT NULL,
+  start_offset INTEGER NOT NULL,
+  end_offset INTEGER NOT NULL,
+  text TEXT NOT NULL,
+  reviewed INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_document_pii_document ON document_pii(document_id);
 CREATE TABLE IF NOT EXISTS consent (
   id TEXT PRIMARY KEY,
   subject TEXT NOT NULL,
@@ -229,6 +240,34 @@ export class MetadataStore {
          FROM documents WHERE folder_id = ? ORDER BY created_at`,
       )
       .all(folderId) as Document[];
+  }
+
+  insertPiiEntities(
+    documentId: string,
+    entities: { kind: string; start: number; end: number; text: string }[],
+  ): DocumentPiiEntity[] {
+    const insert = this.db.prepare(
+      "INSERT INTO document_pii (id, document_id, kind, start_offset, end_offset, text, reviewed) VALUES (?, ?, ?, ?, ?, ?, 0)",
+    );
+    const insertAll = this.db.transaction((rows: typeof entities) => {
+      const out: DocumentPiiEntity[] = [];
+      for (const row of rows) {
+        const id = randomUUID();
+        insert.run(id, documentId, row.kind, row.start, row.end, row.text);
+        out.push({ id, document_id: documentId, kind: row.kind, start: row.start, end: row.end, text: row.text, reviewed: false });
+      }
+      return out;
+    });
+    return insertAll(entities);
+  }
+
+  getPiiByDocument(documentId: string): DocumentPiiEntity[] {
+    const rows = this.db
+      .prepare(
+        "SELECT id, document_id, kind, start_offset AS start, end_offset AS end, text, reviewed FROM document_pii WHERE document_id = ? ORDER BY start_offset",
+      )
+      .all(documentId) as (Omit<DocumentPiiEntity, "reviewed"> & { reviewed: number })[];
+    return rows.map((r) => ({ ...r, reviewed: r.reviewed === 1 }));
   }
 
   updateFolderStatus(folderId: string, status: FolderStatus): void {
