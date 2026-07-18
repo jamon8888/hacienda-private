@@ -10,7 +10,7 @@ import { ModelCache } from "./models.js";
 import { MirrorStore } from "./mirror.js";
 import { KeyVault } from "./vault.js";
 import { PLACEHOLDER_HTML, resolveUiDir, resolveWasmPackageDir, injectToken } from "./static.js";
-import { authenticateHttp, loadOrCreateSessionToken, resolveLaunchScopes } from "./auth.js";
+import { authenticateHttp, loadOrCreateSessionToken, resolveLaunchScopes, ownerPrincipal } from "./auth.js";
 import { authorize } from "./mcp/scopes.js";
 import type { Principal } from "./principal.js";
 import { runMcp } from "./mcp/mod.js";
@@ -240,20 +240,19 @@ async function main(): Promise<void> {
   const args = parseArgs(process.argv);
   const config = buildConfig(args);
   const ctx = createAppContext(config);
+  const scopes = resolveLaunchScopes(process.env);
 
   if (args.command === "mcp") {
-    await runMcp(ctx);
+    await runMcp(ctx, ownerPrincipal(scopes));
     return;
   }
 
-  const auth: HttpAuth = {
-    token: loadOrCreateSessionToken(config.dataDir),
-    scopes: resolveLaunchScopes(process.env),
-  };
-  const server = createHttpServer(ctx, auth);
+  const token = loadOrCreateSessionToken(config.dataDir);
+  const server = createHttpServer(ctx, { token, scopes });
   server.listen(config.port, config.host, () => {
     console.log(`[xberg-mcp] serving http://${config.host}:${config.port}`);
     console.log(`[xberg-mcp] data dir: ${config.dataDir}`);
+    console.log(`[xberg-mcp] session token: ${config.dataDir}/session.token (mode 0600)`);
   });
 }
 

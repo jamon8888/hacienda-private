@@ -6,6 +6,7 @@ import {
   type Tool,
 } from "@modelcontextprotocol/sdk/types.js";
 import type { AppContext } from "../index.js";
+import type { Principal } from "../principal.js";
 
 const NOT_IMPLEMENTED =
   "Tool bodies are implemented in Plan 4. The Node service holds light metadata + the mirrored " +
@@ -74,7 +75,7 @@ function stubContent(toolName: string): { content: { type: "text"; text: string 
   };
 }
 
-export async function runMcp(ctx: AppContext): Promise<void> {
+export async function runMcp(ctx: AppContext, principal: Principal): Promise<void> {
   const server = new Server(
     { name: "@xberg-io/mcp-server", version: "1.0.0-rc.27" },
     { capabilities: { tools: {} } },
@@ -96,5 +97,10 @@ export async function runMcp(ctx: AppContext): Promise<void> {
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error(`[xberg-mcp] MCP server ready (stub tools; ctx data dir ${ctx.config.dataDir})`);
+  // Single-owner model: the process spawn is the auth boundary. `principal` is the
+  // identity the tool layer (Plan 4) will enforce scopes/consent/audit against.
+  console.error(
+    `[xberg-mcp] MCP server ready as subject="${principal.subject}" ` +
+      `(scopes: ${principal.scopes.join(",")}); data dir ${ctx.config.dataDir}`,
+  );
 }
