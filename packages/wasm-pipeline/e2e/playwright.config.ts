@@ -16,7 +16,7 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: "node ../../services/mcp-server/dist/index.js serve --port 8787 --data-dir $RUNNER_TEMP/xberg-e2e",
+    command: `node ../../services/mcp-server/dist/index.js serve --port 8787 --data-dir ${process.env.RUNNER_TEMP || "/tmp"}/xberg-e2e`,
     port: 8787,
     reuseExistingServer: true,
     timeout: 60_000,

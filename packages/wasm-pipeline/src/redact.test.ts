@@ -53,8 +53,8 @@ describe("redactText / rehydrateText (pure reversible redaction)", () => {
     expect(redacted).not.toContain("Acme Corp");
 
     const restored = rehydrateText(redacted, [
-      { token: "<PERSON_1>", value: "Jane" },
-      { token: "<PERSON_2>", value: "John Doe" },
+      { token: "<PERSON_1>", value: "John Doe" },
+      { token: "<PERSON_2>", value: "Jane" },
       { token: "<ORG_1>", value: "Acme Corp" },
     ]);
     expect(restored).toBe(text);
@@ -66,6 +66,26 @@ describe("redactText / rehydrateText (pure reversible redaction)", () => {
       { kind: "per son", start: 2, end: 3 },
     ]);
     expect(result.tokens.map((t) => t.token)).toEqual(["<PER_SON_1>", "<PER_SON_2>"]);
+  });
+
+  it("records token offsets that index into the redacted output", () => {
+    const { redacted, tokens } = redactText(text, [
+      { kind: "PERSON", start: 0, end: 8 },
+      { kind: "PERSON", start: 13, end: 17 },
+      { kind: "ORG", start: 21, end: 30 },
+    ]);
+    for (const t of tokens) {
+      expect(redacted.slice(t.start, t.end)).toBe(t.token);
+    }
+  });
+
+  it("skips overlapping spans instead of corrupting the text", () => {
+    const { redacted, tokens } = redactText("John Doe", [
+      { kind: "PERSON", start: 0, end: 8 },
+      { kind: "NAME", start: 5, end: 8 }, // overlaps the first span
+    ]);
+    expect(tokens).toHaveLength(1);
+    expect(redacted).toBe("<PERSON_1>");
   });
 });
 

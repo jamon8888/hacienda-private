@@ -6,13 +6,13 @@
 
 const PBKDF2_ITERATIONS = 200_000;
 
-async function getSubtle(): Promise<globalThis.SubtleCrypto> {
+async function getWebCrypto(): Promise<Crypto> {
   const c = (globalThis as { crypto?: Crypto }).crypto;
-  if (c && c.subtle) return c.subtle;
+  if (c && c.subtle) return c;
   // Node 24 fallback for test environments without a global webcrypto.
   const { webcrypto } = await import("crypto");
-  if (webcrypto?.subtle) return webcrypto.subtle as unknown as globalThis.SubtleCrypto;
-  throw new Error("no WebCrypto SubtleCrypto available");
+  if (webcrypto?.subtle) return webcrypto as unknown as Crypto;
+  throw new Error("no WebCrypto available");
 }
 
 function toBase64(bytes: Uint8Array): string {
@@ -51,7 +51,7 @@ export class BrowserVault {
    * @returns A non-extractable AES-GCM `CryptoKey`.
    */
   static async deriveKey(passphrase: string, salt: Uint8Array): Promise<CryptoKey> {
-    const subtle = await getSubtle();
+    const subtle = (await getWebCrypto()).subtle;
     const baseKey = await subtle.importKey(
       "raw",
       new TextEncoder().encode(passphrase),
@@ -75,9 +75,9 @@ export class BrowserVault {
    * @returns A base64 {@link CipherBundle} (IV + ciphertext).
    */
   async encrypt(plaintext: Uint8Array): Promise<CipherBundle> {
-    const subtle = await getSubtle();
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const buf = await subtle.encrypt(
+    const webCrypto = await getWebCrypto();
+    const iv = webCrypto.getRandomValues(new Uint8Array(12));
+    const buf = await webCrypto.subtle.encrypt(
       { name: "AES-GCM", iv: iv as unknown as BufferSource },
       this.key,
       plaintext as unknown as BufferSource,
@@ -92,7 +92,7 @@ export class BrowserVault {
    * @returns The decrypted bytes.
    */
   async decrypt(bundle: CipherBundle): Promise<Uint8Array> {
-    const subtle = await getSubtle();
+    const subtle = (await getWebCrypto()).subtle;
     const iv = fromBase64(bundle.iv);
     const ct = fromBase64(bundle.ct);
     const buf = await subtle.decrypt(
@@ -115,7 +115,7 @@ export class BrowserVault {
     if (bytes.length < 12) throw new Error("ciphertext too short");
     const iv = bytes.subarray(0, 12);
     const ct = bytes.subarray(12);
-    const subtle = await getSubtle();
+    const subtle = (await getWebCrypto()).subtle;
     const buf = await subtle.decrypt(
       { name: "AES-GCM", iv: iv as unknown as BufferSource },
       this.key,

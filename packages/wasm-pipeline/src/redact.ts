@@ -217,19 +217,32 @@ async function deriveKey(passphrase: string, salt: Uint8Array): Promise<CryptoKe
  * @returns The redacted text and the placed tokens.
  */
 export function redactText(text: string, spans: RedactionSpan[]): RedactTextResult {
-  const sorted = [...spans]
+  const sortedAscending = [...spans]
     .filter((s) => s.start >= 0 && s.end <= text.length && s.start < s.end)
-    .sort((a, b) => b.start - a.start);
+    .sort((a, b) => a.start - b.start);
+
+  const accepted: RedactionSpan[] = [];
+  let prevEnd = -1;
+  for (const span of sortedAscending) {
+    if (span.start < prevEnd) continue; // skip overlap
+    accepted.push(span);
+    prevEnd = span.end;
+  }
+
   const counters = new Map<string, number>();
   let result = text;
+  let shift = 0;
   const tokens: RedactionToken[] = [];
-  for (const span of sorted) {
+  for (const span of accepted) {
     const kind = span.kind.toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "UNKNOWN";
     const n = (counters.get(kind) ?? 0) + 1;
     counters.set(kind, n);
     const token = `<${kind}_${n}>`;
-    result = result.slice(0, span.start) + token + result.slice(span.end);
-    tokens.push({ token, start: span.start, end: span.start + token.length, kind: span.kind });
+    const redactedStart = span.start + shift;
+    const redactedEnd = span.end + shift;
+    result = result.slice(0, redactedStart) + token + result.slice(redactedEnd);
+    tokens.push({ token, start: redactedStart, end: redactedStart + token.length, kind: span.kind });
+    shift += token.length - (span.end - span.start);
   }
   return { redacted: result, tokens };
 }
