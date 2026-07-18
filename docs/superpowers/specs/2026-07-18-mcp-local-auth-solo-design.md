@@ -171,10 +171,16 @@ process par le client propriétaire est la frontière d'authentification.*
 | Menace | Couvert ? | Par quoi |
 |--------|-----------|----------|
 | Onglet navigateur tiers → `fetch` DELETE sans credential | ✅ | Garde d'origine (couche 1) + SOP sur le token injecté |
-| Autre process local → curl vers l'API HTTP | ✅ | Token Bearer 0600 (couche 2) |
+| Autre process local (compte owner) → curl vers l'API HTTP | ⚠️ (hors périmètre, même frontière que la ligne 4) | Le token Bearer est une **capability same-machine**, pas un secret : `GET /` est non-authentifié et l'injecte en clair (`curl http://127.0.0.1:<port>/ \| grep __XBERG_TOKEN__`), et `curl` n'envoie pas de `Sec-Fetch-Site` donc passe la garde d'origine. Un process tournant sous le compte owner peut donc l'obtenir puis le rejouer en `Bearer`. Le 0600 protège seulement contre un **autre utilisateur** de la machine, pas contre un autre process du même compte — même frontière de confiance que la ligne 4 (accès fichier au home). |
 | Accès distant off-box | ✅ | bind `127.0.0.1` (existant) |
 | Attaquant ayant déjà l'accès fichier au home de l'utilisateur | ❌ (hors périmètre) | Pourrait lire vault/SQLite de toute façon — même frontière de confiance |
 | Multi-utilisateur / multi-tenant | ❌ (par design) | Non-objectif ; `subject="owner"` unique |
+
+*Note :* le token Bearer ne protège pas contre un autre process du compte owner — il protège
+contre un onglet cross-origin (SOP) et contre un accès distant (bind loopback). Sur le poste
+mono-propriétaire visé, un process qui tourne déjà sous le compte owner est hors périmètre au
+même titre que l'accès direct au vault/SQLite (ligne 4) : le 0600 est de l'hygiène défense-en-
+profondeur pour le compte owner, pas une garantie de confidentialité inter-process.
 
 ## 6. État de PR #6 et stratégie de portage vers `main`
 

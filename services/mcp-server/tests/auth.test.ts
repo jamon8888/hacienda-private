@@ -46,6 +46,9 @@ describe("resolveLaunchScopes", () => {
   it("throws when XBERG_SCOPES has no valid scope", () => {
     expect(() => resolveLaunchScopes({ XBERG_SCOPES: "bogus" })).toThrow(AppError);
   });
+  it("keeps only the valid scopes from a mixed list", () => {
+    expect(resolveLaunchScopes({ XBERG_SCOPES: "read,bogus,redact" })).toEqual(["read", "redact"]);
+  });
 });
 
 describe("isSameOriginRequest", () => {
