@@ -17,6 +17,9 @@ export * from "./redact";
 export * from "./mirror";
 export * from "./ingest";
 export * from "./query";
+export { BrowserVault } from "./vault";
+export type { CipherBundle } from "./vault";
+export { assertLocalFirst } from "./egress";
 
 export { detectCapabilities, DeviceProfileSchema } from "./capabilities";
 export type { DeviceProfile } from "./capabilities";

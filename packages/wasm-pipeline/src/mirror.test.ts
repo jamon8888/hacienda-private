@@ -15,7 +15,7 @@ describe("serializeMirror", () => {
   it("serializes to JSON bytes carrying both index and vault", () => {
     const bytes = serializeMirrorToBytes(new Uint8Array([1, 2]), new Uint8Array([7]));
     const parsed = JSON.parse(new TextDecoder().decode(bytes));
-    expect(parsed).toEqual({ version: 1, index: [1, 2], vault: [7] });
+    expect(parsed).toEqual({ version: 1, index: [1, 2], vault: [7], pii: [], chunks: [] });
   });
 });
 
@@ -45,7 +45,7 @@ describe("pushMirror", () => {
     expect(capturedContentType).toBe("application/octet-stream");
     expect(capturedAuth).toBe("Bearer tok");
     const parsed = JSON.parse(new TextDecoder().decode(capturedBody));
-    expect(parsed).toEqual({ version: 1, index: [1, 2, 3], vault: [9] });
+    expect(parsed).toEqual({ version: 1, index: [1, 2, 3], vault: [9], pii: [], chunks: [] });
 
     vi.unstubAllGlobals();
   });
