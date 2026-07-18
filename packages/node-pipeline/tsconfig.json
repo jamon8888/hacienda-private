@@ -5,6 +5,7 @@
     "moduleResolution": "NodeNext",
     "strict": true,
     "noUncheckedIndexedAccess": true,
+    "types": ["node"],
     "declaration": true,
     "outDir": "dist",
     "rootDir": "src"
