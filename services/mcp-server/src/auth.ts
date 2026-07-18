@@ -1,5 +1,5 @@
 import { randomBytes, timingSafeEqual, createHash } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync, mkdirSync, chmodSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, chmodSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import type { IncomingMessage } from "node:http";
 import type { AuthScopes } from "@xberg-io/core";
@@ -11,12 +11,23 @@ const ALL_SCOPES: AuthScopes[] = ["read", "ingest", "redact", "admin"];
 /** Load the persisted session token, or generate + persist a new 256-bit one (file mode 0600). */
 export function loadOrCreateSessionToken(dataDir: string): string {
   const path = resolve(dataDir, "session.token");
-  if (existsSync(path)) {
+  try {
     return readFileSync(path, "utf8").trim();
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
   }
   mkdirSync(dirname(path), { recursive: true });
   const token = randomBytes(32).toString("hex");
-  writeFileSync(path, token, { mode: 0o600 });
+  try {
+    // Exclusive create ("wx") — atomic against a concurrent launch racing to create
+    // the same file. If another process won, read and reuse its token instead.
+    writeFileSync(path, token, { mode: 0o600, flag: "wx" });
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "EEXIST") {
+      return readFileSync(path, "utf8").trim();
+    }
+    throw err;
+  }
   // Some platforms ignore the write-time mode; enforce it explicitly (mirrors vault.ts).
   try {
     chmodSync(path, 0o600);

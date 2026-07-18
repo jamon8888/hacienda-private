@@ -110,7 +110,8 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
   if (pathname === "/" && method === "GET") {
     const uiDir = resolveUiDir();
     const html = uiDir ? readFileSync(join(uiDir, "index.html"), "utf8") : PLACEHOLDER_HTML;
-    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    // no-store: the response embeds the session token — never let a cache retain it.
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
     res.end(injectToken(html, auth.token));
     return;
   }
@@ -178,6 +179,9 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
     const body = await readJson<{ subject: string; matter_id: string; scope: string; expires_at?: string }>(req);
     if (!body.subject || !body.matter_id || !body.scope) {
       throw new AppError("bad_request", "subject, matter_id and scope are required");
+    }
+    if (!(["read", "ingest", "redact", "admin"] as string[]).includes(body.scope)) {
+      throw new AppError("bad_request", `invalid scope: ${body.scope}`);
     }
     const record = ctx.store.grantConsent({
       subject: body.subject,

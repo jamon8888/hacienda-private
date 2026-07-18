@@ -76,10 +76,21 @@ describe("HTTP auth surface", () => {
     expect(res.status).toBe(403);
   });
 
-  it("GET / injects window.__XBERG_TOKEN__ and needs no token", async () => {
+  it("GET / injects window.__XBERG_TOKEN__, needs no token, and is not cacheable", async () => {
     await start(["read"]);
     const res = await fetch(`${base}/`);
     expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
     expect(await res.text()).toContain("__XBERG_TOKEN__");
+  });
+
+  it("400 on POST /consent with an unsupported scope", async () => {
+    await start(["read", "ingest", "redact", "admin"]);
+    const res = await fetch(`${base}/consent`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
+      body: JSON.stringify({ subject: "owner", matter_id: "m-1", scope: "bogus" }),
+    });
+    expect(res.status).toBe(400);
   });
 });
