@@ -10,6 +10,15 @@ import type {
 } from "@xberg-io/core";
 import { AppError } from "./error.js";
 
+export interface AuditEntry {
+  id: string;
+  actor: string;
+  scope: string;
+  action: string;
+  matter_id: string | null;
+  created_at: string;
+}
+
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS matters (
   id TEXT PRIMARY KEY,
@@ -30,6 +39,14 @@ CREATE TABLE IF NOT EXISTS consent (
   scope TEXT NOT NULL,
   granted_at TEXT NOT NULL,
   expires_at TEXT NULL
+);
+CREATE TABLE IF NOT EXISTS audit_log (
+  id TEXT PRIMARY KEY,
+  actor TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  action TEXT NOT NULL,
+  matter_id TEXT NULL,
+  created_at TEXT NOT NULL
 );
 `;
 
@@ -122,6 +139,34 @@ export class MetadataStore {
       )
       .all(subject, matterId, scope) as { expires_at: string | null }[];
     return rows.some((r) => r.expires_at === null || new Date(r.expires_at).getTime() > now);
+  }
+
+  recordAudit(actor: string, scope: string, action: string, matterId?: string): AuditEntry {
+    const entry: AuditEntry = {
+      id: randomUUID(),
+      actor,
+      scope,
+      action,
+      matter_id: matterId ?? null,
+      created_at: new Date().toISOString(),
+    };
+    this.db
+      .prepare(
+        "INSERT INTO audit_log (id, actor, scope, action, matter_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run(entry.id, entry.actor, entry.scope, entry.action, entry.matter_id, entry.created_at);
+    return entry;
+  }
+
+  getAudit(matterId?: string): AuditEntry[] {
+    if (matterId) {
+      return this.db
+        .prepare("SELECT id, actor, scope, action, matter_id, created_at FROM audit_log WHERE matter_id = ? ORDER BY created_at DESC")
+        .all(matterId) as AuditEntry[];
+    }
+    return this.db
+      .prepare("SELECT id, actor, scope, action, matter_id, created_at FROM audit_log ORDER BY created_at DESC")
+      .all() as AuditEntry[];
   }
 }
 
