@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
+import { pathToFileURL } from "node:url";
 import { AppConfig, buildConfig, parseArgs } from "./config.js";
 import { AppError, isAppError } from "./error.js";
 import type { AuthScopes } from "@xberg-io/core";
@@ -8,7 +9,10 @@ import { MetadataStore, openStore } from "./store.js";
 import { ModelCache } from "./models.js";
 import { MirrorStore } from "./mirror.js";
 import { KeyVault } from "./vault.js";
-import { PLACEHOLDER_HTML, resolveUiDir, resolveWasmPackageDir } from "./static.js";
+import { PLACEHOLDER_HTML, resolveUiDir, resolveWasmPackageDir, injectToken } from "./static.js";
+import { authenticateHttp, loadOrCreateSessionToken, resolveLaunchScopes } from "./auth.js";
+import { authorize } from "./mcp/scopes.js";
+import type { Principal } from "./principal.js";
 import { runMcp } from "./mcp/mod.js";
 
 export interface AppContext {
@@ -17,6 +21,11 @@ export interface AppContext {
   models: ModelCache;
   mirror: MirrorStore;
   vault: KeyVault;
+}
+
+export interface HttpAuth {
+  token: string;
+  scopes: AuthScopes[];
 }
 
 function readBody(req: IncomingMessage): Promise<Buffer> {
@@ -92,19 +101,17 @@ async function handleModels(ctx: AppContext, res: ServerResponse, file: string):
   }
 }
 
-async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext): Promise<void> {
+async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext, auth: HttpAuth): Promise<void> {
   const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
   const pathname = url.pathname;
   const method = req.method ?? "GET";
 
+  // --- Static, unauthenticated surface -------------------------------------
   if (pathname === "/" && method === "GET") {
     const uiDir = resolveUiDir();
-    if (uiDir) {
-      serveFile(res, join(uiDir, "index.html"));
-    } else {
-      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-      res.end(PLACEHOLDER_HTML);
-    }
+    const html = uiDir ? readFileSync(join(uiDir, "index.html"), "utf8") : PLACEHOLDER_HTML;
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    res.end(injectToken(html, auth.token));
     return;
   }
 
@@ -124,56 +131,79 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
     return;
   }
 
+  // --- Authenticated surface: everything below requires a valid principal ---
+  const principal: Principal = authenticateHttp(req, auth.token, auth.scopes);
+
   if (pathname === "/matters" && method === "GET") {
+    authorize(principal.scopes, "read");
     sendJson(res, 200, { matters: ctx.store.getMatters() });
     return;
   }
   if (pathname === "/matters" && method === "POST") {
+    authorize(principal.scopes, "ingest");
     const body = await readJson<{ name: string }>(req);
     if (!body.name) throw new AppError("bad_request", "name is required");
-    sendJson(res, 201, ctx.store.createMatter(body.name));
+    const matter = ctx.store.createMatter(body.name);
+    ctx.store.recordAudit(principal.subject, "ingest", "create_matter", matter.id);
+    sendJson(res, 201, matter);
     return;
   }
 
   if (pathname === "/folders" && method === "GET") {
+    authorize(principal.scopes, "read");
     const matterId = url.searchParams.get("matter_id");
     if (!matterId) throw new AppError("bad_request", "matter_id is required");
     sendJson(res, 200, { folders: ctx.store.getFolders(matterId) });
     return;
   }
   if (pathname === "/folders" && method === "POST") {
+    authorize(principal.scopes, "ingest");
     const body = await readJson<{ matter_id: string; name: string; path?: string }>(req);
     if (!body.matter_id || !body.name) throw new AppError("bad_request", "matter_id and name are required");
-    sendJson(res, 201, ctx.store.createFolder(body.matter_id, body.name, body.path));
+    const folder = ctx.store.createFolder(body.matter_id, body.name, body.path);
+    ctx.store.recordAudit(principal.subject, "ingest", "create_folder", body.matter_id);
+    sendJson(res, 201, folder);
     return;
   }
 
   if (pathname === "/consent" && method === "GET") {
+    authorize(principal.scopes, "read");
     const matterId = url.searchParams.get("matter_id");
     if (!matterId) throw new AppError("bad_request", "matter_id is required");
     sendJson(res, 200, { consent: ctx.store.getConsent(matterId) });
     return;
   }
   if (pathname === "/consent" && method === "POST") {
+    authorize(principal.scopes, "admin");
     const body = await readJson<{ subject: string; matter_id: string; scope: string; expires_at?: string }>(req);
     if (!body.subject || !body.matter_id || !body.scope) {
       throw new AppError("bad_request", "subject, matter_id and scope are required");
     }
-    sendJson(res, 201, ctx.store.grantConsent({ subject: body.subject, matter_id: body.matter_id, scope: body.scope as AuthScopes, expires_at: body.expires_at }));
+    const record = ctx.store.grantConsent({
+      subject: body.subject,
+      matter_id: body.matter_id,
+      scope: body.scope as AuthScopes,
+      expires_at: body.expires_at,
+    });
+    ctx.store.recordAudit(principal.subject, "admin", "grant_consent", body.matter_id);
+    sendJson(res, 201, record);
     return;
   }
 
   if (pathname === "/rag/mirror" && method === "POST") {
+    authorize(principal.scopes, "ingest");
     const matterId = url.searchParams.get("matter_id");
     if (!matterId) throw new AppError("bad_request", "matter_id is required");
     const body = await readBody(req);
     const status = ctx.mirror.saveMirror(matterId, body);
+    ctx.store.recordAudit(principal.subject, "ingest", "save_mirror", matterId);
     sendJson(res, 201, status);
     return;
   }
 
   const mirrorStatus = pathname.match(/^\/rag\/mirror\/([^/]+)\/status$/);
   if (mirrorStatus && method === "GET") {
+    authorize(principal.scopes, "read");
     const matterId = decodeURIComponent(mirrorStatus[1] ?? "");
     const status = ctx.mirror.status(matterId);
     if (!status) throw new AppError("not_found", `no mirror for matter ${matterId}`);
@@ -193,9 +223,9 @@ export function createAppContext(config: AppConfig): AppContext {
   return { config, store, models, mirror, vault };
 }
 
-export function createHttpServer(ctx: AppContext) {
+export function createHttpServer(ctx: AppContext, auth: HttpAuth) {
   return createServer((req, res) => {
-    handle(req, res, ctx).catch((err) => {
+    handle(req, res, ctx, auth).catch((err) => {
       if (isAppError(err)) {
         sendJson(res, err.status, err.toJSON());
       } else {
@@ -216,14 +246,21 @@ async function main(): Promise<void> {
     return;
   }
 
-  const server = createHttpServer(ctx);
+  const auth: HttpAuth = {
+    token: loadOrCreateSessionToken(config.dataDir),
+    scopes: resolveLaunchScopes(process.env),
+  };
+  const server = createHttpServer(ctx, auth);
   server.listen(config.port, config.host, () => {
     console.log(`[xberg-mcp] serving http://${config.host}:${config.port}`);
     console.log(`[xberg-mcp] data dir: ${config.dataDir}`);
   });
 }
 
-main().catch((err) => {
-  console.error(err instanceof Error ? err.message : err);
-  process.exit(1);
-});
+const invokedPath = process.argv[1] ? pathToFileURL(process.argv[1]).href : "";
+if (import.meta.url === invokedPath) {
+  main().catch((err) => {
+    console.error(err instanceof Error ? err.message : err);
+    process.exit(1);
+  });
+}
