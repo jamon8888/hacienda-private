@@ -1,22 +1,46 @@
 {
   "models": [
     {
-      "name": "e5",
+      "name": "e5-fp32",
       "url": "https://huggingface.co/Xenova/multilingual-e5-base/resolve/main/onnx/model.onnx",
-      "file": "e5.onnx",
-      "sha256": "TODO_PIN_SHA256"
+      "file": "e5.fp32.onnx",
+      "sha256": "84a4d426f7e87a6bf5bf195f0bae2c4a7d15f675b23ca96f42fab8326d7a77aa"
+    },
+    {
+      "name": "e5-int8",
+      "url": "https://huggingface.co/Xenova/multilingual-e5-base/resolve/main/onnx/model_int8.onnx",
+      "file": "e5.int8.onnx",
+      "sha256": "9ddfd8b45086dabc59a7e1bb00463225dace8954962418b240840f2153bc87da"
+    },
+    {
+      "name": "e5-int4",
+      "url": "https://huggingface.co/Xenova/multilingual-e5-base/resolve/main/onnx/model_q4.onnx",
+      "file": "e5.int4.onnx",
+      "sha256": "5ef14212a2a82f49a1d211dc1e41971a6b70ff713d072f611c83cc64fb92c1ec"
     },
     {
       "name": "e5-tokenizer",
       "url": "https://huggingface.co/Xenova/multilingual-e5-base/resolve/main/tokenizer.json",
       "file": "e5.tokenizer.json",
-      "sha256": "TODO_PIN_SHA256"
+      "sha256": "62c24cdc13d4c9952d63718d6c9fa4c287974249e16b7ade6d5a85e7bbb75626"
     },
     {
-      "name": "gliner-pii",
+      "name": "gliner-pii-fp32",
       "url": "https://huggingface.co/onnx-community/gliner_small-v2.1/resolve/main/onnx/model.onnx",
-      "file": "gliner-pii.onnx",
-      "sha256": "TODO_PIN_SHA256"
+      "file": "gliner-pii.fp32.onnx",
+      "sha256": "874bc905cf3537a3bca91a55c3d99c78dbc571ebc2d8e209eb0aadd63e9d3948"
+    },
+    {
+      "name": "gliner-pii-int8",
+      "url": "https://huggingface.co/onnx-community/gliner_small-v2.1/resolve/main/onnx/model_int8.onnx",
+      "file": "gliner-pii.int8.onnx",
+      "sha256": "c76c90920547fd937aaf505e7f2de5ec73168bf1c25abbb55a298104cb061400"
+    },
+    {
+      "name": "gliner-pii-int4",
+      "url": "https://huggingface.co/onnx-community/gliner_small-v2.1/resolve/main/onnx/model_q4.onnx",
+      "file": "gliner-pii.int4.onnx",
+      "sha256": "1e895a989730af8583d87f35012c538af09dce8f9b02ce88caaeacb85ed6e7e8"
     }
   ]
 }

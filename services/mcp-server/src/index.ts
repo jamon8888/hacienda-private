@@ -17,6 +17,7 @@ export interface AppContext {
   models: ModelCache;
   mirror: MirrorStore;
   vault: KeyVault;
+  tokenScopes: AuthScopes[];
 }
 
 function readBody(req: IncomingMessage): Promise<Buffer> {
@@ -50,6 +51,14 @@ const CONTENT_TYPES: Record<string, string> = {
   ".map": "application/json; charset=utf-8",
 };
 
+// Cross-origin isolation headers required by the browser engine (ORT-Web WASM threads /
+// SharedArrayBuffer, WebGPU/WebGL, WASM-SIMD). Next.js `output: "export"` cannot emit custom
+// headers, so the Node service sets them on every UI/wasm response instead.
+const ISOLATION_HEADERS = {
+  "cross-origin-opener-policy": "same-origin",
+  "cross-origin-embedder-policy": "require-corp",
+} as const;
+
 function serveFile(res: ServerResponse, filePath: string): void {
   if (!existsSync(filePath)) {
     res.writeHead(404, { "content-type": "text/plain" });
@@ -57,8 +66,7 @@ function serveFile(res: ServerResponse, filePath: string): void {
     return;
   }
   const ct = CONTENT_TYPES[extname(filePath)] ?? "application/octet-stream";
-  res.writeHead(200, { "content-type": ct });
-  readFileSync(filePath);
+  res.writeHead(200, { "content-type": ct, ...ISOLATION_HEADERS });
   res.end(readFileSync(filePath));
 }
 
@@ -135,6 +143,19 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
     return;
   }
 
+  const forgetMatch = pathname.match(/^\/matters\/([^/]+)$/);
+  if (forgetMatch && method === "DELETE") {
+    if (!ctx.tokenScopes.includes("admin")) {
+      throw new AppError("scope", "admin scope required to forget a matter");
+    }
+    const matterId = decodeURIComponent(forgetMatch[1] ?? "");
+    const forgotten = ctx.store.forgetMatter(matterId);
+    ctx.mirror.forget(matterId);
+    ctx.store.recordAudit("http", "admin", "forget", matterId);
+    sendJson(res, 200, { forgotten });
+    return;
+  }
+
   if (pathname === "/folders" && method === "GET") {
     const matterId = url.searchParams.get("matter_id");
     if (!matterId) throw new AppError("bad_request", "matter_id is required");
@@ -181,6 +202,31 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
     return;
   }
 
+  // Serve the built web UI (SPA): existing files directly, client routes fall
+  // back to index.html so dynamic segments (/matters/<id>, /documents/<name>)
+  // resolve in the browser router.
+  if (method === "GET") {
+    const uiDir = resolveUiDir();
+    if (uiDir) {
+      const safe = normalize(pathname).replace(/^(\.\.[/\\])+/, "");
+      const candidate = join(uiDir, safe);
+      if (candidate.startsWith(uiDir) && existsSync(candidate) && statSync(candidate).isFile()) {
+        serveFile(res, candidate);
+        return;
+      }
+      const htmlCandidate = join(uiDir, `${safe.replace(/\/$/, "")}.html`);
+      if (htmlCandidate.startsWith(uiDir) && existsSync(htmlCandidate) && statSync(htmlCandidate).isFile()) {
+        serveFile(res, htmlCandidate);
+        return;
+      }
+      const indexPath = join(uiDir, "index.html");
+      if (existsSync(indexPath)) {
+        serveFile(res, indexPath);
+        return;
+      }
+    }
+  }
+
   res.writeHead(404, { "content-type": "text/plain" });
   res.end("not found");
 }
@@ -190,7 +236,10 @@ export function createAppContext(config: AppConfig): AppContext {
   const models = new ModelCache(config.modelCacheDir, config.manifestPath);
   const mirror = new MirrorStore(config.mirrorsDir);
   const vault = new KeyVault({ vaultKeyPath: config.vaultKeyPath });
-  return { config, store, models, mirror, vault };
+  // Local owner-launched MCP: the owner holds every scope. In production this would be derived
+  // from the launcher/JWT token rather than defaulted here.
+  const tokenScopes: AuthScopes[] = ["read", "ingest", "redact", "admin"];
+  return { config, store, models, mirror, vault, tokenScopes };
 }
 
 export function createHttpServer(ctx: AppContext) {
