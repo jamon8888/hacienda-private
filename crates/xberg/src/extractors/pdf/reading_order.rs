@@ -130,12 +130,207 @@ fn project_spans_to_regions(spans: &[TextSpan], hints: &[LayoutHint]) -> Vec<Reg
     regions
 }
 
-/// Reorder segments (higher-level blocks) based on layout regions and column detection.
+/// Tolerance mirroring Docling's `eps` in its bounding-box predicates.
+#[cfg(feature = "layout-detection")]
+const READING_ORDER_EPS: f32 = 1e-3;
+
+/// A layout block (bbox in PDF points, bottom-left origin) used by the
+/// predecessor-graph reading-order reconstruction.
+#[cfg(feature = "layout-detection")]
+#[derive(Debug, Clone, Copy)]
+struct OrderBlock {
+    left: f32,
+    bottom: f32,
+    right: f32,
+    top: f32,
+}
+
+#[cfg(feature = "layout-detection")]
+impl OrderBlock {
+    /// `self` lies entirely above `other` (bottom-left origin: larger y is higher).
+    ///
+    /// Port of docling-core `BoundingBox::is_strictly_above` for BOTTOMLEFT origin.
+    fn is_strictly_above(&self, other: &OrderBlock) -> bool {
+        (self.bottom + READING_ORDER_EPS) > other.top
+    }
+
+    /// The two blocks' x-ranges overlap. Strict: touching edges do not count.
+    ///
+    /// Port of docling-core `BoundingBox::overlaps_horizontally`.
+    fn overlaps_horizontally(&self, other: &OrderBlock) -> bool {
+        !(self.right <= other.left || other.right <= self.left)
+    }
+}
+
+/// Reading-order comparator (`Ordering::Less` == `a` precedes `b`).
 ///
-/// Similar to reorder_spans_by_layout but operates on PDF hierarchy SegmentData.
-/// Each segment has a bounding box (x, y, width, height) that maps onto layout regions.
+/// Port of docling `PageElement.__lt__`: same-column (horizontally overlapping)
+/// blocks order top-to-bottom (higher bottom edge first); otherwise
+/// left-to-right (smaller left edge first).
+#[cfg(feature = "layout-detection")]
+fn reading_order_cmp(a: &OrderBlock, b: &OrderBlock) -> std::cmp::Ordering {
+    if a.overlaps_horizontally(b) {
+        b.bottom.total_cmp(&a.bottom)
+    } else {
+        a.left.total_cmp(&b.left)
+    }
+}
+
+/// Is there a block strictly between `i` and `j` that horizontally overlaps
+/// either, interrupting the `i → j` reading-order edge?
 ///
-/// Returns the reordered segments in reading order (column-major, top-to-bottom).
+/// Port of docling `_has_sequence_interruption`. This is what stops a full-width
+/// heading or figure sitting between two columns from chaining blocks across them.
+#[cfg(feature = "layout-detection")]
+fn has_sequence_interruption(blocks: &[OrderBlock], i: usize, j: usize) -> bool {
+    let bi = &blocks[i];
+    let bj = &blocks[j];
+    blocks.iter().enumerate().any(|(w, bw)| {
+        w != i
+            && w != j
+            && (bi.overlaps_horizontally(bw) || bj.overlaps_horizontally(bw))
+            && bi.is_strictly_above(bw)
+            && bw.is_strictly_above(bj)
+    })
+}
+
+/// Build the up/down predecessor maps over `blocks`.
+///
+/// Port of docling `_init_ud_maps`: an edge `i → j` exists when `i` is strictly
+/// above `j`, they horizontally overlap, and no third block interrupts the pair.
+/// `up[j]` collects predecessors of `j`; `dn[i]` collects successors of `i`.
+#[cfg(feature = "layout-detection")]
+fn build_updown_maps(blocks: &[OrderBlock]) -> (Vec<Vec<usize>>, Vec<Vec<usize>>) {
+    let n = blocks.len();
+    let mut up = vec![Vec::new(); n];
+    let mut dn = vec![Vec::new(); n];
+    for i in 0..n {
+        for j in 0..n {
+            if i != j
+                && blocks[i].is_strictly_above(&blocks[j])
+                && blocks[i].overlaps_horizontally(&blocks[j])
+                && !has_sequence_interruption(blocks, i, j)
+            {
+                dn[i].push(j);
+                up[j].push(i);
+            }
+        }
+    }
+    (up, dn)
+}
+
+/// Walk up the predecessor map from `start`, always taking the first not-yet-
+/// visited predecessor, until reaching a block whose predecessors are all
+/// visited. Guarantees every predecessor is emitted before its successor.
+///
+/// Port of docling `_depth_first_search_upwards` (iterative).
+#[cfg(feature = "layout-detection")]
+fn walk_to_unvisited_root(start: usize, up: &[Vec<usize>], visited: &[bool]) -> usize {
+    let mut k = start;
+    loop {
+        match up[k].iter().copied().find(|&p| !visited[p]) {
+            Some(p) => k = p,
+            None => return k,
+        }
+    }
+}
+
+/// Emit `start`'s successor subtree in reading order.
+///
+/// Port of docling `_depth_first_search_downwards` (iterative, explicit stack).
+#[cfg(feature = "layout-detection")]
+fn emit_downwards(start: usize, order: &mut Vec<usize>, visited: &mut [bool], up: &[Vec<usize>], dn: &[Vec<usize>]) {
+    let mut stack: Vec<(usize, usize)> = vec![(start, 0)];
+    while let Some(&(node, offset)) = stack.last() {
+        let mut next = offset;
+        let mut advanced = false;
+        while next < dn[node].len() {
+            let child = dn[node][next];
+            let root = walk_to_unvisited_root(child, up, visited);
+            if !visited[root] {
+                order.push(root);
+                visited[root] = true;
+                let top = stack.len() - 1;
+                stack[top].1 = next + 1;
+                stack.push((root, 0));
+                advanced = true;
+                break;
+            }
+            next += 1;
+        }
+        if !advanced {
+            stack.pop();
+        }
+    }
+}
+
+/// Whether the page is genuinely multi-column: two content blocks sit side by
+/// side (their y-ranges overlap while their x-ranges do not).
+///
+/// Reading-order reorder only helps multi-column pages — single-column stream
+/// order already reads top-to-bottom, so reordering it by (often noisy) layout
+/// regions is pure downside. This is the defining geometric signal of columns.
+#[cfg(feature = "layout-detection")]
+fn is_multi_column(blocks: &[OrderBlock]) -> bool {
+    for (i, a) in blocks.iter().enumerate() {
+        for b in &blocks[i + 1..] {
+            let vertical_overlap = !(a.top <= b.bottom || b.top <= a.bottom);
+            if vertical_overlap && !a.overlaps_horizontally(b) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Order `blocks` (layout regions with content) in reading order via the
+/// predecessor graph. Returns block indices in reading order.
+///
+/// Port of docling `ReadingOrderPredictor._predict_page`, sans the horizontal
+/// dilation refinement (`_do_horizontal_dilation`), which is a follow-up.
+#[cfg(feature = "layout-detection")]
+fn order_blocks_by_graph(blocks: &[OrderBlock]) -> Vec<usize> {
+    let n = blocks.len();
+    let (up, mut dn) = build_updown_maps(blocks);
+
+    // Sort each node's successors by the reading-order comparator.
+    for children in dn.iter_mut() {
+        children.sort_by(|&a, &b| reading_order_cmp(&blocks[a], &blocks[b]));
+    }
+
+    // Heads: blocks with no predecessor, in reading order.
+    let mut heads: Vec<usize> = (0..n).filter(|&k| up[k].is_empty()).collect();
+    heads.sort_by(|&a, &b| reading_order_cmp(&blocks[a], &blocks[b]));
+
+    let mut visited = vec![false; n];
+    let mut order = Vec::with_capacity(n);
+    for &head in &heads {
+        if !visited[head] {
+            order.push(head);
+            visited[head] = true;
+            emit_downwards(head, &mut order, &mut visited, &up, &dn);
+        }
+    }
+    // Safety net: append any block the traversal missed (degenerate geometry /
+    // cycles) so no content is dropped.
+    for (k, &seen) in visited.iter().enumerate() {
+        if !seen {
+            order.push(k);
+        }
+    }
+    order
+}
+
+/// Reorder page segments into natural reading order using layout regions.
+///
+/// Groups segments into their smallest containing layout region, orders those
+/// regions with Docling's rule-based predecessor-graph reading-order algorithm
+/// ([`order_blocks_by_graph`]), then emits each region's segments top-to-bottom.
+/// Segments outside every region keep their original relative position at the end.
+///
+/// This handles multi-column layouts correctly: the predecessor graph plus its
+/// interruption veto keep column flow intact and let a full-width heading break
+/// the chain between columns — where a naive column sort cannot.
 #[cfg(feature = "layout-detection")]
 pub(crate) fn reorder_segments_by_layout(
     segments: Vec<crate::pdf::hierarchy::SegmentData>,
@@ -149,115 +344,79 @@ pub(crate) fn reorder_segments_by_layout(
         return segments;
     }
 
-    let seg_indices: Vec<(usize, f32, f32, f32, f32)> = segments
-        .iter()
-        .enumerate()
-        .map(|(i, seg)| {
-            let right = seg.x + seg.width;
-            let bottom = seg.y;
-            let top = seg.y + seg.height;
-            (i, seg.x, bottom, right, top)
-        })
-        .collect();
-
-    let mut regions: Vec<(RegionProjection, Vec<usize>)> = hints
-        .iter()
-        .map(|hint| {
-            (
-                RegionProjection {
-                    left: hint.left,
-                    bottom: hint.bottom,
-                    right: hint.right,
-                    top: hint.top,
-                    span_indices: Vec::new(),
-                },
-                Vec::new(),
-            )
-        })
-        .collect();
-
-    for (seg_idx, seg_left, seg_bottom, seg_right, seg_top) in &seg_indices {
-        let seg_center_x = seg_left + (seg_right - seg_left) / 2.0;
-        let seg_center_y = seg_bottom + (seg_top - seg_bottom) / 2.0;
-
+    // Bucket each segment into the smallest layout region containing its center.
+    let mut region_segments: Vec<Vec<usize>> = vec![Vec::new(); hints.len()];
+    for (seg_idx, seg) in segments.iter().enumerate() {
+        let center_x = seg.x + seg.width / 2.0;
+        let center_y = seg.y + seg.height / 2.0;
         let mut best_region = None;
         let mut best_area = f32::INFINITY;
-
-        for (region_idx, (region, _)) in regions.iter().enumerate() {
-            if seg_center_x >= region.left
-                && seg_center_x <= region.right
-                && seg_center_y >= region.bottom
-                && seg_center_y <= region.top
-            {
-                let area = (region.right - region.left) * (region.top - region.bottom);
+        for (region_idx, hint) in hints.iter().enumerate() {
+            if center_x >= hint.left && center_x <= hint.right && center_y >= hint.bottom && center_y <= hint.top {
+                let area = (hint.right - hint.left) * (hint.top - hint.bottom);
                 if area < best_area {
                     best_region = Some(region_idx);
                     best_area = area;
                 }
             }
         }
-
         if let Some(region_idx) = best_region {
-            regions[region_idx].1.push(*seg_idx);
+            region_segments[region_idx].push(seg_idx);
         }
     }
 
-    let active: Vec<(RegionProjection, Vec<usize>)> =
-        regions.into_iter().filter(|(_, indices)| !indices.is_empty()).collect();
-
+    // Only regions that actually received segments participate in ordering.
+    let active: Vec<usize> = (0..hints.len()).filter(|&r| !region_segments[r].is_empty()).collect();
     if active.is_empty() {
         return segments;
     }
 
-    let mut x_centers: Vec<f32> = active.iter().map(|(r, _)| (r.left + r.right) / 2.0).collect();
-    x_centers.sort_by(|a, b| a.total_cmp(b));
-    let mut unique_centers: Vec<f32> = Vec::new();
-    for &center in &x_centers {
-        match unique_centers.last() {
-            Some(&last) if (center - last).abs() <= COLUMN_MERGE_THRESHOLD_PTS => {}
-            _ => unique_centers.push(center),
-        }
-    }
+    let blocks: Vec<OrderBlock> = active
+        .iter()
+        .map(|&r| OrderBlock {
+            left: hints[r].left,
+            bottom: hints[r].bottom,
+            right: hints[r].right,
+            top: hints[r].top,
+        })
+        .collect();
 
-    let mut ordered: Vec<(usize, f32, Vec<usize>)> = Vec::with_capacity(active.len());
-    for (region, indices) in active {
-        let center = (region.left + region.right) / 2.0;
-        let mut best_col = 0usize;
-        let mut best_dist = f32::INFINITY;
-        for (cand, &cluster_center) in unique_centers.iter().enumerate() {
-            let dist = (center - cluster_center).abs();
-            if dist < best_dist {
-                best_dist = dist;
-                best_col = cand;
-            }
-        }
-        ordered.push((best_col, region.top, indices));
-    }
-
-    ordered.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| b.1.total_cmp(&a.1)));
+    // The predecessor graph pays off only on genuinely multi-column pages. On
+    // single-column pages it can fragment an already-correct order when regions
+    // are imperfect, so fall back to a plain top-to-bottom block order there
+    // (neutral vs raw stream order, but still applies the intra-region sort).
+    let block_order = if is_multi_column(&blocks) {
+        order_blocks_by_graph(&blocks)
+    } else {
+        let mut order: Vec<usize> = (0..blocks.len()).collect();
+        order.sort_by(|&a, &b| blocks[b].top.total_cmp(&blocks[a].top));
+        order
+    };
 
     let mut included = vec![false; segments.len()];
     let mut reorder_map: Vec<usize> = Vec::with_capacity(segments.len());
-    for (_, _, indices) in &ordered {
-        let mut sorted_indices: Vec<usize> = indices.clone();
-        sorted_indices.sort_by(|&a, &b| {
-            let seg_a = &segments[a];
-            let seg_b = &segments[b];
-            let top_a = seg_a.y + seg_a.height;
-            let top_b = seg_b.y + seg_b.height;
-            top_b.total_cmp(&top_a).then_with(|| seg_a.x.total_cmp(&seg_b.x))
+    for &block_idx in &block_order {
+        let region_idx = active[block_idx];
+        let mut region: Vec<usize> = region_segments[region_idx].clone();
+        // Intra-region: top-to-bottom, then left-to-right.
+        region.sort_by(|&a, &b| {
+            let top_a = segments[a].y + segments[a].height;
+            let top_b = segments[b].y + segments[b].height;
+            top_b
+                .total_cmp(&top_a)
+                .then_with(|| segments[a].x.total_cmp(&segments[b].x))
         });
-
-        for &idx in &sorted_indices {
-            if idx < segments.len() && !included[idx] {
-                included[idx] = true;
-                reorder_map.push(idx);
+        for seg_idx in region {
+            if !included[seg_idx] {
+                included[seg_idx] = true;
+                reorder_map.push(seg_idx);
             }
         }
     }
-    for (idx, done) in included.iter().enumerate() {
-        if !*done {
-            reorder_map.push(idx);
+    // Segments outside every region keep their original relative order at the tail.
+    for (seg_idx, &done) in included.iter().enumerate() {
+        if !done {
+            reorder_map.push(seg_idx);
         }
     }
 
@@ -571,6 +730,62 @@ mod tests {
             order,
             vec!["A", "B", "C", "D"],
             "segments must be reordered column-major top-to-bottom regardless of hint order"
+        );
+    }
+
+    #[test]
+    fn test_reorder_segments_full_width_heading_breaks_columns() {
+        fn seg(text: &str, x: f32, y: f32) -> crate::pdf::hierarchy::SegmentData {
+            crate::pdf::hierarchy::SegmentData {
+                text: text.to_string(),
+                x,
+                y,
+                width: 10.0,
+                height: 12.0,
+                font_size: 10.0,
+                is_bold: false,
+                is_italic: false,
+                is_monospace: false,
+                baseline_y: y,
+                assigned_role: None,
+            }
+        }
+
+        // A full-width title above two columns. The predecessor graph must emit
+        // the title first, then the whole left column, then the whole right
+        // column — the title interrupts any left→right chaining across columns.
+        let segments = vec![
+            seg("Title", 50.0, 470.0),
+            seg("L1", 50.0, 440.0),
+            seg("R1", 270.0, 440.0),
+            seg("L2", 50.0, 300.0),
+            seg("R2", 270.0, 300.0),
+        ];
+
+        fn hint(left: f32, bottom: f32, right: f32, top: f32) -> LayoutHint {
+            LayoutHint {
+                class_name: crate::pdf::structure::types::LayoutHintClass::Text,
+                confidence: 0.95,
+                left,
+                bottom,
+                right,
+                top,
+            }
+        }
+
+        let hints = vec![
+            hint(40.0, 460.0, 460.0, 490.0),  // full-width title band
+            hint(40.0, 100.0, 240.0, 450.0),  // left column
+            hint(260.0, 100.0, 460.0, 450.0), // right column
+        ];
+
+        let reordered = reorder_segments_by_layout(segments, &hints);
+        let order: Vec<&str> = reordered.iter().map(|s| s.text.as_str()).collect();
+        assert_eq!(
+            order,
+            vec!["Title", "L1", "L2", "R1", "R2"],
+            "full-width heading must precede both columns, then each column reads top-to-bottom \
+             without interleaving across the column boundary"
         );
     }
 

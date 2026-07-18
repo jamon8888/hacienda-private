@@ -24,6 +24,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
+name = "aead"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d122413f284cf2d62fb1b7db97e02edb8cda96d769b16e443a4f6195e35662b0"
+dependencies = [
+ "crypto-common 0.1.7",
+ "generic-array",
+]
+
+[[package]]
 name = "aes"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -43,6 +53,20 @@ dependencies = [
  "cipher 0.5.2",
  "cpubits",
  "cpufeatures 0.3.0",
+]
+
+[[package]]
+name = "aes-gcm"
+version = "0.10.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "831010a0f742e1209b3bcea8fab6a8e149051ba6099432c8cb2cc117dec3ead1"
+dependencies = [
+ "aead",
+ "aes 0.8.4",
+ "cipher 0.4.4",
+ "ctr",
+ "ghash",
+ "subtle",
 ]
 
 [[package]]
@@ -557,7 +581,7 @@ checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
 name = "benchmark-harness"
-version = "1.0.0-rc.27"
+version = "1.0.0-rc.29"
 dependencies = [
  "ahash 0.8.12",
  "anyhow",
@@ -1971,6 +1995,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78c8292055d1c1df0cce5d180393dc8cce0abec0a7102adb6c7b1eef6016d60a"
 dependencies = [
  "generic-array",
+ "rand_core 0.6.4",
  "typenum",
 ]
 
@@ -1991,6 +2016,15 @@ checksum = "fb22e947478ccf9dc44d8922042c677a63fbb88f2cb468521d1145816e5087cb"
 dependencies = [
  "link-section",
  "linktime-proc-macro",
+]
+
+[[package]]
+name = "ctr"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0369ee1ad671834580515889b80f2ea915f23b8be8d0daa4bbaf2ac5c7590835"
+dependencies = [
+ "cipher 0.4.4",
 ]
 
 [[package]]
@@ -3565,6 +3599,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.118",
+]
+
+[[package]]
+name = "ghash"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f0d8a4362ccb29cb0b265253fb0a2728f592895ee6854fd9bc13f2ffda266ff1"
+dependencies = [
+ "opaque-debug",
+ "polyval",
 ]
 
 [[package]]
@@ -5936,9 +5980,9 @@ dependencies = [
 
 [[package]]
 name = "office_oxide"
-version = "0.1.5"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6af473f543db2d69584f3bc3a12358420c4c0111b163c8dfbc96c1717ff725e3"
+checksum = "673fefe70a9e53a74d4e4b2797cbe9fc2d778cfc1734956727db9e5b7d809e98"
 dependencies = [
  "atoi_simd",
  "encoding_rs",
@@ -6006,6 +6050,12 @@ name = "oorandom"
 version = "11.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6790f58c7ff633d8771f42965289203411a5e5c68388703c06e14f24770b41e"
+
+[[package]]
+name = "opaque-debug"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
 
 [[package]]
 name = "openssl"
@@ -6196,6 +6246,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "password-hash"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "346f04948ba92c43e8469c1ee6736c7563d71012b17d40745260fe106aac2166"
+dependencies = [
+ "base64ct",
+ "rand_core 0.6.4",
+ "subtle",
+]
+
+[[package]]
 name = "paste"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6241,9 +6302,9 @@ dependencies = [
 
 [[package]]
 name = "pdf_oxide"
-version = "0.3.73"
+version = "0.3.74"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf6730b3cabd41b9e813c9ab1e536c99e685adc8c06d6755b82b66dcedd49a95"
+checksum = "1b97a8330bf3a3a4011ad84704b3bdcb9b0ef3fd5b03a1bdc371dde40bee1689"
 dependencies = [
  "aes 0.9.1",
  "base64 0.22.1",
@@ -6529,6 +6590,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "50596ddc09eb5ad5f75cacd40209568e66df71baf86e1499a0e99c4cff12a5a6"
 dependencies = [
  "arrayvec",
+]
+
+[[package]]
+name = "polyval"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d1fe60d06143b2430aa532c94cfe9e29783047f06c0d7fd359a9a51b729fa25"
+dependencies = [
+ "cfg-if 1.0.4",
+ "cpufeatures 0.2.17",
+ "opaque-debug",
+ "universal-hash",
 ]
 
 [[package]]
@@ -7402,7 +7475,7 @@ dependencies = [
  "quinn",
  "rustls",
  "rustls-pki-types",
- "rustls-platform-verifier 0.7.0",
+ "rustls-platform-verifier",
  "serde",
  "serde_json",
  "serde_urlencoded",
@@ -7721,27 +7794,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rustls-platform-verifier"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26d1e2536ce4f35f4846aa13bff16bd0ff40157cdb14cc056c7b14ba41233ba0"
-dependencies = [
- "core-foundation 0.10.1",
- "core-foundation-sys",
- "jni 0.22.4",
- "log",
- "once_cell",
- "rustls",
- "rustls-native-certs",
- "rustls-platform-verifier-android",
- "rustls-webpki",
- "security-framework",
- "security-framework-sys",
- "webpki-root-certs",
- "windows-sys 0.61.2",
-]
-
-[[package]]
 name = "rustls-platform-verifier-android"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7838,6 +7890,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "salsa20"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97a22f5af31f73a954c10289c93e8a50cc23d971e80ee446f1f6f7137a088213"
+dependencies = [
+ "cipher 0.4.4",
+]
+
+[[package]]
 name = "same-file"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7898,6 +7959,18 @@ name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
+
+[[package]]
+name = "scrypt"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0516a385866c09368f0b5bcd1caff3366aace790fcd46e2bb032697bb172fd1f"
+dependencies = [
+ "password-hash",
+ "pbkdf2 0.12.2",
+ "salsa20",
+ "sha2 0.10.9",
+]
 
 [[package]]
 name = "seahash"
@@ -8965,9 +9038,9 @@ dependencies = [
 
 [[package]]
 name = "taffy"
-version = "0.11.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dfde4e2f8595f222ceaae1fb16b4963952e9b33e358869dc4cd6316b0e0790cd"
+checksum = "73afc801dd6bd47529eaa7c7e90557f107527d1b7c9c7ed7d7803c7b8d0c357f"
 dependencies = [
  "arrayvec",
  "grid",
@@ -10048,6 +10121,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39ec24b3121d976906ece63c9daad25b85969647682eee313cb5779fdd69e14e"
 
 [[package]]
+name = "universal-hash"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc1de2c688dc15305988b563c3854064043356019f97a4b46276fe734c4f07ea"
+dependencies = [
+ "crypto-common 0.1.7",
+ "subtle",
+]
+
+[[package]]
 name = "unsafe-libyaml"
 version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10099,7 +10182,7 @@ dependencies = [
  "percent-encoding",
  "rustls",
  "rustls-pki-types",
- "rustls-platform-verifier 0.6.2",
+ "rustls-platform-verifier",
  "serde",
  "serde_json",
  "socks",
@@ -11096,8 +11179,9 @@ dependencies = [
 
 [[package]]
 name = "xberg"
-version = "1.0.0-rc.27"
+version = "1.0.0-rc.29"
 dependencies = [
+ "aes-gcm",
  "ahash 0.8.12",
  "anyhow",
  "async-trait",
@@ -11173,12 +11257,14 @@ dependencies = [
  "rake",
  "rayon",
  "regex",
+ "reqwest",
  "resvg",
  "rmcp",
  "rmp-serde",
  "roxmltree 0.21.1",
  "rqrr",
  "safetensors 0.8.0",
+ "scrypt",
  "serde",
  "serde_json",
  "serde_toon_format",
@@ -11221,12 +11307,13 @@ dependencies = [
  "xberg-libheif",
  "xberg-paddle-ocr",
  "xberg-tesseract",
+ "zeroize",
  "zip 8.6.0",
 ]
 
 [[package]]
 name = "xberg-candle-ocr"
-version = "1.0.0-rc.27"
+version = "1.0.0-rc.29"
 dependencies = [
  "base64 0.22.1",
  "candle-core",
@@ -11244,7 +11331,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-cli"
-version = "1.0.0-rc.27"
+version = "1.0.0-rc.29"
 dependencies = [
  "anstyle",
  "anyhow",
@@ -11266,7 +11353,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-dart"
-version = "1.0.0-rc.27"
+version = "1.0.0-rc.29"
 dependencies = [
  "async-trait",
  "crawlberg",
@@ -11278,7 +11365,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-ffi"
-version = "1.0.0-rc.27"
+version = "1.0.0-rc.29"
 dependencies = [
  "ahash 0.8.12",
  "async-trait",
@@ -11292,7 +11379,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-gliner"
-version = "1.0.0-rc.27"
+version = "1.0.0-rc.29"
 dependencies = [
  "ndarray 0.17.2",
  "ort",
@@ -11304,7 +11391,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-jni"
-version = "1.0.0-rc.27"
+version = "1.0.0-rc.29"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -11317,7 +11404,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-libheif"
-version = "1.0.0-rc.27"
+version = "1.0.0-rc.29"
 dependencies = [
  "cfg-if 1.0.4",
  "enumn",
@@ -11329,7 +11416,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-node"
-version = "1.0.0-rc.27"
+version = "1.0.0-rc.29"
 dependencies = [
  "async-trait",
  "crawlberg",
@@ -11345,7 +11432,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-paddle-ocr"
-version = "1.0.0-rc.27"
+version = "1.0.0-rc.29"
 dependencies = [
  "geo-clipper",
  "geo-types",
@@ -11360,7 +11447,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-php"
-version = "1.0.0-rc.27"
+version = "1.0.0-rc.29"
 dependencies = [
  "async-trait",
  "crawlberg",
@@ -11373,7 +11460,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-py"
-version = "1.0.0-rc.27"
+version = "1.0.0-rc.29"
 dependencies = [
  "async-trait",
  "crawlberg",
@@ -11387,7 +11474,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-swift"
-version = "1.0.0-rc.27"
+version = "1.0.0-rc.29"
 dependencies = [
  "ahash 0.8.12",
  "async-trait",
@@ -11403,7 +11490,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-tesseract"
-version = "1.0.0-rc.27"
+version = "1.0.0-rc.29"
 dependencies = [
  "cc",
  "cmake",
@@ -11415,7 +11502,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-wasm"
-version = "1.0.0-rc.27"
+version = "1.0.0-rc.29"
 dependencies = [
  "async-trait",
  "crawlberg",

@@ -22,7 +22,7 @@ default-members = ["crates/xberg", "crates/xberg-cli"]
 resolver = "2"
 
 [workspace.package]
-version = "1.0.0-rc.27"
+version = "1.0.0-rc.29"
 edition = "2024"
 rust-version = "1.91"
 authors = ["Na'aman Hirschfeld <naaman@xberg.io>"]
@@ -76,7 +76,7 @@ once_cell = "1.21.4"
 
 ort = { version = "2.0.0-rc.12", default-features = false, features = ["std", "api-18"] }
 parking_lot = "0.12.5"
-pdf_oxide = { version = "0.3.73", default-features = false, features = ["rendering", "legacy-crypto"] }
+pdf_oxide = { version = "0.3.74", default-features = false, features = ["rendering", "legacy-crypto"] }
 rayon = "1.12.0"
 reqwest = { version = "0.13.4", default-features = false }
 # SVG rendering (resvg re-exports tiny_skia and usvg; default-features = false
@@ -117,8 +117,8 @@ web-sys = { version = "0.3", features = [
     "Window",
     "Response",
 ] }
-xberg = { path = "./crates/xberg", version = "1.0.0-rc.27", default-features = false }
-xberg-gliner = { path = "./crates/xberg-gliner", version = "1.0.0-rc.27", default-features = false }
+xberg = { path = "./crates/xberg", version = "1.0.0-rc.29", default-features = false }
+xberg-gliner = { path = "./crates/xberg-gliner", version = "1.0.0-rc.29", default-features = false }
 
 [patch.crates-io]
 xberg = { path = "crates/xberg" }

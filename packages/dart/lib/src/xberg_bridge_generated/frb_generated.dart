@@ -3,9 +3,6 @@
 
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
-import 'package:xberg/src/native_loader.dart';
-import 'dart:core' as _DartCore;
-import 'dart:core';
 import 'dart:ffi';
 import 'dart:isolate';
 import 'dart:io';
@@ -35,7 +32,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   static Future<ExternalLibrary?> _alefResolveExternalLibrary() async {
     try {
       final packageRoot = await Isolate.resolvePackageUri(
-        _DartCore.Uri.parse('package:xberg/xberg.dart'),
+        Uri.parse('package:xberg/xberg.dart'),
       );
       if (packageRoot == null) return null;
       final libNames = _alefHostLibNames();

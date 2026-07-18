@@ -43,14 +43,168 @@ use std::path::Path;
 ))]
 use std::path::PathBuf;
 
-/// Default wall-clock ceiling for a single model-file download. hf-hub builds its ureq agent with
-/// no read/connect timeout, so a stalled or firewalled connection to HuggingFace makes the blocking
-/// `ApiRepo::get()` hang forever — silently wedging the whole extraction pipeline (observed: OCR /
-/// embedding model pulls parked at 0% CPU behind a host firewall). We cap each fetch so a dead
-/// network fails fast and the caller can degrade. Generous by default because a cold GB-scale model
-/// legitimately takes minutes; override with `XBERG_MODEL_DOWNLOAD_TIMEOUT_SECS`.
+/// Default wall-clock ceiling for a single model-file download. This is a *total* deadline covering
+/// the whole transfer, so it stays generous — a cold GB-scale model legitimately takes minutes — and
+/// serves only as a final backstop; override with `XBERG_MODEL_DOWNLOAD_TIMEOUT_SECS`. Fast failure
+/// on a dead/blackholed network comes instead from the bounded `connect_timeout` and lowered retry
+/// count on the client built by [`hf_client_builder`], not from shortening this deadline (which would
+/// break legitimate slow downloads).
 #[allow(dead_code)]
 const DEFAULT_MODEL_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(300);
+
+/// Per-connect ceiling for HuggingFace requests. On a host that advertises an IPv6 default route but
+/// blackholes IPv6 (common corporate config), a connect to an AAAA address otherwise parks in TCP
+/// `SYN_SENT` until the OS SYN timeout (~75 s) with no happy-eyeballs/IPv4 race — see #1249. Bounding
+/// the connect lets hf-hub's retry fail over quickly instead of burning the total deadline.
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    any(
+        feature = "candle-ocr",
+        feature = "paddle-ocr",
+        feature = "auto-rotate",
+        feature = "layout-detection",
+        feature = "transcription",
+        feature = "onnx-runtime",
+        feature = "ner-onnx",
+        feature = "static-embeddings"
+    )
+))]
+const HF_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Max connect/transient retry attempts for HuggingFace requests. hf-hub's default is 5, which
+/// multiplies a blackholed-connect stall fivefold. Lowering it bounds *both* hf-hub retry loops —
+/// the metadata `HEAD` (via hf-hub's internal, non-overridable client) and the blob `GET` — since
+/// they share one `RetryConfig`. Two attempts still tolerate a single transient blip.
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    any(
+        feature = "candle-ocr",
+        feature = "paddle-ocr",
+        feature = "auto-rotate",
+        feature = "layout-detection",
+        feature = "transcription",
+        feature = "onnx-runtime",
+        feature = "ner-onnx",
+        feature = "static-embeddings"
+    )
+))]
+const HF_MAX_RETRY_ATTEMPTS: usize = 2;
+
+/// A DNS resolver that orders IPv4 (`A`-record) addresses ahead of IPv6 (`AAAA`) ones.
+///
+/// This is the IPv4 fallback for #1249: on hosts that advertise an IPv6 default route but blackhole
+/// IPv6, the default resolution order can hand the connector an `AAAA` address first, which then
+/// stalls in `SYN_SENT`. Returning IPv4 first lets the connector reach a dual-stack host over IPv4,
+/// while still returning `AAAA` addresses afterwards so genuinely IPv6-only hosts (which resolve to
+/// `AAAA` only) keep working — unlike binding an IPv4 `local_address`, which would break them.
+/// Resolution runs on a blocking thread because `getaddrinfo` is synchronous; DNS itself is not the
+/// blackholed path (that's the TCP connect), so this stays fast.
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    any(
+        feature = "candle-ocr",
+        feature = "paddle-ocr",
+        feature = "auto-rotate",
+        feature = "layout-detection",
+        feature = "transcription",
+        feature = "onnx-runtime",
+        feature = "ner-onnx",
+        feature = "static-embeddings"
+    )
+))]
+#[derive(Debug, Default)]
+struct Ipv4FirstResolver;
+
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    any(
+        feature = "candle-ocr",
+        feature = "paddle-ocr",
+        feature = "auto-rotate",
+        feature = "layout-detection",
+        feature = "transcription",
+        feature = "onnx-runtime",
+        feature = "ner-onnx",
+        feature = "static-embeddings"
+    )
+))]
+impl reqwest::dns::Resolve for Ipv4FirstResolver {
+    fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
+        let host = name.as_str().to_owned();
+        Box::pin(async move {
+            // Port 0 is a placeholder; reqwest overrides it with the request's real port.
+            let mut addrs = tokio::task::spawn_blocking(move || {
+                std::net::ToSocketAddrs::to_socket_addrs(&(host.as_str(), 0_u16))
+                    .map(|iter| iter.collect::<Vec<std::net::SocketAddr>>())
+            })
+            .await??;
+            order_ipv4_first(&mut addrs);
+            Ok(Box::new(addrs.into_iter()) as reqwest::dns::Addrs)
+        })
+    }
+}
+
+/// Reorder resolved addresses so IPv4 (`A`) entries precede IPv6 (`AAAA`) ones, preserving the
+/// relative order within each family. Stable so the resolver stays deterministic for a given
+/// `getaddrinfo` result. See [`Ipv4FirstResolver`] for why (the #1249 IPv4 fallback).
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    any(
+        feature = "candle-ocr",
+        feature = "paddle-ocr",
+        feature = "auto-rotate",
+        feature = "layout-detection",
+        feature = "transcription",
+        feature = "onnx-runtime",
+        feature = "ner-onnx",
+        feature = "static-embeddings"
+    )
+))]
+fn order_ipv4_first(addrs: &mut [std::net::SocketAddr]) {
+    addrs.sort_by_key(std::net::SocketAddr::is_ipv6);
+}
+
+/// Build an [`hf_hub::HFClientBuilder`] pre-configured for resilience on hostile networks: a
+/// `reqwest::Client` with a bounded [`HF_CONNECT_TIMEOUT`], an IPv4-first DNS resolver
+/// ([`Ipv4FirstResolver`]), and [`HF_MAX_RETRY_ATTEMPTS`] retries, injected as the transfer client.
+/// Callers chain `.cache_dir(...)` / `.build_sync()` as needed.
+///
+/// The injected client only overrides hf-hub's main `GET` client; its internal `no_redirect_client`
+/// (used for the metadata `HEAD`) is not overridable, so the lowered retry count is what bounds the
+/// `HEAD` path. The HF auth token is applied per-request by hf-hub (not via client default headers),
+/// so injecting our own client does not disturb `HF_TOKEN`-gated downloads. If the client fails to
+/// build we fall back to hf-hub's default (unbounded) client rather than failing the download.
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    any(
+        feature = "candle-ocr",
+        feature = "paddle-ocr",
+        feature = "auto-rotate",
+        feature = "layout-detection",
+        feature = "transcription",
+        feature = "onnx-runtime",
+        feature = "ner-onnx",
+        feature = "static-embeddings"
+    )
+))]
+pub(crate) fn hf_client_builder() -> hf_hub::HFClientBuilder {
+    let builder = hf_hub::HFClientBuilder::new().retry_max_attempts(HF_MAX_RETRY_ATTEMPTS);
+    match reqwest::Client::builder()
+        .connect_timeout(HF_CONNECT_TIMEOUT)
+        .dns_resolver(Ipv4FirstResolver)
+        .build()
+    {
+        Ok(client) => builder.client(client),
+        Err(error) => {
+            tracing::warn!(
+                target: "xberg::model_download",
+                %error,
+                "failed to build HF http client with connect timeout; using hf-hub default client"
+            );
+            builder
+        }
+    }
+}
 
 /// Resolve the model-download deadline, honoring `XBERG_MODEL_DOWNLOAD_TIMEOUT_SECS` (seconds; a
 /// value of 0 or unparseable falls back to the default).
@@ -150,7 +304,7 @@ pub(crate) fn hf_download(repo_id: &str, remote_filename: &str) -> Result<PathBu
     let file_lock = download_lock(&format!("{repo_id}/{remote_filename}"));
     let _guard = file_lock.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
 
-    let api = hf_hub::HFClientBuilder::new()
+    let api = hf_client_builder()
         .build_sync()
         .map_err(|e| format!("Failed to initialize HuggingFace Hub API: {e}"))?;
 
@@ -374,6 +528,57 @@ mod download_deadline_tests {
             elapsed < Duration::from_secs(3),
             "guard must fire near the 1s deadline, not wait out the 10s sleep (took {elapsed:?})"
         );
+    }
+}
+
+/// Tests for the connect-timeout-hardened HF client builder (#1249). Network-free: `build_sync`
+/// only constructs the reqwest client + tokio handle, so a successful build proves the injected
+/// `connect_timeout` client path compiles and constructs on this platform.
+#[cfg(all(
+    test,
+    not(target_arch = "wasm32"),
+    any(
+        feature = "candle-ocr",
+        feature = "paddle-ocr",
+        feature = "auto-rotate",
+        feature = "layout-detection",
+        feature = "transcription",
+        feature = "onnx-runtime",
+        feature = "ner-onnx",
+        feature = "static-embeddings"
+    )
+))]
+mod hf_client_builder_tests {
+    use super::*;
+
+    #[test]
+    fn hf_client_builder_builds_a_working_client() {
+        let client = hf_client_builder().build_sync();
+        assert!(
+            client.is_ok(),
+            "builder with injected connect-timeout client must construct offline: {:?}",
+            client.err()
+        );
+    }
+
+    #[test]
+    fn order_ipv4_first_puts_ipv4_before_ipv6_and_is_stable() {
+        use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
+        let v6a = SocketAddr::V6(SocketAddrV6::new(Ipv6Addr::LOCALHOST, 0, 0, 0));
+        let v4a = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(1, 1, 1, 1), 0));
+        let v6b = SocketAddr::V6(SocketAddrV6::new(Ipv6Addr::new(0x2606, 0x4700, 0, 0, 0, 0, 0, 1), 0, 0, 0));
+        let v4b = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(2, 2, 2, 2), 0));
+
+        // Interleaved AAAA-first input: default getaddrinfo order can hand IPv6 out first.
+        let mut addrs = vec![v6a, v4a, v6b, v4b];
+        order_ipv4_first(&mut addrs);
+
+        assert_eq!(
+            addrs,
+            vec![v4a, v4b, v6a, v6b],
+            "IPv4 addresses must precede IPv6, preserving intra-family order"
+        );
+        assert!(!addrs[0].is_ipv6(), "the first address offered to the connector must be IPv4");
     }
 }
 

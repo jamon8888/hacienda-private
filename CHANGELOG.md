@@ -54,6 +54,13 @@ compile for end users.
 
 ### Added
 
+- **Reversible redaction for authorized callers (`redaction-rehydrate`).** Token-replacement
+  redaction can now capture a token to original-text map, encrypt it with a passphrase
+  (AES-256-GCM, scrypt-derived key, fresh salt and nonce per encryption), and later search or
+  selectively delete subjects from it: `find_subject` matches a token exactly or an original
+  value by substring, and `forget_subject` removes every matching entry and returns what was
+  removed so the caller can re-encrypt the remainder. The map never touches disk inside xberg.
+
 - **Scanned PDFs are now detectable, and can be OCR'd without forcing OCR on the whole file.**
   PDF metadata gains `scanned_confidence` (0.0–1.0) and `scanned_pages`, so you can tell whether a
   document is a scan before deciding how to extract it. The new `ocr_strategy` config selects which
@@ -82,6 +89,15 @@ compile for end users.
 
 ### Fixed
 
+- **Layout detection with reading order no longer crashes pages whose text contains bullets,
+  curly quotes, or other multibyte characters.** Reading-order reordering rebuilds the extracted
+  text but kept the page boundaries computed against the original string, so downstream code
+  sliced the new text at stale byte offsets — a panic whenever an offset landed inside a
+  multibyte character, silently dropping the whole document. On OCR-heavy corpora this lost the
+  majority of pages with layout detection on. Boundaries are now recomputed against the reordered
+  text (including the copy used for chunk page ranges), and the per-page OCR gate and OCR/native
+  merge skip-and-log invalid boundaries instead of panicking. The rebuilt text also keeps
+  `insert_page_markers` markers, which reading-order reordering used to drop.
 - **macOS wheels and the npm darwin package now target macOS 11, instead of only macOS 15.**
   Wheels were built with a deployment target of 15.0, so pip and uv matched no wheel below
   macOS 15 and silently fell back to compiling the Rust sdist; the npm darwin package vendored
@@ -195,6 +211,18 @@ compile for end users.
   width — scanned pages with vertical OCR layers, typeset tategaki books. The panic guard kept
   extraction alive, but the affected page came back as a per-page error with its text lost.
   pdf_oxide 0.3.73 fixes the sort, so those pages now extract normally.
+- **Bordered tables with stroke-width-rendered rules are detected (#1213).** Some print-era PDF
+  generators draw a vertical table rule as a ~1pt segment stroked with a line width equal to the
+  table height, so the rule's geometric bounding box was a speck and the Lines-strategy detector
+  saw no vertical rulings — whole fuse-chart-style tables were missed (their only detected "table"
+  being a false-positive page footer) and their text flowed out column-major, destroying row
+  associations. pdf_oxide 0.3.74 accounts for stroke width in path bounding boxes, so these grids
+  are now detected natively with their rows intact.
+- **Inter-word spaces are no longer dropped in positioned/tabular PDF text.** Words in
+  TJ-positioned runs — the header cells of rate tables and similar tabular layouts — extracted
+  glued together (`Comparisonrate`, `roadvehicles`, `transportlayer`) while the same words in
+  flowing prose on the page were spaced correctly. pdf_oxide 0.3.74 accounts for the `TJ` numeric
+  adjustment that carries the space in those runs, so positioned text is spaced too.
 - **Redaction now scrubs every text-bearing field.** The redaction pass rewrote the main content
   and a handful of fields but left table cells, page content, form-field values, image captions,
   URIs, metadata, and structured output carrying the original text — while still reporting success.

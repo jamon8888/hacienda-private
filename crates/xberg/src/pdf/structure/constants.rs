@@ -47,6 +47,12 @@ pub(super) const MIN_HEADING_FONT_RATIO: f32 = 1.15;
 pub(super) const MIN_HEADING_FONT_GAP: f32 = 1.5;
 /// Maximum word count for a bold paragraph to be promoted to a section heading.
 pub(super) const MAX_BOLD_HEADING_WORD_COUNT: usize = 12;
+/// Minimum layout-hint confidence required for a `Text`/`Caption`/`Footnote` hint to
+/// *demote* an existing heading to body text. Demotion is destructive — erasing a real
+/// heading costs a 2.0-weight block in SF1 — so it uses a higher bar than the 0.5/0.7
+/// thresholds used for constructive overrides, and additionally requires the paragraph
+/// to carry no independent heading evidence (font-above-body, bold, or a section pattern).
+pub(super) const HEADING_DEMOTE_CONFIDENCE: f32 = 0.85;
 /// Minimum number of non-empty text blocks a document must contain before
 /// font-size clustering is allowed to promote any run to a heading.
 ///

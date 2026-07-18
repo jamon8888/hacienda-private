@@ -27,6 +27,10 @@ pub(crate) struct LayoutDebugFlags {
     /// `XBERG_LAYOUT_NO_LAYOUT_TABLES`: suppress table fabrication from layout regions.
     pub(crate) no_layout_tables: bool,
     /// `XBERG_LAYOUT_NO_REORDER`: suppress reading-order reordering by layout.
+    /// Its only reader lives in `reorder_segments_by_layout`, which is gated on
+    /// `feature = "layout-detection"`; without that feature (wasm-target, android-target,
+    /// Swift's feature set) the field is never read, so allow dead_code there.
+    #[cfg_attr(not(feature = "layout-detection"), allow(dead_code))]
     pub(crate) no_reorder: bool,
     /// `XBERG_LAYOUT_LOG_OVERRIDES`: emit a per-override attribution line.
     pub(crate) log_overrides: bool,
