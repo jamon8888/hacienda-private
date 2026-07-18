@@ -40,11 +40,22 @@ compile for end users.
 ### Fixed
 
 - **Version drift guard.** `release.yml` fails the job unless root, `apps/web`,
-  `services/mcp-server`, and `packages/wasm-pipeline` versions all match. **Known
-  conflict:** `packages/wasm-pipeline` is `1.0.0-rc.26` (pinned to match the
-  published `@xberg-io/xberg-wasm@1.0.0-rc.26`), while the app is `1.0.0-rc.27`.
-  The guard currently fails by design — bump `wasm-pipeline` to `1.0.0-rc.27` only
-  once `@xberg-io/xberg-wasm@1.0.0-rc.27` is published (see report).
+  `services/mcp-server`, and `packages/wasm-pipeline` versions all match. Two
+  known, deliberate conflicts, both still open:
+  - `packages/wasm-pipeline`'s own version is `1.0.0-rc.27`, but its
+    `@xberg-io/xberg-wasm` dependency is still pinned to `1.0.0-rc.26`
+    (`1.0.0-rc.27` of that package was never published upstream — the registry
+    jumps straight from `rc.26` to `rc.28`, now at `rc.29`). Bump the pin once a
+    compatible published version exists, after checking for breaking changes
+    between `rc.26` and whatever's current.
+  - After merging `origin/main` (2026-07-18), root `package.json`'s version
+    tracks upstream's own release cadence (`1.0.0-rc.29`) — a different,
+    unrelated numbering track from this fork's `apps/web` /
+    `services/mcp-server` / `packages/wasm-pipeline` layer (`1.0.0-rc.27`).
+    The guard will keep failing on this mismatch until root and the fork
+    layer's versioning are deliberately reconciled (e.g. decoupling the
+    guard's root-vs-subpackage comparison, or giving the fork layer its own
+    non-`1.0.0-rc.*` version scheme so it stops colliding with upstream's).
 
 ### Security
 
