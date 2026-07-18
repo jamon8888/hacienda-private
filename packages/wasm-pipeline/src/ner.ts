@@ -26,16 +26,7 @@ async function disableRemoteModels(): Promise<void> {
   }
 }
 
-const PII_TYPES = [
-  "person",
-  "organization",
-  "location",
-  "email",
-  "phone",
-  "date",
-  "ssn",
-  "financial",
-] as const;
+const PII_TYPES = ["person", "organization", "location", "email", "phone", "date", "ssn", "financial"] as const;
 
 /**
  * List the default PII entity types the detector recognizes.
@@ -110,7 +101,9 @@ export async function detectPii(
 ): Promise<PiiEntity[]> {
   if (scenario === DEFAULT_SCENARIO && !warnedDefaultScenario) {
     warnedDefaultScenario = true;
-    console.warn("[wasm-pipeline] detectPii called without a ModelScenario — using DEFAULT_SCENARIO; callers should pass selectScenario() output (see plan task 4-5)");
+    console.warn(
+      "[wasm-pipeline] detectPii called without a ModelScenario — using DEFAULT_SCENARIO; callers should pass selectScenario() output (see plan task 4-5)",
+    );
   }
   const model = await getModel(scenario);
   const result = await model.inference({

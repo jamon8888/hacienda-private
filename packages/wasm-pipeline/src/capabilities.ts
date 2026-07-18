@@ -17,7 +17,9 @@ export const DeviceProfileSchema = z.object({
 /** A validated device capability profile (inferred from {@link DeviceProfileSchema}). */
 export type DeviceProfile = z.infer<typeof DeviceProfileSchema>;
 
-const SIMD_WASM = Uint8Array.from([0,97,115,109,1,0,0,0,1,5,1,96,0,1,123,3,2,1,0,10,10,1,8,0,65,0,253,15,253,98,11]);
+const SIMD_WASM = Uint8Array.from([
+  0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11,
+]);
 
 function hasWasmSimd(): boolean {
   try {
@@ -75,9 +77,10 @@ export async function detectCapabilities(): Promise<DeviceProfile> {
     try {
       const adapter = await gpu!.requestAdapter({ powerPreference: "high-performance" });
       if (adapter) {
-        const info = (adapter.info ?? (typeof adapter.requestAdapterInfo === "function"
-          ? await adapter.requestAdapterInfo()
-          : undefined)) as GpuAdapterLike["info"] | undefined;
+        const info = (adapter.info ??
+          (typeof adapter.requestAdapterInfo === "function" ? await adapter.requestAdapterInfo() : undefined)) as
+          | GpuAdapterLike["info"]
+          | undefined;
         gpuVendor = info?.vendor || undefined;
         gpuArchitecture = info?.architecture || undefined;
         gpuIsFallback = info?.isFallbackAdapter;
@@ -94,12 +97,18 @@ export async function detectCapabilities(): Promise<DeviceProfile> {
   }
 
   let formFactor = inferFormFactor();
-  const uaData = (nav as unknown as { userAgentData?: { getHighEntropyValues?: (k: string[]) => Promise<{ mobile?: boolean; platform?: string }> } }).userAgentData;
+  const uaData = (
+    nav as unknown as {
+      userAgentData?: { getHighEntropyValues?: (k: string[]) => Promise<{ mobile?: boolean; platform?: string }> };
+    }
+  ).userAgentData;
   if (uaData?.getHighEntropyValues) {
     try {
       const hep = await uaData.getHighEntropyValues(["mobile", "platform"]);
       if (typeof hep.mobile === "boolean") formFactor = hep.mobile ? "mobile" : "desktop";
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   const raw = {

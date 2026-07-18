@@ -12,7 +12,10 @@ import { selectScenario, type ModelScenario } from "./scenario";
 
 function runPiiWhenIdle(text: string, piiTypes: readonly string[], scenario: ModelScenario): Promise<PiiEntity[]> {
   const run = () => detectPii(text, piiTypes, scenario);
-  const w = typeof window !== "undefined" ? (window as Window & { requestIdleCallback?: (cb: () => void) => number }) : undefined;
+  const w =
+    typeof window !== "undefined"
+      ? (window as Window & { requestIdleCallback?: (cb: () => void) => number })
+      : undefined;
   if (w?.requestIdleCallback) {
     const ric = w.requestIdleCallback;
     return new Promise<PiiEntity[]>((resolve) => {
@@ -72,7 +75,10 @@ export async function ingestFolder(
 
   const piiTypes = listPiiTypes();
   const chunks = chunkExtraction(doc);
-  const vectors = await embedChunks(chunks.map((c) => ({ text: c.content })), scenario);
+  const vectors = await embedChunks(
+    chunks.map((c) => ({ text: c.content })),
+    scenario,
+  );
 
   const items: IndexedChunk[] = [];
   const allEntries: RedactionEntry[] = [];

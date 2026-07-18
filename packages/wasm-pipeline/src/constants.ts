@@ -5,8 +5,7 @@ interface ViteImportMeta {
 function resolveApiBase(): string {
   const meta = import.meta as unknown as ViteImportMeta;
   const viteValue = meta.env && meta.env.VITE_API_BASE;
-  const procValue =
-    typeof process !== "undefined" && process.env && process.env["API_BASE"];
+  const procValue = typeof process !== "undefined" && process.env && process.env["API_BASE"];
   const envValue = viteValue || procValue || null;
   return envValue ?? "http://localhost:8787";
 }

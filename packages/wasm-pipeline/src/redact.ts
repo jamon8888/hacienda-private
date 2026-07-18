@@ -45,7 +45,10 @@ export interface RedactionResult {
 }
 
 function normalizeCategory(kind: string): string {
-  const cat = kind.toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  const cat = kind
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
   return cat === "" ? "UNKNOWN" : cat;
 }
 
@@ -122,10 +125,7 @@ export function rehydrate(redacted: string, entries: RedactionEntry[]): string {
  * @param passphrase - The passphrase used to derive the encryption key.
  * @returns The {@link SealedVault} (IV-prefixed ciphertext plus salt).
  */
-export async function sealVault(
-  entries: RedactionEntry[],
-  passphrase: string,
-): Promise<SealedVault> {
+export async function sealVault(entries: RedactionEntry[], passphrase: string): Promise<SealedVault> {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const key = await deriveKey(passphrase, salt);
   const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -149,10 +149,7 @@ export async function sealVault(
  * @param passphrase - The passphrase originally used to seal it.
  * @returns The recovered redaction entries.
  */
-export async function openVault(
-  sealed: SealedVault,
-  passphrase: string,
-): Promise<RedactionEntry[]> {
+export async function openVault(sealed: SealedVault, passphrase: string): Promise<RedactionEntry[]> {
   const key = await deriveKey(passphrase, sealed.salt);
   const iv = sealed.cipher.slice(0, 12);
   const body = sealed.cipher.slice(12);
@@ -187,13 +184,7 @@ export async function redactDocument(
 
 async function deriveKey(passphrase: string, salt: Uint8Array): Promise<CryptoKey> {
   const enc = new TextEncoder();
-  const baseKey = await crypto.subtle.importKey(
-    "raw",
-    enc.encode(passphrase),
-    "PBKDF2",
-    false,
-    ["deriveKey"],
-  );
+  const baseKey = await crypto.subtle.importKey("raw", enc.encode(passphrase), "PBKDF2", false, ["deriveKey"]);
   return crypto.subtle.deriveKey(
     { name: "PBKDF2", salt: salt as unknown as BufferSource, iterations: 100_000, hash: "SHA-256" },
     baseKey,
@@ -234,7 +225,11 @@ export function redactText(text: string, spans: RedactionSpan[]): RedactTextResu
   let shift = 0;
   const tokens: RedactionToken[] = [];
   for (const span of accepted) {
-    const kind = span.kind.toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "UNKNOWN";
+    const kind =
+      span.kind
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "") || "UNKNOWN";
     const n = (counters.get(kind) ?? 0) + 1;
     counters.set(kind, n);
     const token = `<${kind}_${n}>`;

@@ -15,11 +15,7 @@ import { selectScenario } from "./scenario";
  * @param topK - Maximum number of chunks to return (default 8).
  * @returns The ranked {@link RetrievedChunk}s.
  */
-export async function queryRag(
-  matter: Matter,
-  query: string,
-  topK = 8,
-): Promise<RetrievedChunk[]> {
+export async function queryRag(matter: Matter, query: string, topK = 8): Promise<RetrievedChunk[]> {
   const scenario = selectScenario(await detectCapabilities());
   const vec = await embedQuery(query, scenario);
   return retrieve(matter.id, vec, topK);

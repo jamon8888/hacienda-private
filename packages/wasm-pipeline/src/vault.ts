@@ -52,13 +52,7 @@ export class BrowserVault {
    */
   static async deriveKey(passphrase: string, salt: Uint8Array): Promise<CryptoKey> {
     const subtle = (await getWebCrypto()).subtle;
-    const baseKey = await subtle.importKey(
-      "raw",
-      new TextEncoder().encode(passphrase),
-      "PBKDF2",
-      false,
-      ["deriveKey"],
-    );
+    const baseKey = await subtle.importKey("raw", new TextEncoder().encode(passphrase), "PBKDF2", false, ["deriveKey"]);
     return subtle.deriveKey(
       { name: "PBKDF2", salt: salt as unknown as BufferSource, iterations: PBKDF2_ITERATIONS, hash: "SHA-256" },
       baseKey,

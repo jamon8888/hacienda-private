@@ -122,10 +122,7 @@ export function toBoundingBox(box: WasmBoundingBox): BoundingBox {
  * @param chunk - The chunk to locate spatially.
  * @returns The anchoring `BoundingBox`, or `undefined` if none is found.
  */
-export function chunkBoundingBox(
-  doc: WasmExtractedDocument,
-  chunk: WasmChunk,
-): BoundingBox | undefined {
+export function chunkBoundingBox(doc: WasmExtractedDocument, chunk: WasmChunk): BoundingBox | undefined {
   const page = chunk.metadata.firstPage;
   const structure = doc.document;
   if (!structure) return undefined;
@@ -137,4 +134,3 @@ export function chunkBoundingBox(
   }
   return undefined;
 }
-

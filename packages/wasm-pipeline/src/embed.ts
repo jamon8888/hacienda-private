@@ -21,10 +21,8 @@ interface TokenizerOutput {
   token_type_ids?: number[];
 }
 
-type CallableTokenizer = ((
-  text: string,
-  options?: { return_tensor?: boolean },
-) => TokenizerOutput) & Record<string, unknown>;
+type CallableTokenizer = ((text: string, options?: { return_tensor?: boolean }) => TokenizerOutput) &
+  Record<string, unknown>;
 
 interface OrtTensor {
   data: Float32Array | BigInt64Array;
@@ -106,8 +104,11 @@ async function getTokenizer(): Promise<CallableTokenizer> {
   return tokenizerPromise;
 }
 
-
-async function embedOne(text: string, prefix: Prefix, scenario: ModelScenario = DEFAULT_SCENARIO): Promise<Float32Array> {
+async function embedOne(
+  text: string,
+  prefix: Prefix,
+  scenario: ModelScenario = DEFAULT_SCENARIO,
+): Promise<Float32Array> {
   const [session, tok] = await Promise.all([getSession(scenario), getTokenizer()]);
   const prefixed = prefix === "query" ? `query: ${text}` : `passage: ${text}`;
   const enc = tok(prefixed, { return_tensor: false });
@@ -167,10 +168,15 @@ async function embedOne(text: string, prefix: Prefix, scenario: ModelScenario = 
  * @param scenario - Model/runtime scenario; defaults to a conservative fallback.
  * @returns One L2-normalized {@link Float32Array} embedding per input chunk.
  */
-export async function embedChunks(chunks: EmbeddableChunk[], scenario: ModelScenario = DEFAULT_SCENARIO): Promise<Float32Array[]> {
+export async function embedChunks(
+  chunks: EmbeddableChunk[],
+  scenario: ModelScenario = DEFAULT_SCENARIO,
+): Promise<Float32Array[]> {
   if (scenario === DEFAULT_SCENARIO && !warnedDefaultScenario) {
     warnedDefaultScenario = true;
-    console.warn("[wasm-pipeline] embed called without a ModelScenario — using DEFAULT_SCENARIO; callers should pass selectScenario() output (see plan task 4-5)");
+    console.warn(
+      "[wasm-pipeline] embed called without a ModelScenario — using DEFAULT_SCENARIO; callers should pass selectScenario() output (see plan task 4-5)",
+    );
   }
   return Promise.all(chunks.map((c) => embedOne(c.text, "passage", scenario)));
 }
@@ -186,7 +192,9 @@ export async function embedChunks(chunks: EmbeddableChunk[], scenario: ModelScen
 export async function embedQuery(text: string, scenario: ModelScenario = DEFAULT_SCENARIO): Promise<Float32Array> {
   if (scenario === DEFAULT_SCENARIO && !warnedDefaultScenario) {
     warnedDefaultScenario = true;
-    console.warn("[wasm-pipeline] embed called without a ModelScenario — using DEFAULT_SCENARIO; callers should pass selectScenario() output (see plan task 4-5)");
+    console.warn(
+      "[wasm-pipeline] embed called without a ModelScenario — using DEFAULT_SCENARIO; callers should pass selectScenario() output (see plan task 4-5)",
+    );
   }
   return embedOne(text, "query", scenario);
 }

@@ -54,9 +54,7 @@ describe("pushMirror", () => {
     const matter = { id: "m-1" } as never;
     const payload = serializeMirrorToBytes(new Uint8Array([1]), new Uint8Array([2]));
     vi.stubGlobal("fetch", (async () => new Response(null, { status: 500 })) as unknown as typeof fetch);
-    await expect(pushMirror(matter, payload, "tok")).rejects.toThrow(
-      "mirror failed: 500",
-    );
+    await expect(pushMirror(matter, payload, "tok")).rejects.toThrow("mirror failed: 500");
     vi.unstubAllGlobals();
   });
 });

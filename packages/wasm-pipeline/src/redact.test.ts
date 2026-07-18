@@ -1,6 +1,14 @@
 import { describe, it, expect } from "vitest";
 import type { PiiEntity } from "@xberg-io/core";
-import { buildRedaction, rehydrate, sealVault, openVault, type RedactionEntry, redactText, rehydrateText } from "./redact";
+import {
+  buildRedaction,
+  rehydrate,
+  sealVault,
+  openVault,
+  type RedactionEntry,
+  redactText,
+  rehydrateText,
+} from "./redact";
 
 describe("redaction round-trip", () => {
   const text = "John Doe met Jane at Acme Corp on Monday.";

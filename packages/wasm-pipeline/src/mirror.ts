@@ -91,22 +91,15 @@ export function serializeMirrorToBytes(
  * @param scopeToken - Bearer scope token authorizing the mirror write.
  * @throws Error if the server responds with a non-OK status.
  */
-export async function pushMirror(
-  matter: Matter,
-  payload: Uint8Array,
-  scopeToken: string,
-): Promise<void> {
-  const res = await fetch(
-    `${API_BASE}/rag/mirror?matter_id=${encodeURIComponent(matter.id)}`,
-    {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${scopeToken}`,
-        "content-type": "application/octet-stream",
-      },
-      body: payload as unknown as BodyInit,
+export async function pushMirror(matter: Matter, payload: Uint8Array, scopeToken: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/rag/mirror?matter_id=${encodeURIComponent(matter.id)}`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${scopeToken}`,
+      "content-type": "application/octet-stream",
     },
-  );
+    body: payload as unknown as BodyInit,
+  });
   if (!res.ok) {
     throw new Error(`mirror failed: ${res.status}`);
   }

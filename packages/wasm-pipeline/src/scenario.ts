@@ -36,12 +36,10 @@ export function selectScenario(p: DeviceProfile): ModelScenario {
   const lowRam = (p.deviceMemoryGb ?? 8) <= 4;
   const weakCpu = threads <= 4;
   const gpuLooksDiscrete =
-    !!p.gpuVendor && !!p.gpuArchitecture && p.gpuIsFallback !== true &&
-    (p.gpuMaxBufferBytes ?? 0) >= 128 * 1024 * 1024;
+    !!p.gpuVendor && !!p.gpuArchitecture && p.gpuIsFallback !== true && (p.gpuMaxBufferBytes ?? 0) >= 128 * 1024 * 1024;
 
   // Quantization: discrete GPU + decent RAM → INT8; otherwise INT4 to fit.
-  const quant: ModelScenario["quant"] =
-    gpuLooksDiscrete && !lowRam && !isMobile ? "int8" : "int4";
+  const quant: ModelScenario["quant"] = gpuLooksDiscrete && !lowRam && !isMobile ? "int8" : "int4";
 
   // Chunk size: smaller on constrained devices to bound peak memory.
   let chunkSize = 1024;

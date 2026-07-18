@@ -18,8 +18,16 @@ describe("BrowserVault (WebCrypto AES-GCM)", () => {
     const key = await BrowserVault.deriveKey(passphrase, salt);
     const vault = new BrowserVault(key);
     const bundle = await vault.encrypt(new TextEncoder().encode("secret value"));
-    const ivBytes = new Uint8Array(atob(bundle.iv).split("").map((c) => c.charCodeAt(0)));
-    const ctBytes = new Uint8Array(atob(bundle.ct).split("").map((c) => c.charCodeAt(0)));
+    const ivBytes = new Uint8Array(
+      atob(bundle.iv)
+        .split("")
+        .map((c) => c.charCodeAt(0)),
+    );
+    const ctBytes = new Uint8Array(
+      atob(bundle.ct)
+        .split("")
+        .map((c) => c.charCodeAt(0)),
+    );
     const combined = new Uint8Array(ivBytes.length + ctBytes.length);
     combined.set(ivBytes, 0);
     combined.set(ctBytes, ivBytes.length);

@@ -7,12 +7,5 @@ export default defineConfig({
   clean: true,
   sourcemap: true,
   target: "es2022",
-  external: [
-    "@xberg-io/xberg-wasm",
-    "@xberg-io/core",
-    "onnxruntime-web",
-    "gliner",
-    "edgevec",
-    "zod",
-  ],
+  external: ["@xberg-io/xberg-wasm", "@xberg-io/core", "onnxruntime-web", "gliner", "edgevec", "zod"],
 });
