@@ -1,0 +1,47 @@
+name: e2e-web
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*.*.*"]
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: npx playwright install chromium
+      - name: Build web UI
+        run: pnpm --filter web build
+      - name: Build mcp-server
+        run: pnpm --filter mcp-server build
+      - name: Stage models
+        run: |
+          mkdir -p $RUNNER_TEMP/xberg-e2e/models
+          cp -r services/mcp-server/models/* $RUNNER_TEMP/xberg-e2e/models/
+      - name: Start server
+        run: node services/mcp-server/dist/index.js serve --port 8787 --data-dir $RUNNER_TEMP/xberg-e2e &
+      - name: UI e2e (real Chromium + real models)
+        run: pnpm --filter web test:e2e
+        env:
+          E2E_DATA_DIR: ${{ runner.temp }}/xberg-e2e
+      - name: Pipeline module harness
+        run: pnpm --filter wasm-pipeline test:e2e
+        env:
+          E2E_DATA_DIR: ${{ runner.temp }}/xberg-e2e
+      - name: MCP stdio live-bundle e2e
+        run: pnpm --filter mcp-server test:e2e:mcp
+        env:
+          E2E_DATA_DIR: ${{ runner.temp }}/xberg-e2e
+      - name: Upload reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-reports
+          path: |
+            apps/web/playwright-report
+            packages/wasm-pipeline/playwright-report

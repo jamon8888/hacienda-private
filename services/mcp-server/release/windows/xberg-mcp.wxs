@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- WiX installer for xberg-mcp (Windows).
+     Build with: candle.exe xberg-mcp.wxs && light.exe xberg-mcp.wixobj -out xberg-mcp.msi
+     Authenticode-sign the resulting .msi per release Task 3. -->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*"
+           Name="Xberg MCP"
+           Language="1033"
+           Version="1.0.0-rc.27"
+           Manufacturer="xberg-io"
+           UpgradeCode="B1C9F3A0-2E4D-4F1A-9B7C-1A2D3E4F5A6B">
+
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Xberg MCP is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Feature Id="MainFeature" Title="Xberg MCP" Level="1">
+      <ComponentGroupRef Id="InstallComponents" />
+      <ComponentRef Id="PathEnvironment" />
+      <ComponentRef Id="StartMenuShortcut" />
+      <ComponentRef Id="RunOnLogin" />
+    </Feature>
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="xberg">
+          <Component Id="MainExecutable" Guid="A1B2C3D4-0001-0001-0001-000000000001">
+            <File Id="XbergMcpExe" Source="xberg-mcp.exe" KeyPath="yes" />
+          </Component>
+
+          <Component Id="PathEnvironment" Guid="A1B2C3D4-0002-0002-0002-000000000002">
+            <Environment Id="PathEnv" Name="PATH" Value="[INSTALLFOLDER]" Permanent="no" Part="last" Action="set" System="yes" />
+          </Component>
+
+          <Component Id="StartMenuShortcut" Guid="A1B2C3D4-0003-0003-0003-000000000003">
+            <Shortcut Id="StartMenuShortcutId"
+                      Directory="ProgramMenuFolder"
+                      Name="Xberg MCP"
+                      Target="[INSTALLFOLDER]xberg-mcp.exe"
+                      Arguments="serve"
+                      WorkingDirectory="INSTALLFOLDER" />
+            <RemoveFolder Id="ProgramMenuFolder" On="uninstall" />
+            <RegistryValue Root="HKCU" Key="Software\xberg-io\xberg-mcp" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+          </Component>
+
+          <!-- Optional: launch 'xberg-mcp serve' silently on user login -->
+          <Component Id="RunOnLogin" Guid="A1B2C3D4-0004-0004-0004-000000000004">
+            <RegistryKey Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Run">
+              <RegistryValue Name="XbergMcp" Type="string"
+                             Value="&quot;[INSTALLFOLDER]xberg-mcp.exe&quot; serve" />
+            </RegistryKey>
+          </Component>
+        </Directory>
+      </Directory>
+
+      <Directory Id="ProgramMenuFolder" Name="ProgramMenu" />
+    </Directory>
+
+    <ComponentGroup Id="InstallComponents">
+      <ComponentRef Id="MainExecutable" />
+    </ComponentGroup>
+  </Product>
+</Wix>
