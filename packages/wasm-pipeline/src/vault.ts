@@ -9,8 +9,11 @@ const PBKDF2_ITERATIONS = 200_000;
 async function getSubtle(): Promise<globalThis.SubtleCrypto> {
   const c = (globalThis as { crypto?: Crypto }).crypto;
   if (c && c.subtle) return c.subtle;
-  // Node 24 fallback for test environments without a global webcrypto.
-  const { webcrypto } = await import("node:crypto");
+  // Node 24 fallback for test environments without a global webcrypto. Real browsers always hit
+  // the branch above, so this import must never be bundled — webpack's resolve.alias doesn't
+  // intercept "node:"-scheme specifiers (they resolve before alias matching), so it's excluded
+  // from the build graph entirely instead.
+  const { webcrypto } = await import(/* webpackIgnore: true */ "node:crypto");
   if (webcrypto?.subtle) return webcrypto.subtle as unknown as globalThis.SubtleCrypto;
   throw new Error("no WebCrypto SubtleCrypto available");
 }

@@ -43,7 +43,6 @@ const nextConfig = {
       ...config.resolve.alias,
       "onnxruntime-node": resolve(__dirname, "onnxruntime-node-stub.mjs"),
       crypto: false,
-      "node:crypto": false,
     };
 
     // onnxruntime-web (and gliner's copy) resolve to their *node* entry via the
