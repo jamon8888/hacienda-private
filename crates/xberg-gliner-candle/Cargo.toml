@@ -38,14 +38,12 @@ candle-transformers = { workspace = true }
 # accepts the Vec<half::f16> directly.
 half = "2.7"
 ndarray = "0.17"
-# NOT `{ workspace = true }` (the workspace-wide alias pins 0.4, an old,
-# semver-incompatible version other crates need) -- this crate's streaming
-# loader (src/streaming_load.rs) must resolve to the SAME safetensors
-# version+instance candle-core uses internally (0.8.0, patched at the
-# workspace root via [patch.crates-io] for the wasm32 overflow fix), since
-# candle_core::safetensors::Load is only implemented for THAT version's
-# TensorView type. A `{ workspace = true }` 0.4 dependency here would be a
-# distinct crate instance/type, breaking `Load::load(&view, ..)` calls.
+# Must stay in lockstep with the safetensors version candle-core uses
+# internally (0.8): the streaming loader (src/streaming_load.rs) hands its
+# own TensorView values to candle_core::safetensors::Load, which is only
+# implemented for that version's TensorView type. A different version here
+# would be a distinct crate instance/type and the `Load::load(&view, ..)`
+# calls would not compile.
 safetensors = "0.8"
 serde = { workspace = true }
 serde_json = { workspace = true }
