@@ -1,4 +1,4 @@
-//! `schema_gather` — non-parametric utility head.
+//! `schema_gather`; non-parametric utility head.
 
 use candle_core::{Result, Tensor};
 
@@ -7,15 +7,15 @@ pub struct SchemaGather;
 
 /// Result of [`SchemaGather::forward`].
 pub struct SchemaGatherOutput {
-    /// `[1, H]` — the `[P]` token's hidden state (prompt context).
+    /// `[1, H]`; the `[P]` token's hidden state (prompt context).
     pub pc_emb: Tensor,
-    /// `[F, H]` — per-field / per-label embeddings.
+    /// `[F, H]`; per-field / per-label embeddings.
     pub field_embs: Tensor,
 }
 
 impl SchemaGather {
     /// `schema_indices` includes the `[P]` index first, followed by all
-    /// per-field `[E]` indices — matches `schema_positions` order from
+    /// per-field `[E]` indices; matches `schema_positions` order from
     /// `xberg_gliner::encode_v2`.
     pub fn forward(
         &self,

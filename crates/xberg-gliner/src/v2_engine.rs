@@ -20,7 +20,7 @@ use crate::{GlinerError, Parameters, Result, RuntimeConfig, SpanOutput, TextInpu
 /// GLiNER2 schema-prompt inference engine.
 ///
 /// Unlike [`crate::Gliner`] (span-mode, batched), GLiNER2's published ONNX
-/// exports hardcode a batch dimension of 1 — `inference` accepts exactly one
+/// exports hardcode a batch dimension of 1; `inference` accepts exactly one
 /// text per call.
 pub struct Gliner2 {
     params: Parameters,
@@ -70,8 +70,11 @@ impl Gliner2 {
                 input.texts.len()
             )));
         }
-        let text = input.texts[0].clone();
-        let labels = input.entities.clone();
+        // `input` is owned; take the strings instead of cloning a potentially
+        // large document text per call.
+        let TextInput { texts, entities, .. } = input;
+        let text = texts.into_iter().next().expect("length checked above");
+        let labels = entities;
 
         let encoded = encode_v2(&text, &labels, &self.tokenizer, &self.splitter)?;
         let seq_len = encoded.input_ids.len();

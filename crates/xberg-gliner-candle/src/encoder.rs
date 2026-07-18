@@ -22,7 +22,7 @@ impl Encoder {
     /// Load the encoder from a `model.safetensors` + `config.json` pair.
     ///
     /// Only used by [`crate::Gliner2Candle::from_local_with_device`] and
-    /// [`crate::Gliner2Candle::unload_adapter`] — dead weight on wasm32
+    /// [`crate::Gliner2Candle::unload_adapter`]; dead weight on wasm32
     /// (no filesystem).
     #[cfg(not(target_arch = "wasm32"))]
     pub fn from_safetensors(weights_path: &Path, config_path: &Path, device: &Device) -> crate::Result<Self> {
@@ -34,7 +34,7 @@ impl Encoder {
         })?;
 
         // SAFETY: VarBuilder::from_mmaped_safetensors mmap-reads the weights
-        // file. Safe as long as the file isn't mutated under us — Candle's
+        // file. Safe as long as the file isn't mutated under us; Candle's
         // standard pattern.
         #[allow(unsafe_code)]
         let vb = unsafe { VarBuilder::from_mmaped_safetensors(&[weights_path], candle_core::DType::F32, device) }
@@ -52,7 +52,7 @@ impl Encoder {
     /// Load the encoder from in-memory safetensors bytes + parsed config
     /// (wasm/no-fs path). Mirrors [`Self::from_safetensors`] but reads the
     /// weights from a buffer instead of mmap'ing a path. `dtype` lets wasm32
-    /// callers request `DType::F16` to halve resident memory after loading —
+    /// callers request `DType::F16` to halve resident memory after loading;
     /// the source safetensors bytes are always F32, so this only affects
     /// in-memory footprint, not download size.
     pub fn from_buffered_safetensors(
@@ -86,7 +86,7 @@ impl Encoder {
     /// `[batch, seq_len, hidden_size]`.
     ///
     /// `token_type_ids` is optional; pass `None` for single-sequence
-    /// inputs (which is GLiNER2's case — the schema prompt + text are
+    /// inputs (which is GLiNER2's case; the schema prompt + text are
     /// concatenated without segment-A/B distinction).
     pub fn forward(
         &self,
@@ -95,7 +95,7 @@ impl Encoder {
         token_type_ids: Option<&Tensor>,
     ) -> candle_core::Result<Tensor> {
         // DebertaV2Model::forward takes Option<Tensor> (owned). Clone the
-        // borrowed inputs — Candle Tensors are Arc-backed so this is cheap.
+        // borrowed inputs; Candle Tensors are Arc-backed so this is cheap.
         self.model
             .forward(input_ids, token_type_ids.cloned(), Some(attention_mask.clone()))
     }

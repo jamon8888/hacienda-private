@@ -21,7 +21,7 @@ use crate::types::entity::{Entity, EntityCategory};
 
 const DEFAULT_THRESHOLD: f32 = 0.5;
 
-/// Cache key: `(model_dir, lora_adapter_dir)` — mirrors `gline::get_or_init_backend`'s
+/// Cache key: `(model_dir, lora_adapter_dir)`; mirrors `gline::get_or_init_backend`'s
 /// cache-by-source-and-config pattern (not shared with it directly: `gline` is gated by
 /// the independent `ner-onnx` feature, so a `ner-candle`-only build must not depend on
 /// it) so a given (model, adapter) pair is loaded and LoRA-merged at most once per
@@ -70,9 +70,9 @@ impl CandleBackend {
     ///
     /// `model_dir` must contain `tokenizer.json` and `model.safetensors`.
     /// `lora_adapter_dir`, when set, must contain `adapter_config.json` and
-    /// `adapter_model.safetensors` — merged into the base weights at load time.
+    /// `adapter_model.safetensors`; merged into the base weights at load time.
     ///
-    /// Not available on `wasm32` — `Gliner2Candle::from_local` requires filesystem
+    /// Not available on `wasm32`; `Gliner2Candle::from_local` requires filesystem
     /// access, which wasm32 does not have. Use [`Self::from_bytes`] there instead.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn from_local(model_dir: &Path, lora_adapter_dir: Option<&Path>) -> crate::Result<Self> {
@@ -102,7 +102,7 @@ impl CandleBackend {
         get_or_insert_arc(key, || Self::from_local(model_dir, lora_adapter_dir))
     }
 
-    /// Load from in-memory model bytes (no filesystem access — required on `wasm32`,
+    /// Load from in-memory model bytes (no filesystem access; required on `wasm32`,
     /// also usable natively when the caller already has the model bytes in memory).
     pub fn from_bytes(safetensors: &[u8], tokenizer_json: &[u8], encoder_config_json: &[u8]) -> crate::Result<Self> {
         let model = Gliner2Candle::from_bytes(safetensors, tokenizer_json, encoder_config_json)
@@ -147,7 +147,7 @@ impl NerBackend for CandleBackend {
         // extract_ner is CPU-bound (tensor inference). On native targets, block_in_place
         // signals tokio to move other tasks off this thread for the duration without
         // requiring Send. wasm32 has no multi-threaded tokio runtime (and is single-threaded
-        // regardless), so extract_ner is called directly — it is already synchronous.
+        // regardless), so extract_ner is called directly; it is already synchronous.
         #[cfg(not(target_arch = "wasm32"))]
         let spans = tokio::task::block_in_place(|| model.extract_ner(text, &labels, DEFAULT_THRESHOLD))
             .map_err(|e| crate::XbergError::Other(format!("CandleBackend inference: {e}")))?;
@@ -161,7 +161,7 @@ impl NerBackend for CandleBackend {
     }
 }
 
-/// Labels used when the caller supplies an empty `categories` slice — matches the
+/// Labels used when the caller supplies an empty `categories` slice; matches the
 /// full default set the other NER backends (ONNX/LLM) use, not a narrower subset.
 fn default_labels() -> &'static [&'static str] {
     &[

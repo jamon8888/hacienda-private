@@ -1,4 +1,4 @@
-//! `span_rep` head — three 2-layer MLPs (`project_start`, `project_end`,
+//! `span_rep` head; three 2-layer MLPs (`project_start`, `project_end`,
 //! `out_project`) with ReLU between layers.
 
 use candle_core::{IndexOp, Tensor};
@@ -6,7 +6,7 @@ use candle_nn::{Linear, Module, VarBuilder, linear};
 
 use super::MAX_WIDTH;
 
-/// SpanMarkerV0 — builds per-(start, end) span representations from
+/// SpanMarkerV0; builds per-(start, end) span representations from
 /// per-token hidden states.
 pub struct SpanRep {
     project_start_0: Linear,
@@ -37,8 +37,8 @@ impl SpanRep {
         })
     }
 
-    /// * `text_emb` — `[1, T, 768]` per-word pooled hidden states.
-    /// * `span_idx` — `[1, T*MAX_WIDTH, 2]` int64 (start, end) indices.
+    /// * `text_emb`; `[1, T, 768]` per-word pooled hidden states.
+    /// * `span_idx`; `[1, T*MAX_WIDTH, 2]` int64 (start, end) indices.
     ///
     /// Returns `[1, T, MAX_WIDTH, 768]`.
     pub fn forward(&self, text_emb: &Tensor, span_idx: &Tensor) -> candle_core::Result<Tensor> {

@@ -5,7 +5,7 @@ use crate::{GlinerError, Result, Token};
 
 /// Decode GLiNER2's `span_scores` output `(1, num_labels, num_words, max_width)`
 /// into entity spans. Unlike GLiNER1's `logits`, `span_scores` values are already
-/// post-sigmoid probabilities — do not apply `sigmoid()` here.
+/// post-sigmoid probabilities; do not apply `sigmoid()` here.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn decode_span_scores(
     span_scores: ArrayViewD<'_, f32>,

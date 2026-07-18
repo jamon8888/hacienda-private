@@ -1,4 +1,4 @@
-//! `count_embed` head — `CountLSTM` ported to Candle (M5a).
+//! `count_embed` head; `CountLSTM` ported to Candle (M5a).
 //!
 //! Despite the `count_lstm` filename (kept for the M3-stub call sites) and
 //! the `counting_layer: "count_lstm"` config field, the actual module in
@@ -39,7 +39,7 @@ pub const MAX_COUNT: usize = 20;
 /// Hidden / input size for the GRU and the field/pos embeddings.
 const HIDDEN: usize = 768;
 
-/// `CountLSTM` (misnomer — actually a GRU). Builds a per-(instance, field)
+/// `CountLSTM` (misnomer; actually a GRU). Builds a per-(instance, field)
 /// "structure" embedding tensor of shape `[count, num_fields, 768]`.
 pub struct CountLstmFixed {
     gru: GRU,

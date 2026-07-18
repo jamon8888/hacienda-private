@@ -120,7 +120,7 @@ impl LoraAdapter {
             let shape: Vec<usize> = view.shape().to_vec();
             // safetensors gives us a byte slice; load into a Candle tensor.
             // PEFT adapters are typically fp32; if the dtype is fp16/bf16 we'd
-            // need to convert. Phase 4 supports fp32 only — error otherwise.
+            // need to convert. Phase 4 supports fp32 only; error otherwise.
             if view.dtype() != safetensors::Dtype::F32 {
                 return Err(crate::GlinerCandleError::Backend(format!(
                     "lora: {key}: dtype {:?} not supported (Phase 4 ships fp32 only)",
@@ -163,7 +163,7 @@ enum LoraSlot {
 }
 
 /// Parse `base_model.model.<module_path>.lora_{A,B}.weight` →
-/// `(<module_path>, slot)`. Strict — rejects keys not matching the
+/// `(<module_path>, slot)`. Strict; rejects keys not matching the
 /// PEFT convention.
 fn parse_lora_key(key: &str) -> crate::Result<(String, LoraSlot)> {
     let stripped = key.strip_prefix("base_model.model.").ok_or_else(|| {

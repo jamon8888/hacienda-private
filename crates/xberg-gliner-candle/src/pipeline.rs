@@ -1,6 +1,6 @@
 //! Orchestrates encode → encoder.forward → heads → [`crate::decode::ScorerOutput`]
 //! for the Candle GLiNER2 "entities" task. New glue code (not a port) built
-//! on `xberg_gliner::encode_v2`'s already-shipped schema-prompt encoding —
+//! on `xberg_gliner::encode_v2`'s already-shipped schema-prompt encoding;
 //! see plan Task 6 module doc for why this replaces anno's separate
 //! `ProcessedRecord`/`TaskMapping` machinery.
 
@@ -15,7 +15,7 @@ use crate::heads::scorer::Scorer;
 use crate::heads::token_gather::TokenGather;
 
 /// Run the full entities-task pipeline for one `(text, labels)` pair.
-/// Returns `(scorer_out, pred_count, encoded)` — `encoded.words` is needed
+/// Returns `(scorer_out, pred_count, encoded)`; `encoded.words` is needed
 /// by the caller (Task 8's `extract_ner`) to decode byte offsets.
 pub(crate) fn run_pipeline(
     tokenizer: &xberg_gliner::V2Tokenizer,
@@ -41,7 +41,7 @@ pub(crate) fn run_pipeline(
         .map_err(|e| crate::GlinerCandleError::Backend(format!("[pipeline:2 encoder.forward] {e}")))?; // [1, S, H]
 
     // 3. Token gather. `text_positions` are already per-word token indices
-    //    from `encode_v2` — filter to the truncated sequence.
+    //    from `encode_v2`; filter to the truncated sequence.
     let filtered_positions: Vec<u32> = encoded
         .text_positions
         .iter()
@@ -67,11 +67,11 @@ pub(crate) fn run_pipeline(
         .forward(&text_emb, &span_idx)
         .map_err(|e| crate::GlinerCandleError::Backend(format!("[pipeline:4 span_rep] {e}")))?; // [1, num_words, MAX_WIDTH, H]
 
-    // 5. Schema gather: `[P]` index first, then per-label `[E]` indices —
+    // 5. Schema gather: `[P]` index first, then per-label `[E]` indices;
     //    exactly `encoded.schema_positions`' order.
     if encoded.schema_positions.is_empty() {
         return Err(crate::GlinerCandleError::Backend(
-            "schema_positions empty — encode_v2 must emit at least the [P] marker".to_string(),
+            "schema_positions empty; encode_v2 must emit at least the [P] marker".to_string(),
         ));
     }
     let schema_idx: Vec<u32> = encoded.schema_positions.iter().map(|&p| p as u32).collect();

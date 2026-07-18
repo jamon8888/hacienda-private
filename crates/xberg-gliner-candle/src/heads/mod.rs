@@ -2,7 +2,7 @@
 //!
 //! `token_gather`, `schema_gather`, `scorer` are parameter-free utilities.
 //! `span_rep`, `count_pred`, `count_lstm` are parametric (Task 5b). The
-//! `classifier` head from anno is intentionally NOT ported — this crate
+//! `classifier` head from anno is intentionally NOT ported; this crate
 //! ships `extract_ner` parity only (see plan Global Constraints).
 
 pub mod count_lstm;
@@ -13,7 +13,7 @@ pub mod span_rep;
 pub mod token_gather;
 
 /// Maximum span width baked into the v2 Candle heads' trained weights
-/// (`span_rep`'s reshape, `scorer`'s axis sizing). Model-architecture-fixed —
+/// (`span_rep`'s reshape, `scorer`'s axis sizing). Model-architecture-fixed;
 /// see Global Constraints.
 pub(crate) const MAX_WIDTH: usize = 8;
 
@@ -34,13 +34,13 @@ impl AllHeads {
     /// Load all heads' weights from a single safetensors file.
     ///
     /// Only used by [`crate::Gliner2Candle::from_local_with_device`] and
-    /// [`crate::Gliner2Candle::unload_adapter`] — dead weight on wasm32
+    /// [`crate::Gliner2Candle::unload_adapter`]; dead weight on wasm32
     /// (no filesystem).
     #[cfg(not(target_arch = "wasm32"))]
     #[allow(unsafe_code)]
     pub fn from_safetensors(weights_path: &Path, device: &Device) -> crate::Result<Self> {
         // SAFETY: mmap-reads the weights file; safe as long as it isn't
-        // mutated under us — matches `encoder::Encoder`'s pattern.
+        // mutated under us; matches `encoder::Encoder`'s pattern.
         let vb = unsafe { VarBuilder::from_mmaped_safetensors(&[weights_path], candle_core::DType::F32, device) }
             .map_err(|e| crate::GlinerCandleError::Backend(format!("heads safetensors: {e}")))?;
         Self::load(vb, device)
@@ -48,7 +48,7 @@ impl AllHeads {
 
     /// Load all heads from an already-built [`VarBuilder`] (post-LoRA-merge path).
     ///
-    /// Only used by [`crate::Gliner2Candle::load_adapter`] — dead weight on
+    /// Only used by [`crate::Gliner2Candle::load_adapter`]; dead weight on
     /// wasm32 (no filesystem, and LoRA merge is fs-driven).
     #[cfg(not(target_arch = "wasm32"))]
     pub fn from_var_builder(vb: VarBuilder<'_>, device: &Device) -> crate::Result<Self> {

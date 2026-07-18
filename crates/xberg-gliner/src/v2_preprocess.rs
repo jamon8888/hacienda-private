@@ -50,34 +50,39 @@ pub fn encode_v2(
 
     let encoding: PretokenizedEncoding = tokenizer.encode_pretokenized(full_sequence)?;
 
+    // One forward pass over word_ids, recording each word's first token
+    // position. A per-word `.position()` scan would be O(words x tokens),
+    // which is quadratic on exactly the large documents this pipeline
+    // targets; this index keeps the whole lookup phase O(tokens).
+    let total_words = num_schema_words + words.len();
+    let mut first_token_of_word: Vec<Option<usize>> = vec![None; total_words];
+    for (token_pos, word_id) in encoding.word_ids.iter().enumerate() {
+        if let Some(id) = word_id {
+            let idx = *id as usize;
+            if idx < total_words && first_token_of_word[idx].is_none() {
+                first_token_of_word[idx] = Some(token_pos);
+            }
+        }
+    }
+
     let mut text_positions = Vec::with_capacity(words.len());
     for word_index in 0..words.len() {
-        let full_word_index = (num_schema_words + word_index) as u32;
-        let position = encoding
-            .word_ids
-            .iter()
-            .position(|word_id| *word_id == Some(full_word_index))
-            .ok_or_else(|| {
-                GlinerError::Tokenizer(format!(
-                    "GLiNER2 tokenizer dropped text word {word_index} during pre-tokenized encoding"
-                ))
-            })?;
+        let position = first_token_of_word[num_schema_words + word_index].ok_or_else(|| {
+            GlinerError::Tokenizer(format!(
+                "GLiNER2 tokenizer dropped text word {word_index} during pre-tokenized encoding"
+            ))
+        })?;
         text_positions.push(position as i64);
     }
 
     let mut schema_positions = Vec::new();
     for (index, token) in schema_tokens.iter().enumerate() {
         if token == SCHEMA_TOKEN_P || token == SCHEMA_TOKEN_E {
-            let full_word_index = index as u32;
-            let position = encoding
-                .word_ids
-                .iter()
-                .position(|word_id| *word_id == Some(full_word_index))
-                .ok_or_else(|| {
-                    GlinerError::Tokenizer(format!(
-                        "GLiNER2 tokenizer dropped schema marker '{token}' at schema word {index} during encoding"
-                    ))
-                })?;
+            let position = first_token_of_word[index].ok_or_else(|| {
+                GlinerError::Tokenizer(format!(
+                    "GLiNER2 tokenizer dropped schema marker '{token}' at schema word {index} during encoding"
+                ))
+            })?;
             schema_positions.push(position as i64);
         }
     }
@@ -94,7 +99,7 @@ pub fn encode_v2(
 mod tests {
     use super::*;
 
-    /// One output token per input word, in order — `word_ids[i] == Some(i)`.
+    /// One output token per input word, in order; `word_ids[i] == Some(i)`.
     /// Makes position assertions trivial: every schema/text position should
     /// equal the corresponding word's index in `full_sequence`.
     struct FakeTokenizer;

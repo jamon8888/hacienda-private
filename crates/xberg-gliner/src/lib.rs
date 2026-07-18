@@ -14,7 +14,7 @@ mod input;
 mod preprocess;
 #[cfg(feature = "ort-backend")]
 mod session;
-// Only used by the ORT engines (engine.rs, preprocess.rs) — dead weight
+// Only used by the ORT engines (engine.rs, preprocess.rs); dead weight
 // without ort-backend.
 #[cfg(feature = "ort-backend")]
 mod splitter;
@@ -22,7 +22,7 @@ mod splitter;
 mod tensor;
 #[cfg(feature = "ort-backend")]
 mod tokenizer;
-// Only used by the ORT V2 engine (v2_engine.rs) — dead weight without
+// Only used by the ORT V2 engine (v2_engine.rs); dead weight without
 // ort-backend.
 #[cfg(feature = "ort-backend")]
 mod v2_decode;

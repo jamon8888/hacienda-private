@@ -70,7 +70,7 @@ fn pii_model_loads_from_bytes_and_extracts_entities() {
 
     // Exercises the exact wasm32-relevant code path (from_bytes, no filesystem
     // reads inside the constructor itself) even though this test runs
-    // natively — Candle's tensor ops are portable, and this is the real
+    // natively; Candle's tensor ops are portable, and this is the real
     // check the design spec's config-schema inspection could not perform by
     // reading alone: does model.safetensors's tensor naming actually carry
     // the `encoder.` prefix encoder.rs strips via vb.pp("encoder")?

@@ -1,4 +1,4 @@
-//! `token_gather` — non-parametric utility head.
+//! `token_gather`; non-parametric utility head.
 
 use candle_core::{Result, Tensor};
 

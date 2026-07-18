@@ -11,7 +11,7 @@ const SEP_TOKEN: &str = "<<SEP>>";
 /// Raw text input and zero-shot entity labels.
 ///
 /// Only consumed by the ORT-backed engines ([`crate::engine::Gliner`],
-/// [`crate::v2_engine::Gliner2`]) and their preprocessing — dead weight
+/// [`crate::v2_engine::Gliner2`]) and their preprocessing; dead weight
 /// without `ort-backend`.
 #[cfg(feature = "ort-backend")]
 #[derive(Debug, Clone)]

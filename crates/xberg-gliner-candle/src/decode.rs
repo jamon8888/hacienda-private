@@ -2,7 +2,7 @@
 //! pipeline. The numeric decode loop is adapted from
 //! `anno::backends::gliner2_fastino::pipeline::decode_entities_with_thresholds`
 //! to target `xberg_gliner::Span` (byte offsets) instead of anno's
-//! char-offset `Entity` type — no offset-unit conversion needed here.
+//! char-offset `Entity` type; no offset-unit conversion needed here.
 
 use ndarray::Array3;
 pub(crate) use ndarray::Array4;
@@ -22,7 +22,7 @@ pub(crate) struct ScorerOutput {
 ///
 /// For each `(start_word, width_idx)` pair where `width_idx ∈ 0..MAX_WIDTH`,
 /// emits `(start, start + width_idx)`. Out-of-range pairs (`end >= num_words`)
-/// are zero-padded — those slots carry score `0.0` after the heads' forward
+/// are zero-padded; those slots carry score `0.0` after the heads' forward
 /// pass and are always skipped by `decode_span_scores`.
 pub(crate) fn build_span_idx(num_words: usize) -> crate::Result<Array3<i64>> {
     let num_spans = num_words * MAX_WIDTH;
@@ -57,9 +57,13 @@ pub(crate) fn decode_span_scores(
     dup_label: bool,
     multi_label: bool,
 ) -> crate::Result<xberg_gliner::SpanOutput> {
-    let num_words = words.len();
-    let num_labels = labels.len();
     let scores = &scorer_out.scores;
+    // Bound by the scores tensor's word dimension, not `words.len()`: when the
+    // input exceeds the encoder's position-embedding limit, `run_pipeline`
+    // truncates and the scores only cover the surviving words. Indexing by the
+    // full word list would walk off the array.
+    let num_words = words.len().min(scores.shape()[1]);
+    let num_labels = labels.len();
 
     let mut candidates: Vec<Span> = Vec::new();
     for c_idx in 0..pred_count.min(MAX_COUNT) {
@@ -78,10 +82,19 @@ pub(crate) fn decode_span_scores(
                     }
                     let byte_start = words[start].start();
                     let byte_end = words[end_word - 1].end();
-                    if byte_end > text.len() || byte_start >= byte_end {
+                    if byte_start >= byte_end {
                         continue;
                     }
-                    let surface = text[byte_start..byte_end].trim();
+                    // .get() rather than indexing: token offsets come from the
+                    // lowercased copy (see V2Splitter), and a lowercase form
+                    // that changes byte length can land these offsets out of
+                    // bounds or mid-character in the original text. Skip such
+                    // candidates instead of panicking, matching v2_decode's
+                    // defensive handling on the ONNX path.
+                    let Some(raw) = text.get(byte_start..byte_end) else {
+                        continue;
+                    };
+                    let surface = raw.trim();
                     if surface.is_empty() {
                         continue;
                     }
@@ -113,6 +126,59 @@ mod tests {
     use super::*;
 
     #[test]
+    fn decode_span_scores_skips_non_char_boundary_offsets() {
+        use xberg_gliner::Token;
+        // "\u{130}a": U+0130 is two bytes, so offset 1 is mid-character. A
+        // token carrying such offsets (possible when the lowercased copy is
+        // longer than the original) must be skipped, not panic.
+        let text = "\u{130}a";
+        let words = vec![Token::new(1, 3, "ia")];
+        let labels = vec!["person".to_string()];
+        let mut scores = ndarray::Array4::<f32>::zeros((MAX_COUNT, 1, MAX_WIDTH, 1));
+        scores[[0, 0, 0, 0]] = 0.9;
+        let out = decode_span_scores(
+            text,
+            &words,
+            &labels,
+            &ScorerOutput { scores },
+            1,
+            0.5,
+            true,
+            false,
+            false,
+        )
+        .expect("misaligned offsets must be skipped, not panic");
+        assert!(out.spans[0].is_empty());
+    }
+
+    #[test]
+    fn decode_span_scores_bounds_by_scores_dim_after_truncation() {
+        use xberg_gliner::Token;
+        // Three words, but the scores tensor only covers two (the pipeline
+        // truncated the third at the position-embedding limit). Decoding must
+        // stay inside the tensor instead of panicking on the third word.
+        let text = "one two three";
+        let words = vec![Token::new(0, 3, "one"), Token::new(4, 7, "two"), Token::new(8, 13, "three")];
+        let labels = vec!["person".to_string()];
+        let mut scores = ndarray::Array4::<f32>::zeros((MAX_COUNT, 2, MAX_WIDTH, 1));
+        scores[[0, 1, 0, 0]] = 0.9;
+        let out = decode_span_scores(
+            text,
+            &words,
+            &labels,
+            &ScorerOutput { scores },
+            1,
+            0.5,
+            true,
+            false,
+            false,
+        )
+        .expect("truncated scores must bound the decode loop");
+        assert_eq!(out.spans[0].len(), 1);
+        assert_eq!(out.spans[0][0].text(), "two");
+    }
+
+    #[test]
     fn build_span_idx_zero_pads_overflow() {
         let idx = build_span_idx(2).expect("build_span_idx must not fail");
         assert_eq!(idx.shape(), &[1, 2 * MAX_WIDTH, 2]);
@@ -122,7 +188,7 @@ mod tests {
         assert_eq!((idx[[0, 1, 0]], idx[[0, 1, 1]]), (0, 1));
         // start=0, width=2: end=2 >= 2 → zero-padded (0,0)
         assert_eq!((idx[[0, 2, 0]], idx[[0, 2, 1]]), (0, 0));
-        // start=1, width=0: end=1 < 2 → valid (1,1) — second word
+        // start=1, width=0: end=1 < 2 → valid (1,1); second word
         assert_eq!((idx[[0, MAX_WIDTH, 0]], idx[[0, MAX_WIDTH, 1]]), (1, 1));
     }
 

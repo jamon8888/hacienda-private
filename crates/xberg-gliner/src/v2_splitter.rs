@@ -11,7 +11,7 @@ pub(crate) const V2_SPLITTER_REGEX: &str =
 /// Byte offsets are taken from the lowercased copy and applied back to the
 /// original text. This holds for ASCII and most Latin-script text. Characters
 /// whose lowercase form changes byte length (e.g. Turkish dotted İ) can yield
-/// misaligned spans — the upstream reference implementation has the same
+/// misaligned spans; the upstream reference implementation has the same
 /// limitation, so this preserves parity rather than diverging from it.
 pub struct V2Splitter {
     regex: Regex,

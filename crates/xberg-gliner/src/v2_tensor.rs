@@ -5,7 +5,7 @@ use crate::{GlinerError, Result};
 
 /// Build the dense `span_idx` tensor GLiNER2 expects: every `(start, start+width-1)`
 /// pair for `width` in `1..=max_width`, padded with `(0, 0)` once `start+width`
-/// exceeds `num_words`. GLiNER2 has no `span_mask` input — out-of-range spans are
+/// exceeds `num_words`. GLiNER2 has no `span_mask` input; out-of-range spans are
 /// filtered during decode instead (by checking `end >= num_words`).
 pub(crate) fn build_span_idx(num_words: usize, max_width: usize) -> Result<Array3<i64>> {
     let num_spans = num_words.checked_mul(max_width).ok_or_else(|| {

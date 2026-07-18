@@ -85,7 +85,7 @@ pub struct SpanOutput {
 
 impl SpanOutput {
     /// Only constructed by the ORT decode paths ([`decode_logits`] and
-    /// `v2_decode::decode_span_scores`) — dead weight without `ort-backend`.
+    /// `v2_decode::decode_span_scores`); dead weight without `ort-backend`.
     #[cfg(feature = "ort-backend")]
     pub(crate) fn new(texts: Vec<String>, entities: Vec<String>, spans: Vec<Vec<Span>>) -> Self {
         Self { texts, entities, spans }
@@ -110,7 +110,7 @@ impl std::fmt::Display for SpanOutput {
     }
 }
 
-/// Only used by [`decode_logits`] (the ORT V1 decode path) — dead weight
+/// Only used by [`decode_logits`] (the ORT V1 decode path); dead weight
 /// without `ort-backend`.
 #[cfg(feature = "ort-backend")]
 pub(crate) struct EntityContext {
@@ -172,7 +172,7 @@ impl EntityContext {
     }
 }
 
-/// Only called by [`crate::engine::Gliner`] (the ORT V1 engine) — dead
+/// Only called by [`crate::engine::Gliner`] (the ORT V1 engine); dead
 /// weight without `ort-backend`.
 #[cfg(feature = "ort-backend")]
 pub(crate) fn decode_logits(
@@ -272,7 +272,7 @@ fn accept_span(first: &Span, second: &Span, flat_ner: bool, dup_label: bool, mul
     }
 }
 
-/// Only called by [`decode_logits`] — dead weight without `ort-backend`.
+/// Only called by [`decode_logits`]; dead weight without `ort-backend`.
 #[cfg(feature = "ort-backend")]
 fn sigmoid(value: f32) -> f32 {
     1.0 / (1.0 + (-value).exp())

@@ -22,7 +22,7 @@ fn encoder_from_safetensors_rejects_missing_weights() {
 fn token_gather_selects_word_start_positions() {
     use candle_core::{Device, Tensor};
     let device = Device::Cpu;
-    // hidden_states: [1, 3, 2] — 3 tokens, hidden size 2.
+    // hidden_states: [1, 3, 2]; 3 tokens, hidden size 2.
     let hidden = Tensor::from_vec(vec![1f32, 1., 2., 2., 3., 3.], (1, 3, 2), &device).unwrap();
     let word_indices = Tensor::from_vec(vec![0u32, 2u32], (2,), &device).unwrap();
     let out = crate::heads::token_gather::TokenGather

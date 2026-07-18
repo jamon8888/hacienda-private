@@ -19,7 +19,7 @@ pub struct Gliner2Candle {
     pub(crate) device: Device,
     /// Directory containing the base model's `tokenizer.json`, `config.json`
     /// (or `encoder_config/config.json`), and `model.safetensors`. Used to
-    /// re-merge from disk on `load_adapter`/`unload_adapter` — only read on
+    /// re-merge from disk on `load_adapter`/`unload_adapter`; only read on
     /// non-wasm32 targets; empty (`PathBuf::new()`) on the `from_bytes` path.
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     base_model_dir: PathBuf,
@@ -27,7 +27,7 @@ pub struct Gliner2Candle {
     pub(crate) heads: heads::AllHeads,
     active_adapter: Option<String>,
     model_id: String,
-    /// Approximate resident size in bytes — the base `model.safetensors` file
+    /// Approximate resident size in bytes; the base `model.safetensors` file
     /// size, recorded at load. A merged adapter produces a same-shape model, so
     /// this stays valid across `load_adapter`/`unload_adapter`.
     approx_bytes: u64,
@@ -54,7 +54,7 @@ impl Gliner2Candle {
         self.approx_bytes
     }
 
-    /// Load from in-memory model bytes (browser/OPFS, wasm — no filesystem).
+    /// Load from in-memory model bytes (browser/OPFS, wasm; no filesystem).
     /// `encoder_config_json` is the `config.json` (or `encoder_config/config.json`)
     /// contents; `tokenizer_json` is the HF `tokenizer.json` contents;
     /// `safetensors` is the `model.safetensors` contents.
@@ -140,7 +140,7 @@ impl Gliner2Candle {
         {
             return Err(GlinerCandleError::Backend(format!(
                 "load_adapter: adapter trained on '{adapter_base}', current model is \
-                 '{}'. Refusing to merge — remove base_model_name_or_path from \
+                 '{}'. Refusing to merge; remove base_model_name_or_path from \
                  adapter_config.json to bypass.",
                 self.model_id
             )));

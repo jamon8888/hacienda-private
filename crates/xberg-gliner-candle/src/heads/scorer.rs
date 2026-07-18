@@ -1,4 +1,4 @@
-//! `scorer` — non-parametric utility head.
+//! `scorer`; non-parametric utility head.
 //!
 //! `scores[b, p, l, k] = sigmoid(Σ_d span_rep[l, k, d] * struct_proj[b, p, d])`,
 //! computed as a single matmul + reshape + sigmoid.

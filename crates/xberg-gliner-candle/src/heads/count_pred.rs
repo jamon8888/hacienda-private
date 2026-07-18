@@ -1,4 +1,4 @@
-//! `count_pred` head — 2-layer MLP over the pooled prompt embedding.
+//! `count_pred` head; 2-layer MLP over the pooled prompt embedding.
 
 use candle_core::Tensor;
 use candle_nn::{Linear, Module, VarBuilder, linear};
@@ -7,7 +7,7 @@ use candle_nn::{Linear, Module, VarBuilder, linear};
 /// so valid argmax results fall in `[0, 19]`.
 const MAX_COUNT_CLASSES: usize = 20;
 
-/// `count_pred` — 2-layer MLP that predicts a count class given the
+/// `count_pred`; 2-layer MLP that predicts a count class given the
 /// pooled prompt embedding.
 pub struct CountPred {
     linear_0: Linear,
@@ -22,7 +22,7 @@ impl CountPred {
         Ok(Self { linear_0, linear_2 })
     }
 
-    /// * `p_emb` — pooled prompt embedding `[1, 768]` (or `[768]`).
+    /// * `p_emb`; pooled prompt embedding `[1, 768]` (or `[768]`).
     ///
     /// Returns the predicted count as a host-side `usize`, clamped to `[0, 19]`.
     pub fn forward(&self, p_emb: &Tensor) -> candle_core::Result<usize> {
