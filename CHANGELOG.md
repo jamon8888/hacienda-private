@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.0-rc.27]
+
+Release & CI layer for the fully-local lawyer document-intelligence app
+(Plans 1–6). The Node.js MCP server serves the browser UI, the vendored
+`@xberg-io/xberg-wasm` engine, SHA256-pinned models, a light metadata store, an
+AES-GCM key vault, and mirrors the browser EdgeVec index. The browser runs the
+entire engine on-device; no cargo, no system ONNX Runtime, no per-target native
+compile for end users.
+
+### Added
+
+- **Plan 1 — MCP server (`services/mcp-server`).** Thin Node.js service with `serve`
+  (HTTP + static `public/`) and `mcp` (stdio) subcommands; serves UI, wasm, and
+  `/models/*`; AES-GCM key vault; EdgeVec index mirror endpoint.
+- **Plan 2 — `@xberg-io/wasm-pipeline`.** Browser-side privacy pipeline: xberg-wasm
+  extract/OCR/chunk, on-device e5 embeddings (onnxruntime-web), GLiNER PII, EdgeVec
+  RAG, reversible WebCrypto redaction.
+- **Plan 3 — `apps/web`.** Next.js 14.2.5 thin client UI (matters / folders /
+  documents / search / onboarding) calling the MCP server over HTTP; COOP/COEP
+  headers for cross-origin isolation.
+- **Plan 6 — Release & CI.** `.github/workflows/build.yml` (build + per-OS `pkg`
+  wrap), `release.yml` (tag-triggered GitHub Release with version-drift guard and
+  SHA256 manifest), `sign.yml` (Authenticode / macOS notarization / Linux GPG,
+  secret-gated), and this changelog.
+
+### Changed
+
+- MCP server build drops `--dts` (rollup-plugin-dts crash in this toolchain);
+  `tsc --noEmit` remains the typecheck gate.
+
+### Fixed
+
+- **Version drift guard.** `release.yml` fails the job unless root, `apps/web`,
+  `services/mcp-server`, and `packages/wasm-pipeline` versions all match. **Known
+  conflict:** `packages/wasm-pipeline` is `1.0.0-rc.26` (pinned to match the
+  published `@xberg-io/xberg-wasm@1.0.0-rc.26`), while the app is `1.0.0-rc.27`.
+  The guard currently fails by design — bump `wasm-pipeline` to `1.0.0-rc.27` only
+  once `@xberg-io/xberg-wasm@1.0.0-rc.27` is published (see report).
+
+### Security
+
+- Signing secrets never logged; all signing steps gated behind `if: secrets.X != ''`.
+
 ## [Unreleased]
 
 ### Added
