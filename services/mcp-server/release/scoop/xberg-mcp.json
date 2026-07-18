@@ -10,8 +10,6 @@
     }
   },
   "bin": "xberg-mcp.exe",
-  "shortcuts": [
-    ["xberg-mcp.exe", "Xberg MCP"]
-  ],
+  "shortcuts": [["xberg-mcp.exe", "Xberg MCP"]],
   "notes": "Run 'xberg-mcp serve' to open the UI, or 'xberg-mcp mcp' for Claude Desktop."
 }

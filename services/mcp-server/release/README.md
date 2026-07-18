@@ -16,7 +16,7 @@ node dist/index.js serve
 node dist/index.js mcp
 ```
 
-The UI is served at **http://localhost:8787**. For Claude Desktop, copy
+The UI is served at **<http://localhost:8787**>. For Claude Desktop, copy
 [`claude_desktop_config.json`](./claude_desktop_config.json) into your
 `~/Library/Application Support/Claude/` (macOS) / `%APPDATA%\Claude\` (Windows) /
 `~/.config/Claude/` (Linux) config dir, then restart Claude Desktop.

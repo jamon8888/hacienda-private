@@ -32,12 +32,8 @@ async function main() {
     throw new Error("Manifest is missing a 'models' array");
   }
 
-  const alreadyPinned = manifest.models.filter(
-    (m) => m.sha256 && m.sha256 !== PLACEHOLDER
-  );
-  const needsPin = manifest.models.filter(
-    (m) => !m.sha256 || m.sha256 === PLACEHOLDER
-  );
+  const alreadyPinned = manifest.models.filter((m) => m.sha256 && m.sha256 !== PLACEHOLDER);
+  const needsPin = manifest.models.filter((m) => !m.sha256 || m.sha256 === PLACEHOLDER);
 
   if (needsPin.length === 0) {
     console.log("All models already pinned. Nothing to do.\n");

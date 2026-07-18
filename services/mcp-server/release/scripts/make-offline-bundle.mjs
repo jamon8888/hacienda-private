@@ -20,7 +20,7 @@ async function zipWithZipCLI(srcDir, outZip) {
   const zip = spawnSync("zip", ["-r", "-q", outZip, "."], { cwd: srcDir });
   if (zip.error) {
     throw new Error(
-      "Native 'zip' binary not found. Install zip (apt-get install zip / brew install zip) to build the offline bundle."
+      "Native 'zip' binary not found. Install zip (apt-get install zip / brew install zip) to build the offline bundle.",
     );
   }
   if (zip.status !== 0) {
@@ -39,7 +39,7 @@ async function main() {
   if (unpinned.length > 0) {
     throw new Error(
       `Cannot build offline bundle: ${unpinned.length} model(s) still have ${PLACEHOLDER}. ` +
-        `Run 'node scripts/pin-models.mjs' with network access first.`
+        `Run 'node scripts/pin-models.mjs' with network access first.`,
     );
   }
 

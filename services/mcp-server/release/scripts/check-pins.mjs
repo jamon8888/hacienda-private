@@ -17,7 +17,7 @@ function main() {
 
   if (unpinned.length > 0) {
     console.error(
-      `FAIL: ${unpinned.length} model(s) still have the ${PLACEHOLDER} placeholder and must be pinned before release:`
+      `FAIL: ${unpinned.length} model(s) still have the ${PLACEHOLDER} placeholder and must be pinned before release:`,
     );
     for (const m of unpinned) {
       console.error(`  - ${m.name} (${m.url})`);
