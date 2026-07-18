@@ -17,9 +17,7 @@ interface StoredDoc {
 
 const STORAGE_KEY = "xberg.ingestedDocs";
 
-const SAMPLE_PII: PiiEntity[] = [
-  { kind: "EMAIL", start: 0, end: 20, text: "john.doe@example.com" },
-];
+const SAMPLE_PII: PiiEntity[] = [{ kind: "EMAIL", start: 0, end: 20, text: "john.doe@example.com" }];
 
 function DocumentViewInner() {
   const params = useParams<{ id: string }>();
@@ -31,11 +29,8 @@ function DocumentViewInner() {
   const [redactedText, setRedactedText] = useState<string | null>(null);
   const [redacting, setRedacting] = useState(false);
 
-  const raw =
-    typeof window !== "undefined" ? sessionStorage.getItem(STORAGE_KEY) : null;
-  const all: Record<string, StoredDoc> = raw
-    ? (JSON.parse(raw) as Record<string, StoredDoc>)
-    : {};
+  const raw = typeof window !== "undefined" ? sessionStorage.getItem(STORAGE_KEY) : null;
+  const all: Record<string, StoredDoc> = raw ? (JSON.parse(raw) as Record<string, StoredDoc>) : {};
   const stored = all[docId];
 
   const text = stored?.text ?? "";

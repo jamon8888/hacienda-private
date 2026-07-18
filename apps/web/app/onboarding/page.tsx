@@ -22,8 +22,8 @@ export default function OnboardingPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Fully local, on-device document processing for legal materials. Extraction, OCR,
-            embeddings, PII detection, and retrieval all run in your browser.
+            Fully local, on-device document processing for legal materials. Extraction, OCR, embeddings, PII detection,
+            and retrieval all run in your browser.
           </p>
           <Button className="w-full" onClick={start}>
             Enter workspace

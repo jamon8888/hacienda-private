@@ -64,7 +64,10 @@ function emit(ctx: IngestContext, name: string, docId: string, stage: IngestProg
   ctx.onProgress?.({ doc_id: docId, name, stage, progress });
 }
 
-function mirrorPiiSpans(items: IndexedChunk[], allEntries: { kind: string; start: number; end: number; token: string }[]) {
+function mirrorPiiSpans(
+  items: IndexedChunk[],
+  allEntries: { kind: string; start: number; end: number; token: string }[],
+) {
   return allEntries.map((e) => ({
     doc_id: items[0]?.docId ?? "",
     kind: e.kind,
@@ -96,7 +99,10 @@ export async function ingestFolder(file: File, ctx: IngestContext): Promise<Inge
   const chunks = chunkExtraction(doc);
   emit(ctx, name, name, "chunk", 0.4);
 
-  const vectors = await embedChunks(chunks.map((c) => ({ text: c.content })), scenario);
+  const vectors = await embedChunks(
+    chunks.map((c) => ({ text: c.content })),
+    scenario,
+  );
   emit(ctx, name, name, "embed", 0.6);
 
   const items: IndexedChunk[] = [];
@@ -135,7 +141,7 @@ export async function ingestFolder(file: File, ctx: IngestContext): Promise<Inge
         page: it.page,
         bbox: it.bbox,
         score: 1 - i * 0.01,
-    citation: it.citation ?? "",
+        citation: it.citation ?? "",
       })),
     }),
   );

@@ -14,6 +14,9 @@ test("drop files, run pipeline, view extracted document", async ({ page }) => {
   await page.setInputFiles('input[type="file"]', [path.join(__dirname, "fixtures/sample.txt")]);
   await page.getByRole("button", { name: /run pipeline/i }).click();
   await expect(page.getByText(/pages/i)).toBeVisible({ timeout: 180_000 });
-  await page.getByRole("button", { name: /view document/i }).first().click();
+  await page
+    .getByRole("button", { name: /view document/i })
+    .first()
+    .click();
   await expect(page.getByText(/Extracted Text/)).toBeVisible();
 });

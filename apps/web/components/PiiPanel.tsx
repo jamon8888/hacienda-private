@@ -17,9 +17,7 @@ export function PiiPanel({ pii }: { pii: PiiEntity[] }) {
           <ul className="space-y-2">
             {pii.map((e, i) => (
               <li key={i} className="flex items-center justify-between gap-2 text-sm">
-                <span className="truncate rounded bg-muted px-2 py-1 font-mono text-xs">
-                  {e.text}
-                </span>
+                <span className="truncate rounded bg-muted px-2 py-1 font-mono text-xs">{e.text}</span>
                 <Badge variant="destructive">{e.kind}</Badge>
               </li>
             ))}

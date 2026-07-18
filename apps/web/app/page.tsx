@@ -8,9 +8,5 @@ export default function HomePage() {
   useEffect(() => {
     router.replace("/onboarding");
   }, [router]);
-  return (
-    <main className="mx-auto max-w-3xl p-6 text-center text-muted-foreground">
-      Loading…
-    </main>
-  );
+  return <main className="mx-auto max-w-3xl p-6 text-center text-muted-foreground">Loading…</main>;
 }

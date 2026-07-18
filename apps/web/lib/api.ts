@@ -35,12 +35,7 @@ export async function getFolders(token: string, matterId: string): Promise<Folde
   return data.folders;
 }
 
-export async function createFolder(
-  token: string,
-  matterId: string,
-  name: string,
-  path?: string,
-): Promise<Folder> {
+export async function createFolder(token: string, matterId: string, name: string, path?: string): Promise<Folder> {
   const res = await fetch(`${BASE}/folders`, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
@@ -72,14 +67,11 @@ export async function grantConsent(
 }
 
 export async function pushMirror(token: string, matterId: string, payload: unknown): Promise<void> {
-  const res = await fetch(
-    `${BASE}/rag/mirror?matter_id=${encodeURIComponent(matterId)}`,
-    {
-      method: "POST",
-      headers: { authorization: `Bearer ${token}` },
-      body: JSON.stringify(payload),
-    },
-  );
+  const res = await fetch(`${BASE}/rag/mirror?matter_id=${encodeURIComponent(matterId)}`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
+  });
   if (!res.ok) {
     const msg = await res.text().catch(() => res.statusText);
     throw new Error(msg || `mirror push failed: ${res.status}`);

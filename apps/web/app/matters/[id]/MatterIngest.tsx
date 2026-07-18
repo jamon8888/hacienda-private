@@ -6,11 +6,7 @@ import type { Folder, Matter, PiiEntity } from "@xberg-io/core";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { createFolder } from "@/lib/api";
-import {
-  ingestFolder,
-  type IngestResult,
-  type IngestProgress,
-} from "@xberg-io/wasm-pipeline";
+import { ingestFolder, type IngestResult, type IngestProgress } from "@xberg-io/wasm-pipeline";
 
 interface FileProgress {
   name: string;
@@ -23,8 +19,9 @@ const STORAGE_KEY = "xberg.ingestedDocs";
 
 function saveIngest(result: IngestResult) {
   const raw = sessionStorage.getItem(STORAGE_KEY);
-  const all: Record<string, { name: string; text: string; pii: PiiEntity[]; pages: number }> =
-    raw ? (JSON.parse(raw) as Record<string, { name: string; text: string; pii: PiiEntity[]; pages: number }>) : {};
+  const all: Record<string, { name: string; text: string; pii: PiiEntity[]; pages: number }> = raw
+    ? (JSON.parse(raw) as Record<string, { name: string; text: string; pii: PiiEntity[]; pages: number }>)
+    : {};
   all[result.name] = {
     name: result.name,
     text: result.text,
@@ -109,9 +106,7 @@ export default function MatterIngestPage() {
   return (
     <main className="mx-auto max-w-3xl p-6">
       <h1 className="mb-2 text-2xl font-semibold">Matter: {matterId}</h1>
-      <p className="mb-6 text-sm text-muted-foreground">
-        Folder: {folder ? folder.id : "creating…"}
-      </p>
+      <p className="mb-6 text-sm text-muted-foreground">Folder: {folder ? folder.id : "creating…"}</p>
 
       <input
         type="file"

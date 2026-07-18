@@ -16,7 +16,9 @@ export default function MattersPage() {
 
   useEffect(() => {
     if (!auth) return;
-    getMatters(auth.token).then(setMatters).catch(() => setMatters([]));
+    getMatters(auth.token)
+      .then(setMatters)
+      .catch(() => setMatters([]));
   }, [auth]);
 
   const add = async () => {
@@ -30,11 +32,7 @@ export default function MattersPage() {
     <main className="mx-auto max-w-3xl p-6">
       <h1 className="mb-6 text-2xl font-semibold">Matters</h1>
       <div className="mb-6 flex gap-2">
-        <Input
-          placeholder="New matter name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
+        <Input placeholder="New matter name" value={name} onChange={(e) => setName(e.target.value)} />
         <Button onClick={add}>Create</Button>
       </div>
       <div className="grid gap-3">
@@ -48,9 +46,7 @@ export default function MattersPage() {
             <div className="text-sm text-muted-foreground">{m.created_at}</div>
           </div>
         ))}
-        {matters.length === 0 && (
-          <p className="text-sm text-muted-foreground">No matters yet. Create one to begin.</p>
-        )}
+        {matters.length === 0 && <p className="text-sm text-muted-foreground">No matters yet. Create one to begin.</p>}
       </div>
     </main>
   );

@@ -8,9 +8,7 @@ export function RetrievedChunkCard({ chunk }: { chunk: RetrievedChunk }) {
     <Card data-testid="retrieved-chunk">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">{chunk.citation}</CardTitle>
-        <span className="text-xs text-muted-foreground">
-          score {chunk.score.toFixed(3)}
-        </span>
+        <span className="text-xs text-muted-foreground">score {chunk.score.toFixed(3)}</span>
       </CardHeader>
       <CardContent className="text-sm whitespace-pre-wrap">{chunk.text}</CardContent>
     </Card>

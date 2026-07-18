@@ -22,7 +22,10 @@
     "paths": {
       "@/*": ["./*"],
       "@xberg-io/wasm-pipeline": ["./lib/engine/index.ts"],
-      "@xberg-io/wasm-pipeline-real": ["../../packages/wasm-pipeline/src/index.ts", "../../packages/wasm-pipeline/src/index"]
+      "@xberg-io/wasm-pipeline-real": [
+        "../../packages/wasm-pipeline/src/index.ts",
+        "../../packages/wasm-pipeline/src/index"
+      ]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

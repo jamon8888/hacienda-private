@@ -19,11 +19,8 @@ function FolderDocumentsInner() {
   const params = useParams<{ id: string }>();
   const folderId = params.id;
 
-  const raw =
-    typeof window !== "undefined" ? sessionStorage.getItem(STORAGE_KEY) : null;
-  const all: Record<string, StoredDoc> = raw
-    ? (JSON.parse(raw) as Record<string, StoredDoc>)
-    : {};
+  const raw = typeof window !== "undefined" ? sessionStorage.getItem(STORAGE_KEY) : null;
+  const all: Record<string, StoredDoc> = raw ? (JSON.parse(raw) as Record<string, StoredDoc>) : {};
   const docNames = Object.keys(all);
 
   return (
