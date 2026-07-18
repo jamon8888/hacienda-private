@@ -1,6 +1,6 @@
 {
   "name": "@xberg-io/wasm-pipeline",
-  "version": "1.0.0-rc.26",
+  "version": "1.0.0-rc.27",
   "type": "module",
   "description": "Browser-side document-intelligence pipeline: xberg-wasm extract/OCR/chunk + on-device e5 embeddings (onnxruntime-web), GLiNER PII (gliner), EdgeVec RAG, and reversible redaction.",
   "main": "./dist/index.js",

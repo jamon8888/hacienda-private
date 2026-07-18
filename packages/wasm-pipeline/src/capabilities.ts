@@ -41,9 +41,20 @@ function inferFormFactor(): "desktop" | "mobile" | "tablet" {
   return "desktop";
 }
 
+interface GpuAdapterLike {
+  info?: { vendor?: string; architecture?: string; isFallbackAdapter?: boolean };
+  limits?: { maxBufferSize?: number };
+  requestAdapterInfo?: () => Promise<unknown>;
+}
+
+interface GpuLike {
+  requestAdapter(opts?: { powerPreference?: "low-power" | "high-performance" }): Promise<GpuAdapterLike | null>;
+}
+
 export async function detectCapabilities(): Promise<DeviceProfile> {
   const nav = typeof navigator !== "undefined" ? navigator : ({} as Navigator);
-  const hasGpu = "gpu" in nav && !!nav.gpu;
+  const gpu = (nav as unknown as { gpu?: GpuLike }).gpu;
+  const hasGpu = gpu != null;
   let gpuVendor: string | undefined;
   let gpuArchitecture: string | undefined;
   let gpuIsFallback: boolean | undefined;
@@ -51,12 +62,11 @@ export async function detectCapabilities(): Promise<DeviceProfile> {
 
   if (hasGpu) {
     try {
-      const adapter = await nav.gpu!.requestAdapter({ powerPreference: "high-performance" });
+      const adapter = await gpu!.requestAdapter({ powerPreference: "high-performance" });
       if (adapter) {
-        const adapterWithLegacy = adapter as unknown as { requestAdapterInfo?: () => Promise<unknown> };
-        const info = adapter.info ?? (typeof adapterWithLegacy.requestAdapterInfo === "function"
-          ? await adapterWithLegacy.requestAdapterInfo()
-          : undefined);
+        const info = (adapter.info ?? (typeof adapter.requestAdapterInfo === "function"
+          ? await adapter.requestAdapterInfo()
+          : undefined)) as GpuAdapterLike["info"] | undefined;
         gpuVendor = info?.vendor || undefined;
         gpuArchitecture = info?.architecture || undefined;
         gpuIsFallback = info?.isFallbackAdapter;

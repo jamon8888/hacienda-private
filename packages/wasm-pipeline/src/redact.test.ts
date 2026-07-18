@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { PiiEntity } from "@xberg-io/core";
-import { buildRedaction, rehydrate, sealVault, openVault, type RedactionEntry } from "./redact";
+import { buildRedaction, rehydrate, sealVault, openVault, type RedactionEntry, redactText, rehydrateText } from "./redact";
 
 describe("redaction round-trip", () => {
   const text = "John Doe met Jane at Acme Corp on Monday.";
@@ -33,6 +33,39 @@ describe("redaction round-trip", () => {
     const { redacted, entries } = buildRedaction("nothing here", [], "F");
     expect(redacted).toBe("nothing here");
     expect(entries).toEqual([]);
+  });
+});
+
+describe("redactText / rehydrateText (pure reversible redaction)", () => {
+  const text = "John Doe met Jane at Acme Corp on Monday.";
+
+  it("replaces spans with per-kind <KIND_n> tokens and round-trips", () => {
+    const { redacted } = redactText(text, [
+      { kind: "PERSON", start: 0, end: 8 },
+      { kind: "PERSON", start: 13, end: 17 },
+      { kind: "ORG", start: 21, end: 30 },
+    ]);
+    expect(redacted).toContain("<PERSON_1>");
+    expect(redacted).toContain("<PERSON_2>");
+    expect(redacted).toContain("<ORG_1>");
+    expect(redacted).not.toContain("John Doe");
+    expect(redacted).not.toContain("Jane");
+    expect(redacted).not.toContain("Acme Corp");
+
+    const restored = rehydrateText(redacted, [
+      { token: "<PERSON_1>", value: "Jane" },
+      { token: "<PERSON_2>", value: "John Doe" },
+      { token: "<ORG_1>", value: "Acme Corp" },
+    ]);
+    expect(restored).toBe(text);
+  });
+
+  it("normalizes kind names and counts per kind", () => {
+    const result = redactText("A B", [
+      { kind: "per-son", start: 0, end: 1 },
+      { kind: "per son", start: 2, end: 3 },
+    ]);
+    expect(result.tokens.map((t) => t.token)).toEqual(["<PER_SON_1>", "<PER_SON_2>"]);
   });
 });
 
