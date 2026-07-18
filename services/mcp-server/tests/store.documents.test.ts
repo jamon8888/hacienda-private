@@ -88,4 +88,29 @@ describe("documents", () => {
     expect(docs[0]?.status).toBe("error");
     expect(docs[0]?.error_message).toBe("corrupt PDF");
   });
+
+  it("reopens an existing database file without throwing and preserves data (idempotent schema migration)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "xberg-docs-"));
+    dirs.push(dir);
+    const dbPath = join(dir, "meta.sqlite");
+
+    const first = new MetadataStore(dbPath);
+    const matter = first.createMatter("Acme v Doe");
+    const folder = first.createFolder(matter.id, "Discovery", "/tmp/discovery");
+    first.updateFolderStatus(folder.id, "done");
+    first.close();
+
+    // Simulate reopening an existing dev database: ensureColumn's
+    // ALTER TABLE ADD COLUMN guards must not throw "duplicate column name".
+    let second: MetadataStore | undefined;
+    expect(() => {
+      second = new MetadataStore(dbPath);
+    }).not.toThrow();
+    stores.push(second!);
+
+    expect(second!.getMatter(matter.id)?.name).toBe("Acme v Doe");
+    const reopenedFolder = second!.getFolder(folder.id);
+    expect(reopenedFolder?.status).toBe("done");
+    expect(reopenedFolder?.name).toBe("Discovery");
+  });
 });
