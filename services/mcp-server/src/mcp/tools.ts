@@ -123,8 +123,10 @@ function actorFor(ctx: AppContext): string {
 }
 
 export function registerTools(server: McpServer, ctx: AppContext): void {
-  server.tool("rag_query", { matter_id: z.string(), query: z.string(), top_k: z.number().optional() }, async (args) =>
-    ragQuery(ctx, args),
+  server.tool(
+    "rag_query",
+    { matter_id: z.string(), query: z.string(), top_k: z.number().int().min(1).optional() },
+    async (args) => ragQuery(ctx, args),
   );
 
   server.tool("list_pii", { matter_id: z.string(), doc_id: z.string() }, async (args) => listPii(ctx, args));

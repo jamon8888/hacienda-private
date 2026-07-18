@@ -113,8 +113,12 @@ export class MetadataStore {
     if (!this.getMatter(matterId)) {
       throw new AppError("not_found", `matter ${matterId} not found`);
     }
-    if (!this.getFolder(folderId)) {
+    const folder = this.getFolder(folderId);
+    if (!folder) {
       throw new AppError("not_found", `folder ${folderId} not found`);
+    }
+    if (folder.matter_id !== matterId) {
+      throw new AppError("bad_request", `folder ${folderId} does not belong to matter ${matterId}`);
     }
     const recordedAt = new Date().toISOString();
     this.db
@@ -207,13 +211,17 @@ export class MetadataStore {
       throw new AppError("not_found", `matter ${matterId} not found`);
     }
     const r = (sql: string): number => this.db.prepare(sql).run(matterId).changes;
-    const folders = r("DELETE FROM folders WHERE matter_id = ?");
-    const consents = r("DELETE FROM consent WHERE matter_id = ?");
-    const ingests = r("DELETE FROM ingests WHERE matter_id = ?");
-    const redactions = r("DELETE FROM redactions WHERE matter_id = ?");
-    const audits = r("DELETE FROM audit_log WHERE matter_id = ?");
-    const matters = r("DELETE FROM matters WHERE id = ?");
-    return { matters, folders, consents, ingests, redactions, audits };
+    // All-or-nothing: a mid-sequence failure must not leave the matter half-deleted.
+    const forgetTxn = this.db.transaction((id: string) => {
+      const folders = r("DELETE FROM folders WHERE matter_id = ?");
+      const consents = r("DELETE FROM consent WHERE matter_id = ?");
+      const ingests = r("DELETE FROM ingests WHERE matter_id = ?");
+      const redactions = r("DELETE FROM redactions WHERE matter_id = ?");
+      const audits = r("DELETE FROM audit_log WHERE matter_id = ?");
+      const matters = this.db.prepare("DELETE FROM matters WHERE id = ?").run(id).changes;
+      return { matters, folders, consents, ingests, redactions, audits };
+    });
+    return forgetTxn(matterId);
   }
 }
 

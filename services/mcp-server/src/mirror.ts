@@ -70,6 +70,12 @@ export class MirrorStore {
     return `${this.mirrorsDir}/${encodeURIComponent(matterId)}.json`;
   }
 
+  // The full JSON MirrorBundle, kept at its own path so it survives loadMirror() overwriting
+  // indexPath() with the raw (non-JSON) EdgeVec index bytes — see getBundle().
+  private bundlePath(matterId: string): string {
+    return `${this.mirrorsDir}/${encodeURIComponent(matterId)}.bundle.json`;
+  }
+
   saveMirror(matterId: string, body: Buffer): MirrorStatus {
     if (!matterId) {
       throw new AppError("bad_request", "matter_id is required");
@@ -80,7 +86,10 @@ export class MirrorStore {
     mkdirSync(dirname(this.indexPath(matterId)), { recursive: true });
     const syncedAt = new Date().toISOString();
     writeFileSync(this.indexPath(matterId), body);
+    writeFileSync(this.bundlePath(matterId), body);
     writeFileSync(this.metaPath(matterId), JSON.stringify({ matter_id: matterId, synced_at: syncedAt }));
+    // A re-save must not leave listPii/retrieve/loadCipher serving the previous bundle.
+    this.bundles.delete(matterId);
     return { matter_id: matterId, synced_at: syncedAt, bytes: body.length };
   }
 
@@ -116,11 +125,11 @@ export class MirrorStore {
   }
 
   async loadMirror(matterId: string): Promise<LoadedMirror> {
-    const idx = this.indexPath(matterId);
-    if (!existsSync(idx)) {
+    const bundleFile = this.bundlePath(matterId);
+    if (!existsSync(bundleFile)) {
       throw new AppError("not_found", `no mirror for matter ${matterId}`);
     }
-    const bytes = readFileSync(idx);
+    const bytes = readFileSync(bundleFile);
     try {
       const bundle = this.parseBundle(matterId, bytes);
       const indexBytes = Buffer.from(bundle.index);
@@ -147,11 +156,11 @@ export class MirrorStore {
   private getBundle(matterId: string): MirrorBundle {
     const bundle = this.bundles.get(matterId);
     if (bundle) return bundle;
-    const idx = this.indexPath(matterId);
-    if (!existsSync(idx)) {
+    const bundleFile = this.bundlePath(matterId);
+    if (!existsSync(bundleFile)) {
       throw new AppError("not_found", `no mirror loaded for matter ${matterId}`);
     }
-    const bundle2 = this.parseBundle(matterId, readFileSync(idx));
+    const bundle2 = this.parseBundle(matterId, readFileSync(bundleFile));
     this.bundles.set(matterId, bundle2);
     return bundle2;
   }
@@ -222,13 +231,17 @@ export class MirrorStore {
     throw new AppError("not_found", `no ciphertext for chunk ${chunkId}`);
   }
 
+  // Idempotent: a matter may legitimately have no mirror yet (never ingested), and the HTTP
+  // DELETE flow already removes the matter's DB rows before calling this — throwing here would
+  // leave that deletion half-applied and skip the audit entry that follows.
   forget(matterId: string): void {
-    const idx = this.indexPath(matterId);
-    if (!existsSync(idx)) {
-      throw new AppError("not_found", `no mirror for matter ${matterId}`);
-    }
     this.bundles.delete(matterId);
-    for (const p of [this.indexPath(matterId), this.vaultPath(matterId), this.metaPath(matterId)]) {
+    for (const p of [
+      this.indexPath(matterId),
+      this.vaultPath(matterId),
+      this.metaPath(matterId),
+      this.bundlePath(matterId),
+    ]) {
       if (existsSync(p)) {
         unlinkSync(p);
       }
