@@ -345,9 +345,6 @@ diff = ["dep:similar"]
 # `crates/xberg/src/extractors/` for QR) and is wired through a built-in
 # post-processor under `crates/xberg/src/plugins/processor/builtin/`.
 ner-candle = ["ner", "dep:xberg-gliner-candle", "tokio-runtime"]
-# Same in-binary GLiNER2 Candle inference for wasm32 (no tokio); the wasm-side
-# wiring lands separately.
-ner-candle-wasm = ["ner", "dep:xberg-gliner-candle"]
 ner = [] # NER result types only; safe on every target.
 ner-llm-types = [
     "ner",

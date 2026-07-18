@@ -19,10 +19,10 @@ path = "src/lib.rs"
 default = []
 cuda = ["candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda"]
 metal = ["candle-core/metal", "candle-nn/metal", "candle-transformers/metal"]
-# ORT backend selection — pass through to xberg-gliner. One of these must be
-# active for tests and binaries to link (ORT symbols are unconditional in
-# xberg-gliner). Use ort-bundled in dev; ort-dynamic when a system ORT is
-# guaranteed present.
+# ORT backend selection, passed through to xberg-gliner. Optional: the v2
+# pipeline pieces this crate uses live outside xberg-gliner's ort-backend
+# gate, so default builds link without ONNX Runtime. Enable one of these
+# only to couple in the ORT engines.
 ort-bundled = ["xberg-gliner/ort-bundled"]
 ort-dynamic = ["xberg-gliner/ort-dynamic"]
 

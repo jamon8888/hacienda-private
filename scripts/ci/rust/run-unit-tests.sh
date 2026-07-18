@@ -23,7 +23,7 @@ echo "  CARGO_TERM_COLOR: ${CARGO_TERM_COLOR:-not set}"
 
 echo "Workspace information:"
 echo "  Repository: $REPO_ROOT"
-echo "  Excluded packages: xberg-e2e-generator, xberg-py, xberg-node, xberg-candle-ocr, xberg-cli, benchmark-harness"
+echo "  Excluded packages: xberg-e2e-generator, xberg-py, xberg-node, xberg-candle-ocr, xberg-gliner-candle, xberg-cli, benchmark-harness"
 
 if [ ! -d "$TESSDATA_PREFIX" ]; then
   echo "WARNING: TESSDATA_PREFIX directory not found: $TESSDATA_PREFIX"
@@ -69,6 +69,9 @@ if ! {
   echo "=== cargo test --workspace (all features, excluding xberg) ==="
   extra_excludes=()
   extra_excludes+=(--exclude xberg-candle-ocr)
+  # xberg-gliner-candle: cuda/metal features cannot build on CI runners; tested
+  # separately below with default features.
+  extra_excludes+=(--exclude xberg-gliner-candle)
   extra_excludes+=(--exclude xberg-cli)
   extra_excludes+=(--exclude benchmark-harness)
   RUST_BACKTRACE=full cargo test --locked \
@@ -81,6 +84,9 @@ if ! {
     --all-features \
     --all-targets \
     --verbose
+
+  echo "=== cargo test -p xberg-gliner-candle (default features) ==="
+  RUST_BACKTRACE=full cargo test --locked -p xberg-gliner-candle --all-targets --verbose
 } 2>&1 | tee "$TEST_LOG"; then
   echo "=== Test execution failed ==="
   echo "Last 50 lines of test output:"

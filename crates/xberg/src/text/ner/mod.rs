@@ -19,7 +19,7 @@
 #![cfg(feature = "ner")]
 
 pub mod backend;
-#[cfg(any(feature = "ner-candle", feature = "ner-candle-wasm"))]
+#[cfg(feature = "ner-candle")]
 pub mod candle;
 #[cfg(feature = "ner-onnx")]
 pub mod gline;
