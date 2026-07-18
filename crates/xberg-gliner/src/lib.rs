@@ -22,19 +22,7 @@ mod splitter;
 mod tensor;
 #[cfg(feature = "ort-backend")]
 mod tokenizer;
-// Only used by the ORT V2 engine (v2_engine.rs); dead weight without
-// ort-backend.
-#[cfg(feature = "ort-backend")]
-mod v2_decode;
-#[cfg(feature = "ort-backend")]
-mod v2_engine;
-mod v2_preprocess;
-#[cfg(feature = "ort-backend")]
-mod v2_session;
-mod v2_splitter;
-#[cfg(feature = "ort-backend")]
-mod v2_tensor;
-mod v2_tokenizer;
+mod v2;
 
 pub use config::{Parameters, RuntimeConfig};
 pub use decode::{Span, SpanOutput};
@@ -47,12 +35,12 @@ pub use input::Token;
 #[cfg(feature = "ort-backend")]
 pub use session::{INPUT_NAMES, OUTPUT_NAMES};
 #[cfg(feature = "ort-backend")]
-pub use v2_engine::Gliner2;
-pub use v2_preprocess::{V2Encoded, encode_v2};
+pub use v2::engine::Gliner2;
+pub use v2::preprocess::{V2Encoded, encode_v2};
 #[cfg(feature = "ort-backend")]
-pub use v2_session::{INPUT_NAMES_V2, OUTPUT_NAMES_V2};
-pub use v2_splitter::V2Splitter;
-pub use v2_tokenizer::{PretokenizedEncoding, PretokenizingTokenizer, V2Tokenizer};
+pub use v2::session::{INPUT_NAMES_V2, OUTPUT_NAMES_V2};
+pub use v2::splitter::V2Splitter;
+pub use v2::tokenizer::{PretokenizedEncoding, PretokenizingTokenizer, V2Tokenizer};
 
 #[cfg(feature = "ort-backend")]
 pub(crate) use decode::EntityContext;

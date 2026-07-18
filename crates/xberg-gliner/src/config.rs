@@ -60,7 +60,7 @@ impl Default for Parameters {
 
 impl Parameters {
     /// Only called by the ORT engines ([`crate::engine::Gliner`],
-    /// [`crate::v2_engine::Gliner2`]); dead weight without `ort-backend`.
+    /// [`crate::v2::engine::Gliner2`]); dead weight without `ort-backend`.
     #[cfg(feature = "ort-backend")]
     pub(crate) fn validate(&self) -> Result<()> {
         if !(0.0..=1.0).contains(&self.threshold) || !self.threshold.is_finite() {

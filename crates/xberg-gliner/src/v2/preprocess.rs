@@ -1,5 +1,5 @@
-use crate::v2_splitter::V2Splitter;
-use crate::v2_tokenizer::{PretokenizedEncoding, PretokenizingTokenizer};
+use crate::v2::splitter::V2Splitter;
+use crate::v2::tokenizer::{PretokenizedEncoding, PretokenizingTokenizer};
 use crate::{GlinerError, Result, Token};
 
 const SCHEMA_TOKEN_P: &str = "[P]";

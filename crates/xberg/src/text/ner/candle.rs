@@ -42,6 +42,7 @@ fn get_or_insert_arc(
     {
         let cache = CANDLE_BACKEND_CACHE.read();
         if let Some(value) = cache.get(&key) {
+            tracing::debug!(model_dir = %key.0.display(), "Candle GLiNER2 backend found in cache");
             return Ok(Arc::clone(value));
         }
     }
@@ -77,13 +78,24 @@ impl CandleBackend {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn from_local(model_dir: &Path, lora_adapter_dir: Option<&Path>) -> crate::Result<Self> {
         let mut model = Gliner2Candle::from_local(model_dir)
-            .map_err(|e| crate::XbergError::Other(format!("CandleBackend load: {e}")))?;
+            .map_err(|e| crate::XbergError::Plugin {
+                message: format!("CandleBackend load: {e}"),
+                plugin_name: "ner-candle".to_string(),
+            })?;
         if let Some(adapter_dir) = lora_adapter_dir {
             let adapter_name = adapter_dir.file_name().and_then(|n| n.to_str()).unwrap_or("adapter");
             model
                 .load_adapter(adapter_name, adapter_dir)
-                .map_err(|e| crate::XbergError::Other(format!("CandleBackend load_adapter: {e}")))?;
+                .map_err(|e| crate::XbergError::Plugin {
+                    message: format!("CandleBackend load_adapter: {e}"),
+                    plugin_name: "ner-candle".to_string(),
+                })?;
         }
+        tracing::info!(
+            model_dir = %model_dir.display(),
+            adapter = ?lora_adapter_dir.map(std::path::Path::display),
+            "Candle GLiNER2 backend loaded"
+        );
         Ok(Self {
             model: Mutex::new(model),
         })
@@ -106,7 +118,10 @@ impl CandleBackend {
     /// also usable natively when the caller already has the model bytes in memory).
     pub fn from_bytes(safetensors: &[u8], tokenizer_json: &[u8], encoder_config_json: &[u8]) -> crate::Result<Self> {
         let model = Gliner2Candle::from_bytes(safetensors, tokenizer_json, encoder_config_json)
-            .map_err(|e| crate::XbergError::Other(format!("CandleBackend load: {e}")))?;
+            .map_err(|e| crate::XbergError::Plugin {
+                message: format!("CandleBackend load: {e}"),
+                plugin_name: "ner-candle".to_string(),
+            })?;
         Ok(Self {
             model: Mutex::new(model),
         })
@@ -142,7 +157,10 @@ impl NerBackend for CandleBackend {
         let model = self
             .model
             .lock()
-            .map_err(|_| crate::XbergError::Other("CandleBackend: model mutex poisoned".into()))?;
+            .map_err(|_| crate::XbergError::Plugin {
+                message: "CandleBackend: model mutex poisoned".to_string(),
+                plugin_name: "ner-candle".to_string(),
+            })?;
 
         // extract_ner is CPU-bound (tensor inference). On native targets, block_in_place
         // signals tokio to move other tasks off this thread for the duration without
@@ -150,12 +168,18 @@ impl NerBackend for CandleBackend {
         // regardless), so extract_ner is called directly; it is already synchronous.
         #[cfg(not(target_arch = "wasm32"))]
         let spans = tokio::task::block_in_place(|| model.extract_ner(text, &labels, DEFAULT_THRESHOLD))
-            .map_err(|e| crate::XbergError::Other(format!("CandleBackend inference: {e}")))?;
+            .map_err(|e| crate::XbergError::Plugin {
+                message: format!("CandleBackend inference: {e}"),
+                plugin_name: "ner-candle".to_string(),
+            })?;
 
         #[cfg(target_arch = "wasm32")]
         let spans = model
             .extract_ner(text, &labels, DEFAULT_THRESHOLD)
-            .map_err(|e| crate::XbergError::Other(format!("CandleBackend inference: {e}")))?;
+            .map_err(|e| crate::XbergError::Plugin {
+                message: format!("CandleBackend inference: {e}"),
+                plugin_name: "ner-candle".to_string(),
+            })?;
 
         Ok(spans_to_entities(spans))
     }

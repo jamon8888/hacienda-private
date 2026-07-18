@@ -6,15 +6,15 @@ use ort::value::Tensor;
 use parking_lot::Mutex;
 
 use crate::session::build_session;
-use crate::v2_decode::decode_span_scores;
-use crate::v2_preprocess::encode_v2;
-use crate::v2_session::{
+use crate::v2::decode::decode_span_scores;
+use crate::v2::preprocess::encode_v2;
+use crate::v2::session::{
     TENSOR_V2_ATTENTION_MASK, TENSOR_V2_INPUT_IDS, TENSOR_V2_SCHEMA_POSITIONS, TENSOR_V2_SPAN_IDX,
     TENSOR_V2_SPAN_SCORES, TENSOR_V2_TEXT_POSITIONS, validate_session_schema_v2,
 };
-use crate::v2_splitter::V2Splitter;
-use crate::v2_tensor::build_span_idx;
-use crate::v2_tokenizer::V2Tokenizer;
+use crate::v2::splitter::V2Splitter;
+use crate::v2::tensor::build_span_idx;
+use crate::v2::tokenizer::V2Tokenizer;
 use crate::{GlinerError, Parameters, Result, RuntimeConfig, SpanOutput, TextInput};
 
 /// GLiNER2 schema-prompt inference engine.
