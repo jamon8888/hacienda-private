@@ -31,4 +31,16 @@ describe("audit log", () => {
     expect(entry.matter_id).toBeNull();
     expect(store.getAudit()).toHaveLength(1);
   });
+
+  it("transaction rolls back the mutation if the audit step throws", () => {
+    expect(() =>
+      store.transaction(() => {
+        store.createMatter("Dossier X");
+        throw new Error("audit failed");
+      }),
+    ).toThrow();
+    // Neither the matter nor an audit entry should have been persisted.
+    expect(store.getMatters()).toHaveLength(0);
+    expect(store.getAudit()).toHaveLength(0);
+  });
 });

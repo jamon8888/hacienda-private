@@ -144,8 +144,11 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
     authorize(principal.scopes, "ingest");
     const body = await readJson<{ name: string }>(req);
     if (!body.name) throw new AppError("bad_request", "name is required");
-    const matter = ctx.store.createMatter(body.name);
-    ctx.store.recordAudit(principal.subject, "ingest", "create_matter", matter.id);
+    const matter = ctx.store.transaction(() => {
+      const created = ctx.store.createMatter(body.name);
+      ctx.store.recordAudit(principal.subject, "ingest", "create_matter", created.id);
+      return created;
+    });
     sendJson(res, 201, matter);
     return;
   }
@@ -161,8 +164,11 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
     authorize(principal.scopes, "ingest");
     const body = await readJson<{ matter_id: string; name: string; path?: string }>(req);
     if (!body.matter_id || !body.name) throw new AppError("bad_request", "matter_id and name are required");
-    const folder = ctx.store.createFolder(body.matter_id, body.name, body.path);
-    ctx.store.recordAudit(principal.subject, "ingest", "create_folder", body.matter_id);
+    const folder = ctx.store.transaction(() => {
+      const created = ctx.store.createFolder(body.matter_id, body.name, body.path);
+      ctx.store.recordAudit(principal.subject, "ingest", "create_folder", body.matter_id);
+      return created;
+    });
     sendJson(res, 201, folder);
     return;
   }
@@ -183,13 +189,16 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
     if (!(["read", "ingest", "redact", "admin"] as string[]).includes(body.scope)) {
       throw new AppError("bad_request", `invalid scope: ${body.scope}`);
     }
-    const record = ctx.store.grantConsent({
-      subject: body.subject,
-      matter_id: body.matter_id,
-      scope: body.scope as AuthScopes,
-      expires_at: body.expires_at,
+    const record = ctx.store.transaction(() => {
+      const granted = ctx.store.grantConsent({
+        subject: body.subject,
+        matter_id: body.matter_id,
+        scope: body.scope as AuthScopes,
+        expires_at: body.expires_at,
+      });
+      ctx.store.recordAudit(principal.subject, "admin", "grant_consent", body.matter_id);
+      return granted;
     });
-    ctx.store.recordAudit(principal.subject, "admin", "grant_consent", body.matter_id);
     sendJson(res, 201, record);
     return;
   }
@@ -199,6 +208,8 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
     const matterId = url.searchParams.get("matter_id");
     if (!matterId) throw new AppError("bad_request", "matter_id is required");
     const body = await readBody(req);
+    // saveMirror writes to the filesystem, so it cannot join the SQLite audit transaction;
+    // audit is recorded after a successful write. Atomicity here is a documented follow-up.
     const status = ctx.mirror.saveMirror(matterId, body);
     ctx.store.recordAudit(principal.subject, "ingest", "save_mirror", matterId);
     sendJson(res, 201, status);

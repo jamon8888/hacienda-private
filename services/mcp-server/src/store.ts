@@ -64,6 +64,11 @@ export class MetadataStore {
     this.db.close();
   }
 
+  /** Run `fn` in a single SQLite transaction; every write rolls back if it throws. */
+  transaction<T>(fn: () => T): T {
+    return this.db.transaction(fn)();
+  }
+
   createMatter(name: string): Matter {
     const matter: Matter = {
       id: randomUUID(),
