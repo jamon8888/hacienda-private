@@ -2,13 +2,7 @@ import Database from "better-sqlite3";
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
-import type {
-  AuthScopes,
-  ConsentGrant,
-  ConsentRecord,
-  Folder,
-  Matter,
-} from "@xberg-io/core";
+import type { AuthScopes, ConsentGrant, ConsentRecord, Folder, Matter } from "@xberg-io/core";
 import { AppError } from "./error.js";
 
 const SCHEMA = `
@@ -86,9 +80,7 @@ export class MetadataStore {
   }
 
   getMatter(id: string): Matter | undefined {
-    return this.db
-      .prepare("SELECT id, name, created_at FROM matters WHERE id = ?")
-      .get(id) as Matter | undefined;
+    return this.db.prepare("SELECT id, name, created_at FROM matters WHERE id = ?").get(id) as Matter | undefined;
   }
 
   createFolder(matterId: string, name: string, path?: string): Folder {
@@ -114,15 +106,10 @@ export class MetadataStore {
   }
 
   getFolder(id: string): Folder | undefined {
-    return this.db
-      .prepare("SELECT id, matter_id, name, path FROM folders WHERE id = ?")
-      .get(id) as Folder | undefined;
+    return this.db.prepare("SELECT id, matter_id, name, path FROM folders WHERE id = ?").get(id) as Folder | undefined;
   }
 
-  recordIngest(
-    folderId: string,
-    matterId: string,
-  ): { folder_id: string; matter_id: string; recorded_at: string } {
+  recordIngest(folderId: string, matterId: string): { folder_id: string; matter_id: string; recorded_at: string } {
     if (!this.getMatter(matterId)) {
       throw new AppError("not_found", `matter ${matterId} not found`);
     }
@@ -146,9 +133,7 @@ export class MetadataStore {
     }
     const recordedAt = new Date().toISOString();
     this.db
-      .prepare(
-        "INSERT INTO redactions (id, doc_id, matter_id, entity_ids, recorded_at) VALUES (?, ?, ?, ?, ?)",
-      )
+      .prepare("INSERT INTO redactions (id, doc_id, matter_id, entity_ids, recorded_at) VALUES (?, ?, ?, ?, ?)")
       .run(randomUUID(), docId, matterId, JSON.stringify(entityIds), recordedAt);
     return { doc_id: docId, matter_id: matterId, entity_ids: entityIds, recorded_at: recordedAt };
   }
@@ -163,9 +148,7 @@ export class MetadataStore {
       expires_at: grant.expires_at,
     };
     this.db
-      .prepare(
-        "INSERT INTO consent (id, subject, matter_id, scope, granted_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
-      )
+      .prepare("INSERT INTO consent (id, subject, matter_id, scope, granted_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)")
       .run(record.id, record.subject, record.matter_id, record.scope, record.granted_at, record.expires_at ?? null);
     return record;
   }
@@ -179,18 +162,14 @@ export class MetadataStore {
   isConsentActive(subject: string, matterId: string, scope: string): boolean {
     const now = Date.now();
     const rows = this.db
-      .prepare(
-        "SELECT expires_at FROM consent WHERE subject = ? AND matter_id = ? AND scope = ?",
-      )
+      .prepare("SELECT expires_at FROM consent WHERE subject = ? AND matter_id = ? AND scope = ?")
       .all(subject, matterId, scope) as { expires_at: string | null }[];
     return rows.some((r) => r.expires_at === null || new Date(r.expires_at).getTime() > now);
   }
 
   recordAudit(actor: string, scope: AuthScopes, action: string, matterId: string): void {
     this.db
-      .prepare(
-        "INSERT INTO audit_log (id, actor, scope, action, matter_id, recorded_at) VALUES (?, ?, ?, ?, ?, ?)",
-      )
+      .prepare("INSERT INTO audit_log (id, actor, scope, action, matter_id, recorded_at) VALUES (?, ?, ?, ?, ?, ?)")
       .run(randomUUID(), actor, scope, action, matterId, new Date().toISOString());
   }
 
@@ -216,9 +195,7 @@ export class MetadataStore {
     }[];
   }
 
-  forgetMatter(
-    matterId: string,
-  ): {
+  forgetMatter(matterId: string): {
     matters: number;
     folders: number;
     consents: number;

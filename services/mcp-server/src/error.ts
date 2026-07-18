@@ -1,11 +1,4 @@
-export type AppErrorCode =
-  | "auth"
-  | "not_found"
-  | "scope"
-  | "consent"
-  | "store"
-  | "model"
-  | "bad_request";
+export type AppErrorCode = "auth" | "not_found" | "scope" | "consent" | "store" | "model" | "bad_request";
 
 const STATUS_BY_CODE: Record<AppErrorCode, number> = {
   auth: 401,

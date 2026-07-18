@@ -206,18 +206,14 @@ export class MirrorStore {
     const docId = chunkId.slice(0, sep);
     const ref = chunkId.slice(sep + 1);
 
-    const span = bundle.pii.find(
-      (s) => s.doc_id === docId && s.token === ref && s.ciphertext !== undefined,
-    );
+    const span = bundle.pii.find((s) => s.doc_id === docId && s.token === ref && s.ciphertext !== undefined);
     if (span?.ciphertext) {
       return new Uint8Array(Buffer.from(span.ciphertext, "base64"));
     }
 
     const asIndex = Number.parseInt(ref, 10);
     if (Number.isInteger(asIndex)) {
-      const byIndex = bundle.pii.find(
-        (s) => s.doc_id === docId && s.start === asIndex && s.ciphertext !== undefined,
-      );
+      const byIndex = bundle.pii.find((s) => s.doc_id === docId && s.start === asIndex && s.ciphertext !== undefined);
       if (byIndex?.ciphertext) {
         return new Uint8Array(Buffer.from(byIndex.ciphertext, "base64"));
       }

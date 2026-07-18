@@ -123,28 +123,18 @@ function actorFor(ctx: AppContext): string {
 }
 
 export function registerTools(server: McpServer, ctx: AppContext): void {
-  server.tool(
-    "rag_query",
-    { matter_id: z.string(), query: z.string(), top_k: z.number().optional() },
-    async (args) => ragQuery(ctx, args),
+  server.tool("rag_query", { matter_id: z.string(), query: z.string(), top_k: z.number().optional() }, async (args) =>
+    ragQuery(ctx, args),
   );
 
-  server.tool(
-    "list_pii",
-    { matter_id: z.string(), doc_id: z.string() },
-    async (args) => listPii(ctx, args),
+  server.tool("list_pii", { matter_id: z.string(), doc_id: z.string() }, async (args) => listPii(ctx, args));
+
+  server.tool("rehydrate_chunk", { matter_id: z.string(), chunk_id: z.string() }, async (args) =>
+    rehydrateChunk(ctx, args),
   );
 
-  server.tool(
-    "rehydrate_chunk",
-    { matter_id: z.string(), chunk_id: z.string() },
-    async (args) => rehydrateChunk(ctx, args),
-  );
-
-  server.tool(
-    "ingest_folder",
-    { matter_id: z.string(), name: z.string(), path: z.string().optional() },
-    async (args) => ingestFolder(ctx, args),
+  server.tool("ingest_folder", { matter_id: z.string(), name: z.string(), path: z.string().optional() }, async (args) =>
+    ingestFolder(ctx, args),
   );
 
   server.tool(

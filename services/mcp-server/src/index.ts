@@ -180,7 +180,16 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
     if (!body.subject || !body.matter_id || !body.scope) {
       throw new AppError("bad_request", "subject, matter_id and scope are required");
     }
-    sendJson(res, 201, ctx.store.grantConsent({ subject: body.subject, matter_id: body.matter_id, scope: body.scope as AuthScopes, expires_at: body.expires_at }));
+    sendJson(
+      res,
+      201,
+      ctx.store.grantConsent({
+        subject: body.subject,
+        matter_id: body.matter_id,
+        scope: body.scope as AuthScopes,
+        expires_at: body.expires_at,
+      }),
+    );
     return;
   }
 

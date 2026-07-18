@@ -41,12 +41,8 @@ function seedBundle(mirror: MirrorStore, vault: KeyVault, matterId: string): voi
     version: 1,
     index: [1, 2, 3],
     vault: [4, 5, 6],
-    pii: [
-      { doc_id: "d1", kind: "PER", start: 0, end: 3, token: "t1", ciphertext },
-    ],
-    chunks: [
-      { doc_id: "d1", chunk_index: 0, text: "redacted", score: 0.9, citation: "d1#0" },
-    ],
+    pii: [{ doc_id: "d1", kind: "PER", start: 0, end: 3, token: "t1", ciphertext }],
+    chunks: [{ doc_id: "d1", chunk_index: 0, text: "redacted", score: 0.9, citation: "d1#0" }],
   };
   mirror.saveMirror(matterId, Buffer.from(JSON.stringify(bundle)));
 }
