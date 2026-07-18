@@ -1,0 +1,23 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest
+PackageIdentifier: xberg-io.XbergMcp
+PackageVersion: 1.0.0-rc.27
+PackageName: Xberg MCP
+PackagePublisher: xberg-io
+PackageUrl: https://github.com/xberg-io/xberg
+License: MIT
+ShortDescription: Local lawyer document-intelligence server + MCP endpoint (zero toolchain).
+Tags:
+  - document-intelligence
+  - mcp
+  - privacy
+Installers:
+  - Architecture: x64
+    InstallerType: exe
+    # TODO_SHA256: replace with the released installer hash (see release SHA256SUMS).
+    InstallerSha256: TODO_SHA256
+    InstallerUrl: https://github.com/xberg-io/xberg/releases/latest/download/xberg-mcp-windows.exe
+    Silent:
+      Silent: xberg-mcp-windows.exe
+      SilentWithProgress: xberg-mcp-windows.exe
+ManifestType: singleton
+ManifestVersion: 1.6.0

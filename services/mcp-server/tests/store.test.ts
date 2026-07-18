@@ -41,4 +41,25 @@ describe("MetadataStore", () => {
     expect(store.isConsentActive("claude", m.id, "redact")).toBe(false);
     store.close();
   });
+
+  it("rejects recordIngest for a folder that belongs to a different matter", () => {
+    const store = openStore(dbPath);
+    const a = store.createMatter("Matter A");
+    const b = store.createMatter("Matter B");
+    const folderInA = store.createFolder(a.id, "Discovery");
+    expect(() => store.recordIngest(folderInA.id, b.id)).toThrow();
+    store.close();
+  });
+
+  it("forgetMatter removes all rows for a matter atomically", () => {
+    const store = openStore(dbPath);
+    const m = store.createMatter("M");
+    const f = store.createFolder(m.id, "Discovery");
+    store.recordIngest(f.id, m.id);
+    const forgotten = store.forgetMatter(m.id);
+    expect(forgotten).toEqual({ matters: 1, folders: 1, consents: 0, ingests: 1, redactions: 0, audits: 0 });
+    expect(store.getMatter(m.id)).toBeUndefined();
+    expect(store.getFolders(m.id)).toHaveLength(0);
+    store.close();
+  });
 });

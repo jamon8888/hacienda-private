@@ -28,7 +28,10 @@ export class ModelCache {
     try {
       parsed = JSON.parse(readFileSync(manifestPath, "utf8")) as ModelManifest;
     } catch {
-      throw new AppError("model", "model manifest could not be read");
+      // Manifest missing/unreadable: the server must still boot and serve the UI. Models simply
+      // cannot be served (ensureModel fails closed on unknown + placeholder), and the release
+      // `check-pins` guard blocks publishing with an unpinned manifest.
+      parsed = { models: [] };
     }
     if (!parsed || !Array.isArray(parsed.models)) {
       throw new AppError("model", "model manifest is malformed");

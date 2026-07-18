@@ -71,7 +71,7 @@ export function buildConfig(args: CliArgs, env: NodeJS.ProcessEnv = process.env)
   const vaultPath = resolve(dataDir, "vault");
   const vaultKeyPath = resolve(dataDir, "vault.key");
   const mirrorsDir = resolve(dataDir, "mirrors");
-  const manifestPath = fileURLToPath(new URL("../../models/manifest.json", import.meta.url));
+  const manifestPath = fileURLToPath(new URL("../models/manifest.json", import.meta.url));
   const jwtSecret = env.XBERG_JWT_SECRET ?? "dev-insecure-change-me";
 
   const config: AppConfig = {
