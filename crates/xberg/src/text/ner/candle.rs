@@ -60,6 +60,7 @@ fn get_or_insert_arc(
 ///
 /// `Gliner2Candle` holds candle tensors which are not `Send`, so we wrap it
 /// in a `Mutex` to satisfy the `Send + Sync` requirement of [`NerBackend`].
+#[cfg_attr(alef, alef(skip))] // binding surface arrives with the NER dispatch follow-up
 pub struct CandleBackend {
     model: Mutex<Gliner2Candle>,
 }
@@ -96,7 +97,7 @@ impl CandleBackend {
     /// should use so a document-processing pipeline pays the model-load + LoRA-merge
     /// cost once per (model, adapter) pair, not once per document.
     #[cfg(all(not(target_arch = "wasm32"), feature = "ner-candle"))]
-    pub(crate) fn get_or_init(model_dir: &Path, lora_adapter_dir: Option<&Path>) -> crate::Result<Arc<Self>> {
+    pub fn get_or_init(model_dir: &Path, lora_adapter_dir: Option<&Path>) -> crate::Result<Arc<Self>> {
         let key: CandleBackendCacheKey = (model_dir.to_path_buf(), lora_adapter_dir.map(Path::to_path_buf));
         get_or_insert_arc(key, || Self::from_local(model_dir, lora_adapter_dir))
     }
