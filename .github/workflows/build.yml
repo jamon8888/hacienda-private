@@ -1,0 +1,129 @@
+name: build
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build web UI + bundle MCP server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: |
+          if [ -f pnpm-lock.yaml ]; then
+            pnpm install --frozen-lockfile
+          else
+            pnpm install
+          fi
+
+      - name: Build web UI (static export)
+        run: pnpm --filter web build
+
+      - name: Build MCP server (tsup ESM)
+        run: pnpm --filter mcp-server build
+
+      - name: Bundle web UI into MCP server public dir
+        run: cp -r apps/web/out services/mcp-server/public
+
+      - name: Vendor @xberg-io/xberg-wasm into public/wasm
+        run: |
+          if [ -d "node_modules/@xberg-io/xberg-wasm" ]; then
+            mkdir -p services/mcp-server/public/wasm
+            cp -r node_modules/@xberg-io/xberg-wasm services/mcp-server/public/wasm
+          else
+            echo "::warning::@xberg-io/xberg-wasm not installed; skipping wasm vendoring"
+          fi
+
+      - name: Upload MCP server bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcp-server-bundle
+          path: services/mcp-server
+          if-no-files-found: error
+
+  wrap:
+    name: Wrap standalone binaries
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Download MCP server bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: mcp-server-bundle
+          path: services/mcp-server
+
+      - name: Install dependencies
+        run: |
+          if [ -f pnpm-lock.yaml ]; then
+            pnpm install --frozen-lockfile
+          else
+            pnpm install
+          fi
+
+      - name: Smoke check (serve --version)
+        shell: bash
+        run: node services/mcp-server/dist/index.js serve --version
+
+      # Signing (Task 3) runs in sign.yml / release.yml after this step.
+      # @yao-pkg/pkg embeds Node 20 into a standalone binary from dist/index.js.
+      - name: Wrap windows
+        if: matrix.os == 'windows-latest'
+        run: pnpm dlx @yao-pkg/pkg@5.12.0 services/mcp-server/dist/index.js --targets node20-win-x64 --output xberg-mcp-windows.exe
+
+      - name: Wrap linux
+        if: matrix.os == 'ubuntu-latest'
+        run: pnpm dlx @yao-pkg/pkg@5.12.0 services/mcp-server/dist/index.js --targets node20-linux-x64 --output xberg-mcp-linux
+
+      - name: Wrap darwin
+        if: matrix.os == 'macos-latest'
+        run: pnpm dlx @yao-pkg/pkg@5.12.0 services/mcp-server/dist/index.js --targets node20-macos-x64 --output xberg-mcp-darwin
+
+      - name: Upload windows binary
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: xberg-mcp-windows.exe
+          path: xberg-mcp-windows.exe
+
+      - name: Upload linux binary
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: xberg-mcp-linux
+          path: xberg-mcp-linux
+
+      - name: Upload darwin binary
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: xberg-mcp-darwin
+          path: xberg-mcp-darwin
