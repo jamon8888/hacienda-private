@@ -42,6 +42,25 @@ export interface MirrorStatus {
   bytes: number;
 }
 
+export interface MirrorPiiSpanInput {
+  doc_id: string;
+  kind: string;
+  start: number;
+  end: number;
+  token: string;
+  ciphertext?: string;
+}
+
+export interface MirrorChunkInput {
+  doc_id: string;
+  chunk_index: number;
+  text: string;
+  page?: number;
+  bbox?: { x: number; y: number; w: number; h: number };
+  score: number;
+  citation: string;
+}
+
 export interface LoadedMirror {
   matter_id: string;
   bytes: number;
@@ -91,6 +110,30 @@ export class MirrorStore {
     // A re-save must not leave listPii/retrieve/loadCipher serving the previous bundle.
     this.bundles.delete(matterId);
     return { matter_id: matterId, synced_at: syncedAt, bytes: body.length };
+  }
+
+  // Merges one document's PII spans/chunks into a matter's existing bundle (or starts an empty
+  // one) and re-saves via saveMirror. index/vault are deliberately left untouched — those are
+  // browser-owned EdgeVec/curtain-privacy bytes this Node-side code never constructs (see the
+  // "server NEVER imports edgevec" note above).
+  appendMirror(
+    matterId: string,
+    additions: { pii: MirrorPiiSpanInput[]; chunks: MirrorChunkInput[] },
+  ): MirrorStatus {
+    const bundleFile = this.bundlePath(matterId);
+    const existing: MirrorBundle = existsSync(bundleFile)
+      ? this.parseBundle(matterId, readFileSync(bundleFile))
+      : { version: 1, index: [], vault: [], pii: [], chunks: [] };
+
+    const merged: MirrorBundle = {
+      version: 1,
+      index: existing.index,
+      vault: existing.vault,
+      pii: [...existing.pii, ...additions.pii],
+      chunks: [...existing.chunks, ...additions.chunks],
+    };
+
+    return this.saveMirror(matterId, Buffer.from(JSON.stringify(merged), "utf8"));
   }
 
   status(matterId: string): MirrorStatus | null {
