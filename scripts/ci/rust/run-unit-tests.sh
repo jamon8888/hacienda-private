@@ -86,7 +86,15 @@ if ! {
     --verbose
 
   echo "=== cargo test -p xberg-gliner-candle (default features) ==="
-  RUST_BACKTRACE=full cargo test --locked -p xberg-gliner-candle --all-targets --verbose
+  if [ "$(uname -s)" = "Linux" ] && [ "$(uname -m)" = "aarch64" ]; then
+    # gemm-f16 (candle's matmul backend) carries aarch64 inline asm that
+    # requires the fullfp16 target feature; the Linux ARM runner's baseline
+    # lacks it, so real codegen fails with "instruction requires: fullfp16".
+    # Apple Silicon includes fullfp16 in its baseline and runs these fine.
+    echo "Skipping xberg-gliner-candle tests on Linux aarch64 (gemm-f16 needs fullfp16)"
+  else
+    RUST_BACKTRACE=full cargo test --locked -p xberg-gliner-candle --all-targets --verbose
+  fi
 } 2>&1 | tee "$TEST_LOG"; then
   echo "=== Test execution failed ==="
   echo "Last 50 lines of test output:"
