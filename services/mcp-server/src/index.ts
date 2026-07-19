@@ -2,7 +2,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { basename, dirname, extname, join, normalize } from "node:path";
+import { basename, dirname, extname, join, normalize, resolve as resolvePath } from "node:path";
+import { fileURLToPath } from "node:url";
 import { AppConfig, buildConfig, parseArgs } from "./config.js";
 import { AppError, isAppError } from "./error.js";
 import type { AuthScopes } from "@xberg-io/core";
@@ -17,7 +18,6 @@ import { DEFAULT_GLINER_MODEL, RUST_ALIGNED_PII_TYPES, detectPii, embedText } fr
 import {
 	loadOrCreateSessionToken,
 	resolveLaunchScopes,
-	isSameOriginRequest,
 	authenticateHttp,
 	ownerPrincipal,
 } from "./auth.js";
@@ -113,6 +113,11 @@ const CONTENT_TYPES: Record<string, string> = {
 	".map": "application/json; charset=utf-8",
 };
 
+// Consent grants are keyed by ConsentKind (see mcp/consent.ts), not AuthScopes — the shared
+// ConsentGrant.scope field is loosely typed as AuthScopes, but the values that actually mean
+// anything to requireConsent() are these two.
+const VALID_CONSENT_SCOPES = ["pii_read", "redact_rehydrate"] as const;
+
 // Cross-origin isolation headers required by the browser engine (ORT-Web WASM threads /
 // SharedArrayBuffer, WebGPU/WebGL, WASM-SIMD). Next.js `output: "export"` cannot emit custom
 // headers, so the Node service sets them on every UI/wasm response instead.
@@ -162,15 +167,14 @@ async function handleModels(ctx: AppContext, res: ServerResponse, file: string):
 	}
 }
 
-async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext): Promise<void> {
+async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext, auth: HttpAuth): Promise<void> {
 	const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
 	const pathname = url.pathname;
 	const method = req.method ?? "GET";
 
-	// Per-request authentication: derive Principal from Bearer token + origin guard
-	const principal = authenticateHttp(req, ctx.httpAuth.token, ctx.httpAuth.scopes);
-
-	// Public routes: no auth required
+	// Public routes: no auth required — in particular, GET / must stay reachable with no token so
+	// it can inject the session token the browser needs for every subsequent request. Authentication
+	// happens further down, scoped to the routes that actually need it.
 	if (pathname === "/" && method === "GET") {
 		const uiDir = resolveUiDir();
 		let html: string;
@@ -180,8 +184,8 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
 			html = PLACEHOLDER_HTML;
 		}
 		// Inject session token so same-origin UI can read it
-		html = injectToken(html, ctx.httpAuth.token);
-		res.writeHead(200, { "content-type": "text/html; charset=utf-8", ...ISOLATION_HEADERS });
+		html = injectToken(html, auth.token);
+		res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", ...ISOLATION_HEADERS });
 		res.end(html);
 		return;
 	}
@@ -202,13 +206,9 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
 		return;
 	}
 
-	// Protected API routes: require valid Bearer token + same-origin
-	if (pathname.startsWith("/api/")) {
-		if (principal.subject === "anonymous") {
-			sendJson(res, 401, { error: "Unauthorized", code: "auth", message: "invalid or missing bearer token" });
-			return;
-		}
-	}
+	// Every remaining route is protected: derive the per-request Principal now (throws
+	// AppError "auth" on a missing/invalid Bearer token, or "scope" on a cross-origin request).
+	const principal = authenticateHttp(req, auth.token, auth.scopes);
 
 	if (pathname === "/api/matters" && method === "GET") {
 		authorize(principal.scopes, "read");
@@ -264,6 +264,9 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
 		const body = await readJson<{ subject: string; matter_id: string; scope: string; expires_at?: string }>(req);
 		if (!body.subject || !body.matter_id || !body.scope) {
 			throw new AppError("bad_request", "subject, matter_id and scope are required");
+		}
+		if (!VALID_CONSENT_SCOPES.includes(body.scope as (typeof VALID_CONSENT_SCOPES)[number])) {
+			throw new AppError("bad_request", `unsupported consent scope: ${body.scope}`);
 		}
 		sendJson(
 			res,
@@ -363,9 +366,10 @@ export function createAppContext(config: AppConfig): AppContext {
 	return { config, store, models, mirror, vault, httpAuth, pipeline };
 }
 
-export function createHttpServer(ctx: AppContext) {
+export function createHttpServer(ctx: AppContext, authOverride?: HttpAuth) {
+	const auth = authOverride ?? ctx.httpAuth;
 	return createServer((req, res) => {
-		handle(req, res, ctx).catch((err) => {
+		handle(req, res, ctx, auth).catch((err) => {
 			if (isAppError(err)) {
 				sendJson(res, err.status, err.toJSON());
 			} else {
@@ -403,7 +407,15 @@ async function main(): Promise<void> {
 	});
 }
 
-main().catch((err) => {
-	console.error(err instanceof Error ? err.message : err);
-	process.exit(1);
-});
+// Only run when executed directly (`node dist/index.js ...`), not when imported — this module is
+// also imported by tests to reuse createAppContext/createHttpServer without launching a real
+// server. Without this guard, merely importing the module (as every mcp-server test does) would
+// parse the importing process's own argv, build a real config, and bind a real port as a side
+// effect of the import.
+const isMainModule = process.argv[1] !== undefined && fileURLToPath(import.meta.url) === resolvePath(process.argv[1]);
+if (isMainModule) {
+	main().catch((err) => {
+		console.error(err instanceof Error ? err.message : err);
+		process.exit(1);
+	});
+}
