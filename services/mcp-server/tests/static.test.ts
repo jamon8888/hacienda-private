@@ -28,4 +28,10 @@ describe("injectToken", () => {
     expect(out).not.toContain("</script><script>alert(1)");
     expect(out).toContain("\\u003c/script>");
   });
+
+  it("inserts right after <head ...> when the tag carries attributes", () => {
+    const out = injectToken('<html><head lang="en"><title>x</title></head></html>', "tok");
+    expect(out).toContain('<head lang="en"><script>window.__XBERG_TOKEN__="tok";</script>');
+    expect(out.indexOf("__XBERG_TOKEN__")).toBeLessThan(out.indexOf("<title>"));
+  });
 });
