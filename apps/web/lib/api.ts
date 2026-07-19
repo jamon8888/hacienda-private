@@ -1,4 +1,4 @@
-import type { Folder, Matter } from "@xberg-io/core";
+import type { Document, DocumentPiiEntity, Folder, Matter } from "@xberg-io/core";
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8787";
 
@@ -84,4 +84,20 @@ export async function pushMirror(token: string, matterId: string, payload: unkno
     const msg = await res.text().catch(() => res.statusText);
     throw new Error(msg || `mirror push failed: ${res.status}`);
   }
+}
+
+export async function getFolderDocuments(token: string, folderId: string): Promise<Document[]> {
+  const res = await fetch(`${BASE}/folders/${encodeURIComponent(folderId)}/documents`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  const data = await json<{ documents: Document[] }>(res);
+  return data.documents;
+}
+
+export async function getDocumentPii(token: string, documentId: string): Promise<DocumentPiiEntity[]> {
+  const res = await fetch(`${BASE}/documents/${encodeURIComponent(documentId)}/pii`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  const data = await json<{ pii: DocumentPiiEntity[] }>(res);
+  return data.pii;
 }

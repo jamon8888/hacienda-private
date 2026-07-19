@@ -29,6 +29,15 @@ export function resolveWasmPackageDir(): string | null {
   }
 }
 
+/** Insert `window.__XBERG_TOKEN__` so the same-origin UI can read the session token. */
+export function injectToken(html: string, token: string): string {
+  const tag = `<script>window.__XBERG_TOKEN__=${JSON.stringify(token)};</script>`;
+  if (html.includes("<head>")) {
+    return html.replace("<head>", `<head>${tag}`);
+  }
+  return tag + html;
+}
+
 export const PLACEHOLDER_HTML = `<!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><title>Xberg Document Intelligence</title></head>

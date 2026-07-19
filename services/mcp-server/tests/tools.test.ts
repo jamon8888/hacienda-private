@@ -32,6 +32,7 @@ function makeConfig(dir: string): AppConfig {
     mirrorsDir: join(dir, "mirrors"),
     manifestPath: join(dir, "manifest.json"),
     jwtSecret: "test",
+    sessionToken: "test-session-token",
   };
 }
 
@@ -65,7 +66,7 @@ function makeFakePipeline(): AppContext["pipeline"] {
   };
 }
 
-async function makeHarness(scopes: AppContext["tokenScopes"], consent: boolean): Promise<Harness> {
+async function makeHarness(scopes: AuthScopes[], consent: boolean): Promise<Harness> {
   const dir = mkdtempSync(join(tmpdir(), "xberg-tools-"));
   writeFileSync(join(dir, "manifest.json"), JSON.stringify({ models: [] }));
   const config = makeConfig(dir);
@@ -85,13 +86,21 @@ async function makeHarness(scopes: AppContext["tokenScopes"], consent: boolean):
   seedBundle(mirror, vault, matter.id);
   await mirror.loadMirror(matter.id);
 
-  const ctx: AppContext = { config, store, models, mirror, vault, tokenScopes: scopes, pipeline: makeFakePipeline() };
+  const ctx: AppContext = {
+    config,
+    store,
+    models,
+    mirror,
+    vault,
+    httpAuth: { token: config.sessionToken, scopes },
+    pipeline: makeFakePipeline(),
+  };
   return { dir, ctx, matter };
 }
 
 let created: Harness[] = [];
 
-async function harness(scopes: AppContext["tokenScopes"], consent: boolean): Promise<Harness> {
+async function harness(scopes: AuthScopes[], consent: boolean): Promise<Harness> {
   const h = await makeHarness(scopes, consent);
   created.push(h);
   return h;
@@ -118,7 +127,7 @@ describe("mcp tools", () => {
     expect(chunks[0]?.text).toBe("redacted");
     const audit = ctx.store.getAuditLog(matter.id);
     expect(audit.some((a) => a.action === "rag_query")).toBe(true);
-    expect(audit[0]?.actor).toBe("mcp:read,ingest,redact,admin");
+    expect(audit[0]?.actor).toBe("owner");
   });
 
   it("list_pii returns the span token, never plaintext", async () => {

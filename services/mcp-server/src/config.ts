@@ -2,6 +2,7 @@ import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AppError } from "./error.js";
+import { loadOrCreateSessionToken } from "./auth.js";
 
 export interface AppConfig {
   host: string;
@@ -14,6 +15,7 @@ export interface AppConfig {
   mirrorsDir: string;
   manifestPath: string;
   jwtSecret: string;
+  sessionToken: string;
 }
 
 export interface CliArgs {
@@ -21,6 +23,7 @@ export interface CliArgs {
   host: string;
   port: number;
   dataDir?: string;
+  elevated?: boolean;
 }
 
 const PLACEHOLDER_SHA = "TODO_PIN_SHA256";
@@ -31,6 +34,7 @@ export function parseArgs(argv: string[]): CliArgs {
   let host = "127.0.0.1";
   let port = 8787;
   let dataDir: string | undefined;
+  let elevated = false;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -52,6 +56,8 @@ export function parseArgs(argv: string[]): CliArgs {
       const v = args[++i];
       if (!v) throw new AppError("bad_request", "--data-dir requires a value");
       dataDir = v;
+    } else if (arg === "--elevated") {
+      elevated = true;
     } else if (arg.startsWith("--port=")) {
       port = Number.parseInt(arg.slice("--port=".length), 10);
     } else if (arg.startsWith("--host=")) {
@@ -61,7 +67,7 @@ export function parseArgs(argv: string[]): CliArgs {
     }
   }
 
-  return { command, host, port, dataDir };
+  return { command, host, port, dataDir, elevated };
 }
 
 export function buildConfig(args: CliArgs, env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -74,6 +80,8 @@ export function buildConfig(args: CliArgs, env: NodeJS.ProcessEnv = process.env)
   const manifestPath = fileURLToPath(new URL("../models/manifest.json", import.meta.url));
   const jwtSecret = env.XBERG_JWT_SECRET ?? "dev-insecure-change-me";
 
+  const sessionToken = loadOrCreateSessionToken(dataDir);
+
   const config: AppConfig = {
     host: args.host,
     port: args.port,
@@ -85,6 +93,7 @@ export function buildConfig(args: CliArgs, env: NodeJS.ProcessEnv = process.env)
     mirrorsDir,
     manifestPath,
     jwtSecret,
+    sessionToken,
   };
 
   validateConfig(config);

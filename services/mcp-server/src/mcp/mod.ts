@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { AppContext } from "../index.js";
+import type { Principal } from "../principal.js";
 import { registerTools } from "./tools.js";
 
 export function createMcpServer(ctx: AppContext): McpServer {
@@ -12,11 +13,11 @@ export function createMcpServer(ctx: AppContext): McpServer {
   return server;
 }
 
-export async function runMcp(ctx: AppContext): Promise<void> {
+export async function runMcp(ctx: AppContext, principal: Principal): Promise<void> {
   const server = createMcpServer(ctx);
   // TODO(http): the SDK exposes StreamableHTTPServerTransport for `mcp --http`, but it requires an
   // HTTP framework/session wiring beyond this plan's scope. Only stdio is implemented here.
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error(`[xberg-mcp] MCP server ready (stdio; data dir ${ctx.config.dataDir})`);
+  console.error(`[xberg-mcp] MCP server ready (stdio; data dir ${ctx.config.dataDir}; subject ${principal.subject}; scopes ${principal.scopes.join(",")})`);
 }

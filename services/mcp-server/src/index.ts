@@ -10,10 +10,13 @@ import { MetadataStore, openStore } from "./store.js";
 import { ModelCache } from "./models.js";
 import { MirrorStore } from "./mirror.js";
 import { KeyVault } from "./vault.js";
-import { PLACEHOLDER_HTML, resolveUiDir, resolveWasmPackageDir } from "./static.js";
+import { PLACEHOLDER_HTML, resolveUiDir, resolveWasmPackageDir, injectToken } from "./static.js";
 import { runMcp } from "./mcp/mod.js";
 import type { IngestDeps } from "@xberg-io/node-pipeline";
 import { DEFAULT_GLINER_MODEL, RUST_ALIGNED_PII_TYPES, detectPii, embedText } from "@xberg-io/node-pipeline";
+import { loadOrCreateSessionToken, resolveLaunchScopes, isSameOriginRequest, authenticateHttp, type HttpAuth } from "./auth.js";
+import { ownerPrincipal, type Principal } from "./principal.js";
+import { authorize } from "./mcp/scopes.js";
 
 export interface AppContext {
   config: AppConfig;
@@ -21,7 +24,7 @@ export interface AppContext {
   models: ModelCache;
   mirror: MirrorStore;
   vault: KeyVault;
-  tokenScopes: AuthScopes[];
+  httpAuth: HttpAuth;
   pipeline: Omit<IngestDeps, "store" | "mirror">;
 }
 
@@ -153,14 +156,22 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
   const pathname = url.pathname;
   const method = req.method ?? "GET";
 
+  // Per-request authentication: derive Principal from Bearer token + origin guard
+  const principal = authenticateHttp(req, ctx.httpAuth.token, ctx.httpAuth.scopes);
+
+  // Public routes: no auth required
   if (pathname === "/" && method === "GET") {
     const uiDir = resolveUiDir();
+    let html: string;
     if (uiDir) {
-      serveFile(res, join(uiDir, "index.html"));
+      html = readFileSync(join(uiDir, "index.html"), "utf8");
     } else {
-      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-      res.end(PLACEHOLDER_HTML);
+      html = PLACEHOLDER_HTML;
     }
+    // Inject session token so same-origin UI can read it
+    html = injectToken(html, ctx.httpAuth.token);
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8", ...ISOLATION_HEADERS });
+    res.end(html);
     return;
   }
 
@@ -180,50 +191,65 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
     return;
   }
 
-  if (pathname === "/matters" && method === "GET") {
+  // Protected API routes: require valid Bearer token + same-origin
+  if (pathname.startsWith("/api/")) {
+    if (principal.subject === "anonymous") {
+      sendJson(res, 401, { error: "Unauthorized", code: "auth", message: "invalid or missing bearer token" });
+      return;
+    }
+  }
+
+  if (pathname === "/api/matters" && method === "GET") {
+    authorize(principal, "read", { id: "", name: "", created_at: "" });
     sendJson(res, 200, { matters: ctx.store.getMatters() });
     return;
   }
-  if (pathname === "/matters" && method === "POST") {
+  if (pathname === "/api/matters" && method === "POST") {
+    authorize(principal, "ingest", { id: "", name: "", created_at: "" });
     const body = await readJson<{ name: string }>(req);
     if (!body.name) throw new AppError("bad_request", "name is required");
-    sendJson(res, 201, ctx.store.createMatter(body.name));
+    const matter = ctx.store.createMatter(body.name);
+    ctx.store.recordAudit(principal.subject, "ingest", "create_matter", matter.id);
+    sendJson(res, 201, matter);
     return;
   }
 
-  const forgetMatch = pathname.match(/^\/matters\/([^/]+)$/);
+  const forgetMatch = pathname.match(/^\/api\/matters\/([^/]+)$/);
   if (forgetMatch && method === "DELETE") {
-    if (!ctx.tokenScopes.includes("admin")) {
-      throw new AppError("scope", "admin scope required to forget a matter");
-    }
+    authorize(principal, "admin", { id: "", name: "", created_at: "" });
     const matterId = decodeURIComponent(forgetMatch[1] ?? "");
     const forgotten = ctx.store.forgetMatter(matterId);
     ctx.mirror.forget(matterId);
-    ctx.store.recordAudit("http", "admin", "forget", matterId);
+    ctx.store.recordAudit(principal.subject, "admin", "forget", matterId);
     sendJson(res, 200, { forgotten });
     return;
   }
 
-  if (pathname === "/folders" && method === "GET") {
+  if (pathname === "/api/folders" && method === "GET") {
+    authorize(principal, "read", { id: "", name: "", created_at: "" });
     const matterId = url.searchParams.get("matter_id");
     if (!matterId) throw new AppError("bad_request", "matter_id is required");
     sendJson(res, 200, { folders: ctx.store.getFolders(matterId) });
     return;
   }
-  if (pathname === "/folders" && method === "POST") {
+  if (pathname === "/api/folders" && method === "POST") {
+    authorize(principal, "ingest", { id: "", name: "", created_at: "" });
     const body = await readJson<{ matter_id: string; name: string; path?: string }>(req);
     if (!body.matter_id || !body.name) throw new AppError("bad_request", "matter_id and name are required");
-    sendJson(res, 201, ctx.store.createFolder(body.matter_id, body.name, body.path));
+    const folder = ctx.store.createFolder(body.matter_id, body.name, body.path);
+    sendJson(res, 201, folder);
     return;
   }
 
-  if (pathname === "/consent" && method === "GET") {
+  if (pathname === "/api/consent" && method === "GET") {
+    authorize(principal, "admin", { id: "", name: "", created_at: "" });
     const matterId = url.searchParams.get("matter_id");
     if (!matterId) throw new AppError("bad_request", "matter_id is required");
     sendJson(res, 200, { consent: ctx.store.getConsent(matterId) });
     return;
   }
-  if (pathname === "/consent" && method === "POST") {
+  if (pathname === "/api/consent" && method === "POST") {
+    authorize(principal, "admin", { id: "", name: "", created_at: "" });
     const body = await readJson<{ subject: string; matter_id: string; scope: string; expires_at?: string }>(req);
     if (!body.subject || !body.matter_id || !body.scope) {
       throw new AppError("bad_request", "subject, matter_id and scope are required");
@@ -232,7 +258,8 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
     return;
   }
 
-  if (pathname === "/rag/mirror" && method === "POST") {
+  if (pathname === "/api/rag/mirror" && method === "POST") {
+    authorize(principal, "ingest", { id: "", name: "", created_at: "" });
     const matterId = url.searchParams.get("matter_id");
     if (!matterId) throw new AppError("bad_request", "matter_id is required");
     const body = await readBody(req);
@@ -241,12 +268,30 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
     return;
   }
 
-  const mirrorStatus = pathname.match(/^\/rag\/mirror\/([^/]+)\/status$/);
+  const mirrorStatus = pathname.match(/^\/api\/rag\/mirror\/([^/]+)\/status$/);
   if (mirrorStatus && method === "GET") {
+    authorize(principal, "read", { id: "", name: "", created_at: "" });
     const matterId = decodeURIComponent(mirrorStatus[1] ?? "");
     const status = ctx.mirror.status(matterId);
     if (!status) throw new AppError("not_found", `no mirror for matter ${matterId}`);
     sendJson(res, 200, status);
+    return;
+  }
+
+  // Folder documents + PII routes (for Web UI polling)
+  const folderDocsMatch = pathname.match(/^\/api\/folders\/([^/]+)\/documents$/);
+  if (folderDocsMatch && method === "GET") {
+    authorize(principal, "read", { id: "", name: "", created_at: "" });
+    const folderId = decodeURIComponent(folderDocsMatch[1] ?? "");
+    sendJson(res, 200, { documents: ctx.store.getDocumentsByFolder(folderId) });
+    return;
+  }
+
+  const docPiiMatch = pathname.match(/^\/api\/documents\/([^/]+)\/pii$/);
+  if (docPiiMatch && method === "GET") {
+    authorize(principal, "read", { id: "", name: "", created_at: "" });
+    const documentId = decodeURIComponent(docPiiMatch[1] ?? "");
+    sendJson(res, 200, { pii: ctx.store.getPiiByDocument(documentId) });
     return;
   }
 
@@ -259,9 +304,10 @@ export function createAppContext(config: AppConfig): AppContext {
   const models = new ModelCache(config.modelCacheDir, config.manifestPath);
   const mirror = new MirrorStore(config.mirrorsDir);
   const vault = new KeyVault({ vaultKeyPath: config.vaultKeyPath });
-  // Local owner-launched MCP: the owner holds every scope. In production this would be derived
-  // from the launcher/JWT token rather than defaulted here.
-  const tokenScopes: AuthScopes[] = ["read", "ingest", "redact", "admin"];
+
+  // Launch-time scopes from XBERG_SCOPES env (default: all). HTTP auth derives per-request Principal.
+  const launchScopes = resolveLaunchScopes();
+  const httpAuth: HttpAuth = { token: config.sessionToken, scopes: launchScopes };
 
   const pipeline: AppContext["pipeline"] = {
     extract: async (path: string) => {
@@ -283,10 +329,6 @@ export function createAppContext(config: AppConfig): AppContext {
       return chunks.length > 0 ? chunks : [content];
     },
     embed: async (text: string) => {
-      // Corrected from the plan's assumed "e5.model"/"e5.tokenizer" manifest names: the real
-      // pinned manifest (services/mcp-server/models/manifest.json) names these "e5-fp32" and
-      // "e5-tokenizer". This Node pipeline has no capability-detection/quantization-scenario
-      // logic, so it always uses the fp32 weights (not the int8/int4 variants also in the manifest).
       const modelPath = await models.ensureModel("e5-fp32");
       const tokenizerPath = await models.ensureModel("e5-tokenizer");
       return embedText(text, modelPath, tokenizerPath);
@@ -298,7 +340,7 @@ export function createAppContext(config: AppConfig): AppContext {
     },
   };
 
-  return { config, store, models, mirror, vault, tokenScopes, pipeline };
+  return { config, store, models, mirror, vault, httpAuth, pipeline };
 }
 
 export function createHttpServer(ctx: AppContext) {
@@ -320,7 +362,9 @@ async function main(): Promise<void> {
   const ctx = createAppContext(config);
 
   if (args.command === "mcp") {
-    await runMcp(ctx);
+    // MCP stdio: the process spawn is the auth boundary; owner holds launch scopes
+    const principal = ownerPrincipal(ctx.httpAuth.scopes);
+    await runMcp(ctx, principal);
     return;
   }
 
@@ -328,6 +372,7 @@ async function main(): Promise<void> {
   server.listen(config.port, config.host, () => {
     console.log(`[xberg-mcp] serving http://${config.host}:${config.port}`);
     console.log(`[xberg-mcp] data dir: ${config.dataDir}`);
+    console.log(`[xberg-mcp] session token: ${config.sessionToken} (also at ${config.dataDir}/session.token)`);
   });
 }
 
