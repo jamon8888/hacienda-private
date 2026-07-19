@@ -15,12 +15,7 @@ import { PLACEHOLDER_HTML, resolveUiDir, resolveWasmPackageDir, injectToken } fr
 import { runMcp } from "./mcp/mod.js";
 import type { IngestDeps } from "@xberg-io/node-pipeline";
 import { DEFAULT_GLINER_MODEL, RUST_ALIGNED_PII_TYPES, detectPii, embedText } from "@xberg-io/node-pipeline";
-import {
-	loadOrCreateSessionToken,
-	resolveLaunchScopes,
-	authenticateHttp,
-	ownerPrincipal,
-} from "./auth.js";
+import { loadOrCreateSessionToken, resolveLaunchScopes, authenticateHttp, ownerPrincipal } from "./auth.js";
 import type { Principal } from "./principal.js";
 import { authorize } from "./mcp/scopes.js";
 
@@ -185,7 +180,11 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
 		}
 		// Inject session token so same-origin UI can read it
 		html = injectToken(html, auth.token);
-		res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", ...ISOLATION_HEADERS });
+		res.writeHead(200, {
+			"content-type": "text/html; charset=utf-8",
+			"cache-control": "no-store",
+			...ISOLATION_HEADERS,
+		});
 		res.end(html);
 		return;
 	}
