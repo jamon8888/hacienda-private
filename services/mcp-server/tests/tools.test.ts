@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AuthScopes, Matter } from "@xberg-io/core";
@@ -10,7 +10,7 @@ import { MirrorStore } from "../src/mirror.js";
 import { ModelCache } from "../src/models.js";
 import { KeyVault } from "../src/vault.js";
 import { AppError, isAppError } from "../src/error.js";
-import { listPii, ragQuery, redact, rehydrateChunk, listMatters, createMatter } from "../src/mcp/tools.js";
+import { listPii, ragQuery, redact, rehydrateChunk, listMatters, createMatter, ingestFolder } from "../src/mcp/tools.js";
 
 const VAULT_KEY = Buffer.alloc(32, 7);
 
@@ -51,6 +51,20 @@ function seedBundle(mirror: MirrorStore, vault: KeyVault, matterId: string): voi
   mirror.saveMirror(matterId, Buffer.from(JSON.stringify(bundle)));
 }
 
+// Lightweight test doubles for the pipeline deps — real extraction/embedding/PII detection
+// require downloaded ONNX models, which unit tests must not depend on. `extract` still reads
+// the real file so ingest_folder tests genuinely exercise real folder walks against real files.
+function makeFakePipeline(): AppContext["pipeline"] {
+  return {
+    extract: vi.fn(async (path: string) => ({ content: readFileSync(path, "utf8"), pageCount: 1 })),
+    chunk: vi.fn((content: string) => [content]),
+    embed: vi.fn(async () => new Array(768).fill(0)),
+    detectPii: vi.fn(async (text: string) =>
+      text.includes("Jane Doe") ? [{ kind: "person", start: 0, end: 8, text: "Jane Doe" }] : [],
+    ),
+  };
+}
+
 async function makeHarness(scopes: AppContext["tokenScopes"], consent: boolean): Promise<Harness> {
   const dir = mkdtempSync(join(tmpdir(), "xberg-tools-"));
   writeFileSync(join(dir, "manifest.json"), JSON.stringify({ models: [] }));
@@ -71,7 +85,7 @@ async function makeHarness(scopes: AppContext["tokenScopes"], consent: boolean):
   seedBundle(mirror, vault, matter.id);
   await mirror.loadMirror(matter.id);
 
-  const ctx: AppContext = { config, store, models, mirror, vault, tokenScopes: scopes };
+  const ctx: AppContext = { config, store, models, mirror, vault, tokenScopes: scopes, pipeline: makeFakePipeline() };
   return { dir, ctx, matter };
 }
 
@@ -177,5 +191,57 @@ describe("list_matters / create_matter", () => {
   it("rejects create_matter without ingest scope", async () => {
     const { ctx } = await harness(["read"], false);
     expect(() => createMatter(ctx, { name: "x" })).toThrow(/missing required scope/);
+  });
+});
+
+describe("ingest_folder", () => {
+  let folderDirs: string[] = [];
+
+  afterEach(() => {
+    for (const d of folderDirs) {
+      rmSync(d, { recursive: true, force: true });
+    }
+    folderDirs = [];
+  });
+
+  function makeFolderDir(prefix: string): string {
+    const dir = mkdtempSync(join(tmpdir(), prefix));
+    folderDirs.push(dir);
+    return dir;
+  }
+
+  it("walks a real folder and produces documents + mirror data", async () => {
+    const { ctx, matter } = await harness(["ingest"], false);
+    const folderDir = makeFolderDir("xberg-ingest-folder-");
+    writeFileSync(join(folderDir, "one.txt"), "Jane Doe met Acme Corp.");
+    writeFileSync(join(folderDir, "two.txt"), "Second document, no PII here.");
+
+    const result = await ingestFolder(ctx, { matter_id: matter.id, path: folderDir });
+    const parsed = JSON.parse(result.content[0]!.text) as {
+      documents_processed: number;
+      documents_skipped: number;
+      errors: { path: string; message: string }[];
+    };
+
+    expect(parsed.documents_processed).toBe(2);
+    expect(parsed.documents_skipped).toBe(0);
+    expect(parsed.errors).toHaveLength(0);
+  });
+
+  it("skips unchanged files on a second call and reports the count", async () => {
+    const { ctx, matter } = await harness(["ingest"], false);
+    const folderDir = makeFolderDir("xberg-ingest-folder-2-");
+    writeFileSync(join(folderDir, "one.txt"), "stable content");
+
+    await ingestFolder(ctx, { matter_id: matter.id, path: folderDir });
+    const second = await ingestFolder(ctx, { matter_id: matter.id, path: folderDir });
+    const parsed = JSON.parse(second.content[0]!.text) as { documents_skipped: number };
+
+    expect(parsed.documents_skipped).toBe(1);
+  });
+
+  it("rejects ingest_folder without ingest scope", async () => {
+    const { ctx, matter } = await harness(["read"], false);
+    await expect(ingestFolder(ctx, { matter_id: matter.id, path: "." })).rejects.toThrow(/missing required scope/);
   });
 });

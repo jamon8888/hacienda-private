@@ -17,6 +17,7 @@
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@xberg-io/core": "workspace:*",
     "@xberg-io/node-pipeline": "workspace:*",
+    "@xberg-io/xberg-wasm": "1.0.0-rc.26",
     "better-sqlite3": "^11.0.0",
     "edgevec": "^0.9.0",
     "zod": "^3.23.8"

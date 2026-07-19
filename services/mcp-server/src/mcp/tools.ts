@@ -4,6 +4,7 @@ import type { AppContext } from "../index.js";
 import { AppError } from "../error.js";
 import { authorize } from "./scopes.js";
 import { requireConsent } from "./consent.js";
+import { ingestFile, walkFolder } from "@xberg-io/node-pipeline";
 
 // NOTE: the current @modelcontextprotocol/sdk ContentBlock union has no `type: "json"` variant, so
 // JSON payloads are returned as a `type: "text"` block carrying `JSON.stringify(...)`. The intent
@@ -51,8 +52,8 @@ export interface RehydrateChunkArgs {
 }
 export interface IngestFolderArgs {
   matter_id: string;
-  name: string;
-  path?: string;
+  path: string;
+  recursive?: boolean;
 }
 export interface RedactArgs {
   matter_id: string;
@@ -94,14 +95,53 @@ export function rehydrateChunk(ctx: AppContext, args: RehydrateChunkArgs): ToolR
   });
 }
 
-export function ingestFolder(ctx: AppContext, args: IngestFolderArgs): ToolResult {
-  return wrap(() => {
-    const matter = getMatter(ctx, args.matter_id);
-    authorize(ctx.tokenScopes, "ingest", matter, args.matter_id);
-    const folder = ctx.store.createFolder(args.matter_id, args.name, args.path);
-    const record = ctx.store.recordIngest(folder.id, args.matter_id);
-    ctx.store.recordAudit(actorFor(ctx), "ingest", "ingest_folder", args.matter_id);
-    return jsonResult({ folder, ingest: record });
+export async function ingestFolder(ctx: AppContext, args: IngestFolderArgs): Promise<ToolResult> {
+  const matter = getMatter(ctx, args.matter_id);
+  authorize(ctx.tokenScopes, "ingest", matter, args.matter_id);
+
+  // Reuse the folder row for a path already ingested under this matter, rather than creating a
+  // fresh one on every call: findDocumentByHash below is scoped by folder.id, so a brand-new
+  // folder on each call would defeat the whole "skip unchanged files" contract this tool exists
+  // to provide (there would never be a folder.id in common to look up an existing document by).
+  const folder =
+    ctx.store.getFolders(args.matter_id).find((f) => f.path === args.path) ??
+    ctx.store.createFolder(args.matter_id, args.path.split(/[/\\]/).pop() ?? args.path, args.path);
+  ctx.store.updateFolderStatus(folder.id, "processing");
+
+  const files = await walkFolder(args.path);
+  let processed = 0;
+  let skipped = 0;
+  let piiFound = 0;
+  const errors: { path: string; message: string }[] = [];
+
+  for (const file of files) {
+    const existing = ctx.store.findDocumentByHash(folder.id, file.contentHash);
+    if (existing) {
+      skipped += 1;
+      continue;
+    }
+    const doc = await ingestFile(
+      { ...ctx.pipeline, store: ctx.store, mirror: ctx.mirror },
+      file,
+      { folderId: folder.id, matterId: args.matter_id, ingestedVia: "mcp" },
+    );
+    if (doc.status === "error") {
+      errors.push({ path: file.path, message: doc.error_message ?? "unknown error" });
+    } else {
+      processed += 1;
+      piiFound += doc.pii_count;
+    }
+  }
+
+  ctx.store.updateFolderStatus(folder.id, errors.length > 0 && processed === 0 ? "error" : "done");
+  ctx.store.recordAudit(actorFor(ctx), "ingest", "ingest_folder", args.matter_id);
+
+  return jsonResult({
+    folder,
+    documents_processed: processed,
+    documents_skipped: skipped,
+    pii_entities_found: piiFound,
+    errors,
   });
 }
 
@@ -157,8 +197,10 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
     rehydrateChunk(ctx, args),
   );
 
-  server.tool("ingest_folder", { matter_id: z.string(), name: z.string(), path: z.string().optional() }, async (args) =>
-    ingestFolder(ctx, args),
+  server.tool(
+    "ingest_folder",
+    { matter_id: z.string(), path: z.string(), recursive: z.boolean().optional() },
+    async (args) => ingestFolder(ctx, args),
   );
 
   server.tool(

@@ -1,6 +1,8 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { extname, join, normalize } from "node:path";
+import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { basename, dirname, extname, join, normalize } from "node:path";
 import { AppConfig, buildConfig, parseArgs } from "./config.js";
 import { AppError, isAppError } from "./error.js";
 import type { AuthScopes } from "@xberg-io/core";
@@ -10,6 +12,8 @@ import { MirrorStore } from "./mirror.js";
 import { KeyVault } from "./vault.js";
 import { PLACEHOLDER_HTML, resolveUiDir, resolveWasmPackageDir } from "./static.js";
 import { runMcp } from "./mcp/mod.js";
+import type { IngestDeps } from "@xberg-io/node-pipeline";
+import { DEFAULT_GLINER_MODEL, RUST_ALIGNED_PII_TYPES, detectPii, embedText } from "@xberg-io/node-pipeline";
 
 export interface AppContext {
   config: AppConfig;
@@ -18,6 +22,50 @@ export interface AppContext {
   mirror: MirrorStore;
   vault: KeyVault;
   tokenScopes: AuthScopes[];
+  pipeline: Omit<IngestDeps, "store" | "mirror">;
+}
+
+// Extensions walkFolder() will hand us — kept in sync with node-pipeline's own
+// SUPPORTED_EXTENSIONS set (packages/node-pipeline/src/walk.ts). xberg-wasm's `extract` rejects
+// empty/unknown MIME types, so every supported extension needs an explicit entry here.
+const MIME_TYPES_BY_EXTENSION: Record<string, string> = {
+  ".pdf": "application/pdf",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".doc": "application/msword",
+  ".txt": "text/plain",
+  ".md": "text/markdown",
+  ".markdown": "text/markdown",
+  ".csv": "text/csv",
+  ".html": "text/html",
+  ".htm": "text/html",
+  ".json": "application/json",
+  ".rtf": "application/rtf",
+};
+
+// Lazily initializes the xberg-wasm module and caches it for the process lifetime.
+//
+// NOTE: `@xberg-io/xberg-wasm`'s published package is a wasm-pack `--target web` build. Its
+// default init function (`export { __wbg_init as default }`) resolves the .wasm binary via
+// `new URL("xberg_wasm_bg.wasm", import.meta.url)` and then `fetch()`s it when called with no
+// arguments — but Node's built-in `fetch` (undici) does not support `file://` URLs, so that
+// default path throws under this Node service. We instead read the binary from disk ourselves
+// (resolved via Node's own module resolution against the installed package, not a hardcoded
+// node_modules layout) and hand the bytes directly to the init function, which accepts a
+// `BufferSource` and skips the fetch path entirely.
+let xbergWasmReady: Promise<typeof import("@xberg-io/xberg-wasm")> | null = null;
+async function getXbergWasm(): Promise<typeof import("@xberg-io/xberg-wasm")> {
+  if (!xbergWasmReady) {
+    xbergWasmReady = (async () => {
+      const wasm = await import("@xberg-io/xberg-wasm");
+      const wasmRequire = createRequire(import.meta.url);
+      const entryPath = wasmRequire.resolve("@xberg-io/xberg-wasm");
+      const wasmBinaryPath = join(dirname(entryPath), "xberg_wasm_bg.wasm");
+      const wasmBytes = await readFile(wasmBinaryPath);
+      await wasm.default(wasmBytes);
+      return wasm;
+    })();
+  }
+  return xbergWasmReady;
 }
 
 function readBody(req: IncomingMessage): Promise<Buffer> {
@@ -214,7 +262,43 @@ export function createAppContext(config: AppConfig): AppContext {
   // Local owner-launched MCP: the owner holds every scope. In production this would be derived
   // from the launcher/JWT token rather than defaulted here.
   const tokenScopes: AuthScopes[] = ["read", "ingest", "redact", "admin"];
-  return { config, store, models, mirror, vault, tokenScopes };
+
+  const pipeline: AppContext["pipeline"] = {
+    extract: async (path: string) => {
+      const wasm = await getXbergWasm();
+      const bytes = await readFile(path);
+      const mimeType = MIME_TYPES_BY_EXTENSION[extname(path).toLowerCase()] ?? "application/octet-stream";
+      const input = wasm.WasmExtractInput.fromBytes(new Uint8Array(bytes), mimeType, basename(path));
+      const output = await wasm.extract(input, undefined);
+      const first = output.results[0];
+      if (!first) throw new Error(`extraction produced no result for ${path}`);
+      return { content: first.content ?? "", pageCount: first.metadata?.pages?.totalCount ?? 1 };
+    },
+    chunk: (content: string) => {
+      const CHUNK_SIZE = 1024;
+      const chunks: string[] = [];
+      for (let i = 0; i < content.length; i += CHUNK_SIZE) {
+        chunks.push(content.slice(i, i + CHUNK_SIZE));
+      }
+      return chunks.length > 0 ? chunks : [content];
+    },
+    embed: async (text: string) => {
+      // Corrected from the plan's assumed "e5.model"/"e5.tokenizer" manifest names: the real
+      // pinned manifest (services/mcp-server/models/manifest.json) names these "e5-fp32" and
+      // "e5-tokenizer". This Node pipeline has no capability-detection/quantization-scenario
+      // logic, so it always uses the fp32 weights (not the int8/int4 variants also in the manifest).
+      const modelPath = await models.ensureModel("e5-fp32");
+      const tokenizerPath = await models.ensureModel("e5-tokenizer");
+      return embedText(text, modelPath, tokenizerPath);
+    },
+    detectPii: async (text: string) => {
+      const modelPath = await models.ensureModel(`${DEFAULT_GLINER_MODEL}.model`);
+      const tokenizerPath = await models.ensureModel(`${DEFAULT_GLINER_MODEL}.tokenizer`);
+      return detectPii(text, modelPath, tokenizerPath, RUST_ALIGNED_PII_TYPES);
+    },
+  };
+
+  return { config, store, models, mirror, vault, tokenScopes, pipeline };
 }
 
 export function createHttpServer(ctx: AppContext) {
