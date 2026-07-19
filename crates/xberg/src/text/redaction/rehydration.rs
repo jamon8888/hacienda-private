@@ -98,9 +98,7 @@ pub fn decrypt_map(blob: &[u8], passphrase: &str) -> Result<RehydrationMap> {
     let mut buffer = Zeroizing::new(ciphertext.to_vec());
     cipher
         .decrypt_in_place_detached(nonce, b"", &mut buffer, tag.into())
-        .map_err(|_| {
-            XbergError::validation("failed to decrypt rehydration map: wrong passphrase or corrupted data")
-        })?;
+        .map_err(|_| XbergError::validation("failed to decrypt rehydration map: wrong passphrase or corrupted data"))?;
 
     serde_json::from_slice(&buffer)
         .map_err(|e| XbergError::validation(format!("failed to deserialize rehydration map: {e}")))

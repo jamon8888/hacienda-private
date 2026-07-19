@@ -28,8 +28,13 @@ describe("loadOrCreateSessionToken", () => {
   it("creates a 64-hex-char token in a 0600 file, then is idempotent", () => {
     const t1 = loadOrCreateSessionToken(dir);
     expect(t1).toMatch(/^[0-9a-f]{64}$/);
-    const mode = statSync(join(dir, "session.token")).mode & 0o777;
-    expect(mode).toBe(0o600);
+    // Windows/NTFS has no POSIX permission bits — chmodSync is a best-effort no-op there
+    // (see the matching comment in src/auth.ts), so the exact mode is only meaningful on
+    // platforms that actually enforce it.
+    if (process.platform !== "win32") {
+      const mode = statSync(join(dir, "session.token")).mode & 0o777;
+      expect(mode).toBe(0o600);
+    }
     const t2 = loadOrCreateSessionToken(dir);
     expect(t2).toBe(t1);
     expect(readFileSync(join(dir, "session.token"), "utf8").trim()).toBe(t1);

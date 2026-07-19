@@ -5945,7 +5945,7 @@ wheels = [
 
 [[package]]
 name = "xberg"
-version = "1.0.0rc27"
+version = "1.0.0rc29"
 source = { editable = "packages/python" }
 
 [package.dev-dependencies]

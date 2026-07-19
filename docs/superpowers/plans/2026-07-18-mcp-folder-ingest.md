@@ -28,7 +28,7 @@ updated to match (see Task 0).
 ## Global Constraints
 
 - Follow the repo's existing TDD/TypeScript conventions: `strict` + `noUncheckedIndexedAccess`, ESM, `vitest` for tests, no default exports.
-- No new runtime dependency may require a native/platform-specific binary on Windows (this is the whole reason `onnxruntime-node`/native `ort` are out — see Deviation above).
+- No new runtime dependency may require a native/platform-specific binary on Windows (this is the whole reason `onnxruntime-node`/native `ort` are out — see Deviation above). Clarified during Task 4 review: this means the *executed code path* must never invoke a Windows-broken native binary — it does not forbid a dependency (like `gliner`, which lists `onnxruntime-node` as a peer) from having an unused native package present in `node_modules`, as long as the code always configures it for the WASM backend and never touches the native one. `packages/wasm-pipeline` already carries this exact dependency set and installs/runs cleanly on Windows; `packages/node-pipeline` (Task 4+) intentionally mirrors it rather than re-litigating the same constraint per task.
 - Every new SQLite column/table addition must be idempotent across repeated `MetadataStore` construction (existing dev databases must not break on upgrade).
 - Every new `/api/*` route must go through the auth guard added in Task 11 — no route may bypass it.
 - MCP tool scope checks must use the existing `authorize()`/`requireConsent()` helpers in `services/mcp-server/src/mcp/scopes.ts` / `consent.ts` — do not add a parallel authorization mechanism.
@@ -890,18 +890,21 @@ git commit -m "feat(node-pipeline): scaffold package with recursive folder walk 
 **Interfaces:**
 - Produces: `GLINER_MODEL_DEFINITIONS`, `parseGlinerChecksums(text: string): Record<string,string>`, `buildGlinerManifestEntries(checksums: Record<string,string>): ModelManifestEntry[]`.
 
-This mirrors `crates/xberg-gliner/src/lib.rs`'s `GLINER_MODELS` table and
-checksum-manifest format exactly, so Node and Rust download and verify the
+This mirrors `crates/xberg/src/text/ner/gline.rs`'s `GLINER_MODELS` table and
+checksum-manifest format exactly (that Rust *core crate* module wraps the
+lower-level `crates/xberg-gliner` ONNX engine and owns the model catalog +
+pinned manifest — `crates/xberg-gliner` itself has no catalog, only the
+inference/decode plumbing), so Node and Rust download and verify the
 identical artifacts from the identical `xberg-io/gliner-models` HF repo. The
 checksum values themselves are **not** retyped here — copying
-`crates/xberg-gliner/src/gliner-models.sha256` verbatim (Step 1) is a
+`crates/xberg/src/text/ner/gliner-models.sha256` verbatim (Step 1) is a
 mechanical `cp`, not a re-derivation, so there is no risk of transcription
 error diverging from the pinned values Rust already verifies against.
 
 - [ ] **Step 1: Copy the pinned checksum manifest verbatim**
 
 ```bash
-cp "crates/xberg-gliner/src/gliner-models.sha256" "packages/node-pipeline/src/gliner-models.sha256"
+cp "crates/xberg/src/text/ner/gliner-models.sha256" "packages/node-pipeline/src/gliner-models.sha256"
 ```
 
 - [ ] **Step 2: Write the failing test**
@@ -970,7 +973,7 @@ export interface GlinerModelDefinition {
   tokenizerFile: string;
 }
 
-// Mirrors crates/xberg-gliner/src/lib.rs::GLINER_MODELS exactly.
+// Mirrors crates/xberg/src/text/ner/gline.rs::GLINER_MODELS exactly.
 export const GLINER_MODEL_DEFINITIONS: GlinerModelDefinition[] = [
   {
     id: "gliner_small-v2.5",
@@ -1039,19 +1042,60 @@ export function buildGlinerManifestEntries(checksums: Record<string, string>): M
 Run: `pnpm --filter @xberg-io/node-pipeline test src/gliner-catalog.test.ts`
 Expected: PASS
 
-- [ ] **Step 6: Wire the catalog into the Node service's `ModelCache`**
+- [ ] **Step 6: Add `loadGlinerManifestEntries()` — self-relative, no cross-package path**
+
+**Files:**
+- Modify: `packages/node-pipeline/src/gliner-catalog.ts` (append)
+
+The checksum file must be located relative to `gliner-catalog.ts`'s own
+`import.meta.url`, never via a path that assumes another package's directory
+layout — that path changes shape between `src/` (dev) and `dist/` (built) and
+was wrong in an earlier draft of this plan (`services/mcp-server` cannot know
+where `packages/node-pipeline` lives on disk). Resolving relative to *this
+file* works unchanged in both cases, because the `.sha256` file travels with
+whichever copy of `gliner-catalog.js` is actually running:
+
+```ts
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+const CHECKSUM_FILE_PATH = fileURLToPath(new URL("./gliner-models.sha256", import.meta.url));
+
+export function loadGlinerManifestEntries(): ModelManifestEntry[] {
+  const text = readFileSync(CHECKSUM_FILE_PATH, "utf8");
+  return buildGlinerManifestEntries(parseGlinerChecksums(text));
+}
+```
+
+Re-export it from the package index:
+
+```ts
+// packages/node-pipeline/src/index.ts (append)
+export { loadGlinerManifestEntries } from "./gliner-catalog.js";
+```
+
+Ensure the checksum file ships alongside the built output — add a copy step
+to `packages/node-pipeline/package.json`'s `build` script so `dist/` isn't
+missing it after `tsup` (which only compiles `.ts`, it does not copy other
+files):
+
+```json
+"build": "tsup src/index.ts --format esm --clean && cp src/gliner-models.sha256 dist/gliner-models.sha256"
+```
+
+- [ ] **Step 7: Wire the catalog into the Node service's `ModelCache`**
 
 **Files:**
 - Modify: `services/mcp-server/src/models.ts:19-42` (constructor)
 
 Merge the GLiNER catalog entries into whatever base manifest loads, so GLiNER
 models are servable even before a release-time `manifest.json` includes them
-natively:
+natively. This is a one-directional dependency (`mcp-server` → `node-pipeline`
+only) — `node-pipeline` never imports anything from `mcp-server` (see Task 8's
+structural-interface note for why that direction stays closed):
 
 ```ts
-import { buildGlinerManifestEntries, GLINER_MODEL_DEFINITIONS, parseGlinerChecksums } from "@xberg-io/node-pipeline";
-import { readFileSync as readFileSyncNode } from "node:fs";
-import { fileURLToPath as fileURLToPathNode } from "node:url";
+import { loadGlinerManifestEntries } from "@xberg-io/node-pipeline";
 ```
 
 In the constructor, after `parsed = { models: [] }` fallback / validation but
@@ -1059,9 +1103,7 @@ before `this.manifest = parsed;`:
 
 ```ts
 try {
-  const checksumPath = fileURLToPathNode(new URL("../../node-pipeline/src/gliner-models.sha256", import.meta.url));
-  const checksums = parseGlinerChecksums(readFileSyncNode(checksumPath, "utf8"));
-  const glinerEntries = buildGlinerManifestEntries(checksums);
+  const glinerEntries = loadGlinerManifestEntries();
   const existingNames = new Set(parsed.models.map((m) => m.name));
   for (const entry of glinerEntries) {
     if (!existingNames.has(entry.name)) parsed.models.push(entry);
@@ -1074,17 +1116,17 @@ try {
 Add `"@xberg-io/node-pipeline": "workspace:*"` to
 `services/mcp-server/package.json` dependencies.
 
-- [ ] **Step 7: Run the mcp-server test suite**
+- [ ] **Step 8: Run the mcp-server test suite**
 
 Run: `pnpm --filter @xberg-io/mcp-server test`
 Expected: PASS (existing `ModelCache` tests in `tests/static.test.ts` and
 `tests/tools.test.ts` still pass with the merged manifest).
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
-git add packages/node-pipeline/src/gliner-catalog.ts packages/node-pipeline/src/gliner-catalog.test.ts packages/node-pipeline/src/gliner-models.sha256 services/mcp-server/src/models.ts services/mcp-server/package.json
-git commit -m "feat(node-pipeline): pin GLiNER model catalog to the same manifest crates/xberg-gliner uses"
+git add packages/node-pipeline/src/gliner-catalog.ts packages/node-pipeline/src/gliner-catalog.test.ts packages/node-pipeline/src/gliner-models.sha256 packages/node-pipeline/src/index.ts packages/node-pipeline/package.json services/mcp-server/src/models.ts services/mcp-server/package.json
+git commit -m "feat(node-pipeline): pin GLiNER model catalog to the same manifest crates/xberg's gline.rs uses"
 ```
 
 ---
@@ -1109,7 +1151,7 @@ needed, this is just the label string list handed to the model.
 
 This test is marked `skip` by default because it needs a real downloaded
 GLiNER model (network + several hundred MB) — it is the equivalent of
-`crates/xberg-gliner`'s own `#[ignore] smoke_test_real_inference`. Run it
+`crates/xberg/src/text/ner/gline.rs`'s own `#[ignore] smoke_test_real_inference`. Run it
 explicitly during implementation to prove the integration works, then leave it
 skipped in CI (mirroring the Rust smoke test's `--ignored` convention).
 
@@ -1360,86 +1402,122 @@ git commit -m "feat(node-pipeline): e5 embedding via onnxruntime-web under Node"
 - Modify: `packages/node-pipeline/src/index.ts` (re-export)
 
 **Interfaces:**
-- Consumes: `walkFolder`, `hashBytes` (Task 4); `detectPii` (Task 6); `embedText` (Task 7); `MetadataStore` methods (Tasks 1-2); `MirrorStore.appendMirror` (Task 3).
-- Produces: `ingestFile(deps: IngestDeps, file: WalkedFile, ctx: IngestFileContext): Promise<Document>`, `IngestDeps`, `IngestFileContext`.
+- Consumes: `walkFolder`, `hashBytes` (Task 4); `detectPii` (Task 6); `embedText` (Task 7).
+- Produces: `ingestFile(deps: IngestDeps, file: WalkedFile, ctx: IngestFileContext): Promise<Document>`, `IngestDeps`, `IngestFileContext`, `DocumentStore`, `MirrorSink` (structural interfaces — see note below).
 
 This is the per-file pipeline the MCP tool (Task 10) drives in a loop over
 `walkFolder`'s output: extract → chunk → embed → PII → persist both outputs.
-`IngestDeps` is an explicit dependency-injection object (model paths,
-store, mirror) so the function is unit-testable without real ONNX models —
-tests inject fake `embed`/`detectPii` functions and assert the
-orchestration/persistence logic, matching how `crates/xberg-gliner`'s own
+`IngestDeps` is an explicit dependency-injection object so the function is
+unit-testable without real ONNX models or a real database — tests inject fake
+`embed`/`detectPii` functions and an in-memory fake store/mirror, and assert
+the orchestration/persistence logic, matching how `crates/xberg`'s `gline.rs`
 tests separate model-dependent smoke tests from pure-logic tests.
+
+**Why structural interfaces, not the real classes:** `packages/node-pipeline`
+must never import from `services/mcp-server` — Task 5/10 already have
+`mcp-server` importing *from* `node-pipeline` (the GLiNER catalog, `walkFolder`,
+`ingestFile`), and a workspace package cannot depend on a package that depends
+on it (neither can build first). So `IngestDeps.store`/`mirror` are typed as
+narrow interfaces covering only the methods `ingestFile` actually calls.
+`services/mcp-server/src/mcp/tools.ts` (Task 10) passes its real
+`ctx.store`/`ctx.mirror` at the call site — `MetadataStore`/`MirrorStore`
+already implement these methods with matching signatures, so no adapter code
+is needed, TypeScript's structural typing accepts them directly.
 
 - [ ] **Step 1: Write the failing test**
 
 ```ts
 // packages/node-pipeline/src/ingest.test.ts
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { MetadataStore } from "@xberg-io/mcp-server/store";
-import { MirrorStore } from "@xberg-io/mcp-server/mirror";
+import { describe, expect, it, vi } from "vitest";
 import { hashBytes } from "./walk.js";
 import { ingestFile } from "./ingest.js";
+import type { Document, DocumentPiiEntity } from "@xberg-io/core";
+import type { DocumentStore, MirrorSink } from "./ingest.js";
 
-let dirs: string[] = [];
-afterEach(() => {
-  for (const d of dirs) rmSync(d, { recursive: true, force: true });
-  dirs = [];
-});
+function makeFakeStore(): DocumentStore & { documents: Document[]; pii: Record<string, DocumentPiiEntity[]> } {
+  const documents: Document[] = [];
+  const pii: Record<string, DocumentPiiEntity[]> = {};
+  return {
+    documents,
+    pii,
+    findDocumentByHash: (folderId, contentHash) =>
+      documents.find((d) => d.folder_id === folderId && d.content_hash === contentHash),
+    createDocument: (input) => {
+      const doc: Document = {
+        id: `doc-${documents.length + 1}`,
+        folder_id: input.folder_id,
+        matter_id: input.matter_id,
+        path: input.path,
+        content_hash: input.content_hash,
+        status: "processing",
+        pages: 0,
+        chunk_count: 0,
+        pii_count: 0,
+        ingested_via: input.ingested_via,
+        created_at: new Date(0).toISOString(),
+      };
+      documents.push(doc);
+      return doc;
+    },
+    updateDocumentStatus: (id, status, fields = {}) => {
+      const doc = documents.find((d) => d.id === id);
+      if (!doc) throw new Error(`unknown document ${id}`);
+      doc.status = status;
+      if (fields.pages !== undefined) doc.pages = fields.pages;
+      if (fields.chunk_count !== undefined) doc.chunk_count = fields.chunk_count;
+      if (fields.pii_count !== undefined) doc.pii_count = fields.pii_count;
+      if (fields.error_message !== undefined) doc.error_message = fields.error_message;
+    },
+    insertPiiEntities: (documentId, entities) => {
+      const inserted = entities.map((e, i) => ({ id: `pii-${documentId}-${i}`, document_id: documentId, reviewed: false, ...e }));
+      pii[documentId] = inserted;
+      return inserted;
+    },
+    getDocumentsByFolder: (folderId) => documents.filter((d) => d.folder_id === folderId),
+  };
+}
+
+function makeFakeMirror(): MirrorSink & { appended: { matterId: string; pii: unknown[]; chunks: unknown[] }[] } {
+  const appended: { matterId: string; pii: unknown[]; chunks: unknown[] }[] = [];
+  return {
+    appended,
+    appendMirror: (matterId, additions) => {
+      appended.push({ matterId, pii: additions.pii, chunks: additions.chunks });
+    },
+  };
+}
 
 describe("ingestFile", () => {
   it("extracts, chunks, embeds, detects PII, and persists both outputs", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "xberg-ingest-"));
-    dirs.push(dir);
-    const filePath = join(dir, "a.txt");
-    writeFileSync(filePath, "Jane Doe works at Acme Corp.");
-
-    const store = new MetadataStore(join(dir, "meta.sqlite"));
-    const mirror = new MirrorStore(join(dir, "mirrors"));
-    const matter = store.createMatter("Acme v Doe");
-    const folder = store.createFolder(matter.id, "Discovery", dir);
-
+    const store = makeFakeStore();
+    const mirror = makeFakeMirror();
     const extract = vi.fn().mockResolvedValue({ content: "Jane Doe works at Acme Corp.", pageCount: 1 });
     const chunk = vi.fn().mockReturnValue(["Jane Doe works at Acme Corp."]);
     const embed = vi.fn().mockResolvedValue(new Array(768).fill(0.1));
     const detectPii = vi.fn().mockResolvedValue([{ kind: "person", start: 0, end: 8, text: "Jane Doe" }]);
 
-    const bytes = Buffer.from("Jane Doe works at Acme Corp.");
-    const file = { path: filePath, contentHash: hashBytes(bytes) };
-
+    const file = { path: "/tmp/a.txt", contentHash: hashBytes(Buffer.from("Jane Doe works at Acme Corp.")) };
     const doc = await ingestFile(
       { extract, chunk, embed, detectPii, store, mirror },
       file,
-      { folderId: folder.id, matterId: matter.id, ingestedVia: "mcp" },
+      { folderId: "folder-1", matterId: "matter-1", ingestedVia: "mcp" },
     );
 
     expect(doc.status).toBe("done");
     expect(doc.pages).toBe(1);
     expect(doc.chunk_count).toBe(1);
     expect(doc.pii_count).toBe(1);
-
-    expect(store.getPiiByDocument(doc.id)).toHaveLength(1);
-    await mirror.loadMirror(matter.id);
-    expect(mirror.listPii(matter.id, doc.id)).toHaveLength(1);
-    expect(mirror.retrieve(matter.id, "", 10)).toHaveLength(1);
+    expect(store.pii[doc.id]).toHaveLength(1);
+    expect(mirror.appended).toHaveLength(1);
+    expect(mirror.appended[0]?.matterId).toBe("matter-1");
+    expect(mirror.appended[0]?.chunks).toHaveLength(1);
+    expect(embed).toHaveBeenCalledWith("Jane Doe works at Acme Corp.");
   });
 
   it("skips a file whose content hash was already ingested for the folder", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "xberg-ingest-skip-"));
-    dirs.push(dir);
-    const filePath = join(dir, "a.txt");
-    writeFileSync(filePath, "duplicate content");
-
-    const store = new MetadataStore(join(dir, "meta.sqlite"));
-    const mirror = new MirrorStore(join(dir, "mirrors"));
-    const matter = store.createMatter("Acme v Doe");
-    const folder = store.createFolder(matter.id, "Discovery", dir);
-
-    const bytes = Buffer.from("duplicate content");
-    const file = { path: filePath, contentHash: hashBytes(bytes) };
+    const store = makeFakeStore();
+    const mirror = makeFakeMirror();
+    const file = { path: "/tmp/a.txt", contentHash: hashBytes(Buffer.from("duplicate content")) };
     const deps = {
       extract: vi.fn().mockResolvedValue({ content: "duplicate content", pageCount: 1 }),
       chunk: vi.fn().mockReturnValue(["duplicate content"]),
@@ -1449,26 +1527,17 @@ describe("ingestFile", () => {
       mirror,
     };
 
-    const first = await ingestFile(deps, file, { folderId: folder.id, matterId: matter.id, ingestedVia: "mcp" });
-    const second = await ingestFile(deps, file, { folderId: folder.id, matterId: matter.id, ingestedVia: "mcp" });
+    const first = await ingestFile(deps, file, { folderId: "folder-1", matterId: "matter-1", ingestedVia: "mcp" });
+    const second = await ingestFile(deps, file, { folderId: "folder-1", matterId: "matter-1", ingestedVia: "mcp" });
 
     expect(second.id).toBe(first.id);
     expect(deps.extract).toHaveBeenCalledTimes(1);
   });
 
   it("records status='error' with a message when extraction throws, without persisting PII", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "xberg-ingest-err-"));
-    dirs.push(dir);
-    const filePath = join(dir, "bad.pdf");
-    writeFileSync(filePath, "not a real pdf");
-
-    const store = new MetadataStore(join(dir, "meta.sqlite"));
-    const mirror = new MirrorStore(join(dir, "mirrors"));
-    const matter = store.createMatter("Acme v Doe");
-    const folder = store.createFolder(matter.id, "Discovery", dir);
-
-    const bytes = Buffer.from("not a real pdf");
-    const file = { path: filePath, contentHash: hashBytes(bytes) };
+    const store = makeFakeStore();
+    const mirror = makeFakeMirror();
+    const file = { path: "/tmp/bad.pdf", contentHash: hashBytes(Buffer.from("not a real pdf")) };
     const deps = {
       extract: vi.fn().mockRejectedValue(new Error("corrupt PDF")),
       chunk: vi.fn(),
@@ -1478,11 +1547,12 @@ describe("ingestFile", () => {
       mirror,
     };
 
-    const doc = await ingestFile(deps, file, { folderId: folder.id, matterId: matter.id, ingestedVia: "mcp" });
+    const doc = await ingestFile(deps, file, { folderId: "folder-1", matterId: "matter-1", ingestedVia: "mcp" });
 
     expect(doc.status).toBe("error");
     expect(doc.error_message).toBe("corrupt PDF");
-    expect(store.getPiiByDocument(doc.id)).toHaveLength(0);
+    expect(store.pii[doc.id]).toBeUndefined();
+    expect(mirror.appended).toHaveLength(0);
   });
 });
 ```
@@ -1496,9 +1566,7 @@ Expected: FAIL — `Cannot find module './ingest.js'`.
 
 ```ts
 // packages/node-pipeline/src/ingest.ts
-import type { Document, IngestSource } from "@xberg-io/core";
-import type { MetadataStore } from "@xberg-io/mcp-server/store";
-import type { MirrorStore } from "@xberg-io/mcp-server/mirror";
+import type { Document, DocumentPiiEntity, IngestSource } from "@xberg-io/core";
 import type { WalkedFile } from "./walk.js";
 
 export interface ExtractedDoc {
@@ -1506,13 +1574,47 @@ export interface ExtractedDoc {
   pageCount: number;
 }
 
+// Narrow, structural subset of MetadataStore — see the task note on why this
+// is not imported from @xberg-io/mcp-server.
+export interface DocumentStore {
+  findDocumentByHash(folderId: string, contentHash: string): Document | undefined;
+  createDocument(input: {
+    folder_id: string;
+    matter_id: string;
+    path: string;
+    content_hash: string;
+    ingested_via: IngestSource;
+  }): Document;
+  updateDocumentStatus(
+    id: string,
+    status: Document["status"],
+    fields?: { pages?: number; chunk_count?: number; pii_count?: number; error_message?: string },
+  ): void;
+  insertPiiEntities(
+    documentId: string,
+    entities: { kind: string; start: number; end: number; text: string }[],
+  ): DocumentPiiEntity[];
+  getDocumentsByFolder(folderId: string): Document[];
+}
+
+// Narrow, structural subset of MirrorStore.
+export interface MirrorSink {
+  appendMirror(
+    matterId: string,
+    additions: {
+      pii: { doc_id: string; kind: string; start: number; end: number; token: string }[];
+      chunks: { doc_id: string; chunk_index: number; text: string; score: number; citation: string }[];
+    },
+  ): void;
+}
+
 export interface IngestDeps {
   extract: (path: string) => Promise<ExtractedDoc>;
   chunk: (content: string) => string[];
   embed: (text: string) => Promise<number[]>;
   detectPii: (text: string) => Promise<{ kind: string; start: number; end: number; text: string }[]>;
-  store: MetadataStore;
-  mirror: MirrorStore;
+  store: DocumentStore;
+  mirror: MirrorSink;
 }
 
 export interface IngestFileContext {
@@ -1569,22 +1671,6 @@ export async function ingestFile(deps: IngestDeps, file: WalkedFile, ctx: Ingest
 }
 ```
 
-Note: `services/mcp-server/package.json` needs subpath exports for `./store`
-and `./mirror` for this cross-package import to resolve — add to its
-`exports` field:
-
-```json
-"./store": { "types": "./dist/store.d.ts", "import": "./dist/store.js" },
-"./mirror": { "types": "./dist/mirror.d.ts", "import": "./dist/mirror.js" }
-```
-
-(`services/mcp-server`'s `build` script already runs `tsup src/index.ts` —
-extend it to also emit `store.js`/`mirror.js`: change to
-`tsup src/index.ts src/store.ts src/mirror.ts --format esm`.)
-
-Add `"@xberg-io/mcp-server": "workspace:*"` to
-`packages/node-pipeline/package.json` dependencies.
-
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pnpm --filter @xberg-io/node-pipeline test src/ingest.test.ts`
@@ -1595,7 +1681,7 @@ Expected: PASS
 ```ts
 // packages/node-pipeline/src/index.ts (append)
 export { ingestFile } from "./ingest.js";
-export type { IngestDeps, IngestFileContext, ExtractedDoc } from "./ingest.js";
+export type { IngestDeps, IngestFileContext, ExtractedDoc, DocumentStore, MirrorSink } from "./ingest.js";
 export { detectPii, RUST_ALIGNED_PII_TYPES } from "./ner.js";
 export type { DetectedEntity } from "./ner.js";
 export { embedText } from "./embed.js";
@@ -1604,7 +1690,7 @@ export { embedText } from "./embed.js";
 - [ ] **Step 6: Commit**
 
 ```bash
-git add packages/node-pipeline services/mcp-server/package.json
+git add packages/node-pipeline
 git commit -m "feat(node-pipeline): orchestrate extract/chunk/embed/PII into documents + mirror"
 ```
 
@@ -2507,3 +2593,14 @@ matches the `pipeline` field wired into `AppContext` in Task 10 Step 3 —
 `{extract, chunk, embed, detectPii}` without `store`/`mirror` (added at the
 call site). `MirrorPiiSpanInput`/`MirrorChunkInput` (Task 3) match the
 objects `ingestFile` (Task 8) constructs for `appendMirror`.
+
+**Pre-flight correction (applied before execution):** the original draft had
+Task 8's `ingest.ts` importing `MetadataStore`/`MirrorStore` directly from
+`@xberg-io/mcp-server`, which — combined with Task 5/10 importing the other
+direction — created a circular workspace package dependency, and Task 5's
+manifest-merge used a cross-package relative path that resolved to the wrong
+directory and would have broken again under a `dist/` build. Fixed by giving
+`node-pipeline` structural `DocumentStore`/`MirrorSink` interfaces (Task 8)
+and a self-relative `loadGlinerManifestEntries()` (Task 5 Step 6) — the plan
+text above already reflects the fix; this note records that it was a
+pre-flight change, not part of the original design doc.

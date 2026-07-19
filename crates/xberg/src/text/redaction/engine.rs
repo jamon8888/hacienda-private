@@ -666,7 +666,11 @@ mod tests {
             .await
             .expect("capture must succeed");
 
-        assert!(!doc.content.contains(email), "content still holds the email: {}", doc.content);
+        assert!(
+            !doc.content.contains(email),
+            "content still holds the email: {}",
+            doc.content
+        );
         assert_eq!(
             map.values().filter(|v| v.as_str() == email).count(),
             1,
@@ -677,7 +681,10 @@ mod tests {
         for (token, original) in &map {
             rehydrated = rehydrated.replace(token, original);
         }
-        assert!(rehydrated.contains(email) && rehydrated.contains(phone), "rehydrated: {rehydrated}");
+        assert!(
+            rehydrated.contains(email) && rehydrated.contains(phone),
+            "rehydrated: {rehydrated}"
+        );
     }
 
     /// Regression for xberg-io/xberg#1223: redaction must mask PII on every

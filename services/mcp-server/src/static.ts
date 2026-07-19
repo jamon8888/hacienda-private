@@ -29,20 +29,6 @@ export function resolveWasmPackageDir(): string | null {
   }
 }
 
-export const PLACEHOLDER_HTML = `<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>Xberg Document Intelligence</title></head>
-<body>
-  <h1>Xberg Document Intelligence</h1>
-  <p>The browser UI (apps/web) is built in a later plan. The Node service is running.</p>
-  <ul>
-    <li><a href="/models/e5.onnx">/models/e5.onnx</a></li>
-    <li><a href="/models/gliner-pii.onnx">/models/gliner-pii.onnx</a></li>
-    <li><a href="/wasm/">/wasm/</a> (xberg wasm package, when installed)</li>
-  </ul>
-</body>
-</html>`;
-
 // Matches the opening <head> tag, tolerant of attributes and case (e.g. <head lang="en">).
 const HEAD_TAG = /<head(?=[\s>])[^>]*>/i;
 
@@ -57,3 +43,17 @@ export function injectToken(html: string, token: string): string {
   }
   return tag + html;
 }
+
+export const PLACEHOLDER_HTML = `<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Xberg Document Intelligence</title></head>
+<body>
+  <h1>Xberg Document Intelligence</h1>
+  <p>The browser UI (apps/web) is built in a later plan. The Node service is running.</p>
+  <ul>
+    <li><a href="/models/e5.onnx">/models/e5.onnx</a></li>
+    <li><a href="/models/gliner-pii.onnx">/models/gliner-pii.onnx</a></li>
+    <li><a href="/wasm/">/wasm/</a> (xberg wasm package, when installed)</li>
+  </ul>
+</body>
+</html>`;

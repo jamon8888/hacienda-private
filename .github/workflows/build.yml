@@ -35,8 +35,14 @@ jobs:
       - name: Build web UI (static export)
         run: pnpm --filter web build
 
+      - name: Build node-pipeline (provides dist consumed by mcp-server)
+        run: pnpm --filter node-pipeline build
+
       - name: Build MCP server (tsup ESM)
         run: pnpm --filter mcp-server build
+
+      - name: Build node-pipeline (dependency of MCP server)
+        run: pnpm --filter @xberg-io/node-pipeline build
 
       - name: Bundle web UI into MCP server public dir
         run: cp -r apps/web/out services/mcp-server/public
@@ -82,12 +88,16 @@ jobs:
           path: services/mcp-server
 
       - name: Install dependencies
+        shell: bash
         run: |
           if [ -f pnpm-lock.yaml ]; then
             pnpm install --frozen-lockfile
           else
             pnpm install
           fi
+
+      - name: Build node-pipeline (dependency of MCP server)
+        run: pnpm --filter @xberg-io/node-pipeline build
 
       - name: Smoke check (serve --version)
         shell: bash
@@ -97,15 +107,15 @@ jobs:
       # @yao-pkg/pkg embeds Node 22 into a standalone binary from dist/index.js.
       - name: Wrap windows
         if: matrix.os == 'windows-latest'
-        run: pnpm dlx @yao-pkg/pkg@5.12.0 services/mcp-server/dist/index.js --targets node22-win-x64 --output xberg-mcp-windows.exe
+        run: pnpm dlx @yao-pkg/pkg@6.21.0 services/mcp-server/dist/index.js --targets node22-win-x64 --output xberg-mcp-windows.exe
 
       - name: Wrap linux
         if: matrix.os == 'ubuntu-latest'
-        run: pnpm dlx @yao-pkg/pkg@5.12.0 services/mcp-server/dist/index.js --targets node22-linux-x64 --output xberg-mcp-linux
+        run: pnpm dlx @yao-pkg/pkg@6.21.0 services/mcp-server/dist/index.js --targets node22-linux-x64 --output xberg-mcp-linux
 
       - name: Wrap darwin
         if: matrix.os == 'macos-latest'
-        run: pnpm dlx @yao-pkg/pkg@5.12.0 services/mcp-server/dist/index.js --targets node22-macos-x64 --output xberg-mcp-darwin
+        run: pnpm dlx @yao-pkg/pkg@6.21.0 services/mcp-server/dist/index.js --targets node22-macos-x64 --output xberg-mcp-darwin
 
       - name: Upload windows binary
         if: matrix.os == 'windows-latest'

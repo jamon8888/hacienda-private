@@ -34,13 +34,13 @@ afterEach(async () => {
 describe("HTTP auth surface", () => {
   it("401 without a Bearer token", async () => {
     await start(["read", "ingest", "redact", "admin"]);
-    const res = await fetch(`${base}/matters`);
+    const res = await fetch(`${base}/api/matters`);
     expect(res.status).toBe(401);
   });
 
   it("403 on a cross-site request even with a valid token", async () => {
     await start(["read", "ingest", "redact", "admin"]);
-    const res = await fetch(`${base}/matters`, {
+    const res = await fetch(`${base}/api/matters`, {
       headers: { authorization: `Bearer ${TOKEN}`, "sec-fetch-site": "cross-site" },
     });
     expect(res.status).toBe(403);
@@ -48,14 +48,14 @@ describe("HTTP auth surface", () => {
 
   it("200 with a valid token (non-browser client, no sec-fetch-site)", async () => {
     await start(["read", "ingest", "redact", "admin"]);
-    const res = await fetch(`${base}/matters`, { headers: { authorization: `Bearer ${TOKEN}` } });
+    const res = await fetch(`${base}/api/matters`, { headers: { authorization: `Bearer ${TOKEN}` } });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ matters: [] });
   });
 
   it("POST /matters records an audit entry under 'owner'", async () => {
     await start(["read", "ingest", "redact", "admin"]);
-    const res = await fetch(`${base}/matters`, {
+    const res = await fetch(`${base}/api/matters`, {
       method: "POST",
       headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
       body: JSON.stringify({ name: "Dossier A" }),
@@ -70,7 +70,7 @@ describe("HTTP auth surface", () => {
 
   it("403 when the launch scopes lack the required scope", async () => {
     await start(["read"]);
-    const res = await fetch(`${base}/matters`, {
+    const res = await fetch(`${base}/api/matters`, {
       method: "POST",
       headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
       body: JSON.stringify({ name: "x" }),
@@ -88,7 +88,7 @@ describe("HTTP auth surface", () => {
 
   it("400 on POST /consent with an unsupported scope", async () => {
     await start(["read", "ingest", "redact", "admin"]);
-    const res = await fetch(`${base}/consent`, {
+    const res = await fetch(`${base}/api/consent`, {
       method: "POST",
       headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
       body: JSON.stringify({ subject: "owner", matter_id: "m-1", scope: "bogus" }),

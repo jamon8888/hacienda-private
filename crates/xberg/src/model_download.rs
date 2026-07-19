@@ -566,7 +566,12 @@ mod hf_client_builder_tests {
         use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
         let v6a = SocketAddr::V6(SocketAddrV6::new(Ipv6Addr::LOCALHOST, 0, 0, 0));
         let v4a = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(1, 1, 1, 1), 0));
-        let v6b = SocketAddr::V6(SocketAddrV6::new(Ipv6Addr::new(0x2606, 0x4700, 0, 0, 0, 0, 0, 1), 0, 0, 0));
+        let v6b = SocketAddr::V6(SocketAddrV6::new(
+            Ipv6Addr::new(0x2606, 0x4700, 0, 0, 0, 0, 0, 1),
+            0,
+            0,
+            0,
+        ));
         let v4b = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(2, 2, 2, 2), 0));
 
         // Interleaved AAAA-first input: default getaddrinfo order can hand IPv6 out first.
@@ -578,7 +583,10 @@ mod hf_client_builder_tests {
             vec![v4a, v4b, v6a, v6b],
             "IPv4 addresses must precede IPv6, preserving intra-family order"
         );
-        assert!(!addrs[0].is_ipv6(), "the first address offered to the connector must be IPv4");
+        assert!(
+            !addrs[0].is_ipv6(),
+            "the first address offered to the connector must be IPv4"
+        );
     }
 }
 

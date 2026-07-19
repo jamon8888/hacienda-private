@@ -92,9 +92,12 @@ New package `packages/node-pipeline` (TypeScript), consumed by
   fp32). The vendored `gliner-models.sha256` manifest becomes the single source of
   truth for both Rust and Node; Node's `ModelCache` downloads/verifies against it
   instead of its own separate manifest.
-- **Runtime:** `onnxruntime-node` (Microsoft's prebuilt Node bindings — supported
-  on Windows, unlike the Rust `ort` build). CPU execution provider only; no
-  capability-detection needed since it's one fixed server machine.
+- **Runtime:** `onnxruntime-web`'s WASM execution provider, run directly under
+  Node (no browser DOM needed for the `wasm` backend — only `webgpu`/`webgl`
+  require browser globals). Reuses the exact runtime `packages/wasm-pipeline`
+  already proves works, just with local filesystem model access instead of
+  `fetch`. CPU-only; no capability-detection needed since it's one fixed server
+  machine, not arbitrary browser hardware.
 - **Taxonomy:** adopts the Rust `EntityCategory` set (person, organization,
   location, date, time, money, percent, email, phone, url, custom) as canonical.
   The browser's extra `ssn`/`financial` labels map to `Custom("ssn")` /
