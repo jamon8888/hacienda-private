@@ -1,4 +1,6 @@
 // packages/node-pipeline/src/ner.ts
+import { createRequire } from "node:module";
+import { dirname } from "node:path";
 import type { Gliner, IEntityResult, InitConfig, IONNXWebSettings, ITransformersSettings } from "gliner";
 
 export const RUST_ALIGNED_PII_TYPES = [
@@ -22,6 +24,27 @@ async function disableRemoteModels(): Promise<void> {
   }
 }
 
+/**
+ * Resolves the local filesystem directory holding onnxruntime-web's WASM
+ * binaries, via Node's own module resolution against the package's
+ * published export map — never a hardcoded `node_modules` layout, which
+ * pnpm hoisting/symlinking can rearrange at any time.
+ *
+ * `onnxruntime-web/package.json` isn't itself an exported subpath (its
+ * exports map has no "./package.json" entry), so we resolve one of the
+ * package's actually-exported WASM binaries instead — the file gliner's
+ * ONNXWebWrapper looks for at inference time — and take its directory.
+ *
+ * Returned with a trailing "/" because ONNXWebWrapper builds binary URLs
+ * via plain string concatenation: `wasmPaths + "ort-wasm-simd-threaded.wasm"`.
+ */
+export function resolveLocalOnnxWasmPaths(): string {
+  const require = createRequire(import.meta.url);
+  const wasmBinaryPath = require.resolve("onnxruntime-web/ort-wasm-simd-threaded.wasm");
+  const wasmDir = dirname(wasmBinaryPath).replaceAll("\\", "/");
+  return `${wasmDir}/`;
+}
+
 const modelCache = new Map<string, Promise<Gliner>>();
 
 async function getModel(modelPath: string, tokenizerPath: string): Promise<Gliner> {
@@ -32,7 +55,11 @@ async function getModel(modelPath: string, tokenizerPath: string): Promise<Gline
       const { Gliner: GlinerClass } = await import("gliner");
       await disableRemoteModels();
       const transformersSettings: ITransformersSettings = { allowLocalModels: true, useBrowserCache: false };
-      const onnxSettings: IONNXWebSettings = { modelPath, executionProvider: "wasm" };
+      const onnxSettings: IONNXWebSettings = {
+        modelPath,
+        executionProvider: "wasm",
+        wasmPaths: resolveLocalOnnxWasmPaths(),
+      };
       const config: InitConfig = { tokenizerPath, onnxSettings, transformersSettings };
       const model = new GlinerClass(config);
       await model.initialize();

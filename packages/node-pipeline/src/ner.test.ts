@@ -1,5 +1,6 @@
+import { existsSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { detectPii, RUST_ALIGNED_PII_TYPES } from "./ner.js";
+import { detectPii, resolveLocalOnnxWasmPaths, RUST_ALIGNED_PII_TYPES } from "./ner.js";
 
 describe("RUST_ALIGNED_PII_TYPES", () => {
   it("matches the Rust EntityCategory taxonomy plus the two custom labels", () => {
@@ -7,6 +8,21 @@ describe("RUST_ALIGNED_PII_TYPES", () => {
       "person", "organization", "location", "date", "time", "money", "percent", "email", "phone", "url",
       "ssn", "financial",
     ]);
+  });
+});
+
+describe("resolveLocalOnnxWasmPaths", () => {
+  it("resolves to a real local directory, never the onnxruntime-web CDN default", () => {
+    const wasmPaths = resolveLocalOnnxWasmPaths();
+
+    expect(wasmPaths).not.toMatch(/^https?:/);
+    expect(wasmPaths).not.toContain("cdn.jsdelivr.net");
+    expect(wasmPaths.endsWith("/")).toBe(true);
+
+    // Strip the trailing slash convention (wasmPaths is concatenated with a
+    // filename by gliner's ONNXWebWrapper) to check the directory on disk.
+    const dir = wasmPaths.slice(0, -1);
+    expect(existsSync(dir)).toBe(true);
   });
 });
 
