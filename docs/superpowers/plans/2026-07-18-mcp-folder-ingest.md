@@ -28,7 +28,7 @@ updated to match (see Task 0).
 ## Global Constraints
 
 - Follow the repo's existing TDD/TypeScript conventions: `strict` + `noUncheckedIndexedAccess`, ESM, `vitest` for tests, no default exports.
-- No new runtime dependency may require a native/platform-specific binary on Windows (this is the whole reason `onnxruntime-node`/native `ort` are out — see Deviation above).
+- No new runtime dependency may require a native/platform-specific binary on Windows (this is the whole reason `onnxruntime-node`/native `ort` are out — see Deviation above). Clarified during Task 4 review: this means the *executed code path* must never invoke a Windows-broken native binary — it does not forbid a dependency (like `gliner`, which lists `onnxruntime-node` as a peer) from having an unused native package present in `node_modules`, as long as the code always configures it for the WASM backend and never touches the native one. `packages/wasm-pipeline` already carries this exact dependency set and installs/runs cleanly on Windows; `packages/node-pipeline` (Task 4+) intentionally mirrors it rather than re-litigating the same constraint per task.
 - Every new SQLite column/table addition must be idempotent across repeated `MetadataStore` construction (existing dev databases must not break on upgrade).
 - Every new `/api/*` route must go through the auth guard added in Task 11 — no route may bypass it.
 - MCP tool scope checks must use the existing `authorize()`/`requireConsent()` helpers in `services/mcp-server/src/mcp/scopes.ts` / `consent.ts` — do not add a parallel authorization mechanism.
