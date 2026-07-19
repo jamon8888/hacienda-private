@@ -10,7 +10,7 @@ import { MirrorStore } from "../src/mirror.js";
 import { ModelCache } from "../src/models.js";
 import { KeyVault } from "../src/vault.js";
 import { AppError, isAppError } from "../src/error.js";
-import { listPii, ragQuery, redact, rehydrateChunk } from "../src/mcp/tools.js";
+import { listPii, ragQuery, redact, rehydrateChunk, listMatters, createMatter } from "../src/mcp/tools.js";
 
 const VAULT_KEY = Buffer.alloc(32, 7);
 
@@ -151,5 +151,31 @@ describe("mcp tools", () => {
     const rec = JSON.parse(res.content[0]?.text ?? "{}") as { doc_id: string; entity_ids: string[] };
     expect(rec.doc_id).toBe("d1");
     expect(rec.entity_ids).toEqual(["e1"]);
+  });
+});
+
+describe("list_matters / create_matter", () => {
+  it("lists existing matters", async () => {
+    const { ctx, matter } = await harness(["read"], false);
+    const result = listMatters(ctx);
+    const parsed = JSON.parse(result.content[0]!.text) as { matters: { id: string }[] };
+    expect(parsed.matters.some((m) => m.id === matter.id)).toBe(true);
+  });
+
+  it("rejects list_matters without read scope", async () => {
+    const { ctx } = await harness([], false);
+    expect(() => listMatters(ctx)).toThrow(/missing required scope/);
+  });
+
+  it("creates a new matter", async () => {
+    const { ctx } = await harness(["ingest"], false);
+    const result = createMatter(ctx, { name: "Roe v Wade" });
+    const parsed = JSON.parse(result.content[0]!.text) as { name: string };
+    expect(parsed.name).toBe("Roe v Wade");
+  });
+
+  it("rejects create_matter without ingest scope", async () => {
+    const { ctx } = await harness(["read"], false);
+    expect(() => createMatter(ctx, { name: "x" })).toThrow(/missing required scope/);
   });
 });

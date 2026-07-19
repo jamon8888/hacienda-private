@@ -116,6 +116,30 @@ export function redact(ctx: AppContext, args: RedactArgs): ToolResult {
   });
 }
 
+export function listMatters(ctx: AppContext): ToolResult {
+  return wrap(() => {
+    if (!ctx.tokenScopes.includes("read") && !ctx.tokenScopes.includes("admin")) {
+      throw new AppError("scope", "missing required scope: read");
+    }
+    return jsonResult({ matters: ctx.store.getMatters() });
+  });
+}
+
+export interface CreateMatterArgs {
+  name: string;
+}
+
+export function createMatter(ctx: AppContext, args: CreateMatterArgs): ToolResult {
+  return wrap(() => {
+    if (!ctx.tokenScopes.includes("ingest") && !ctx.tokenScopes.includes("admin")) {
+      throw new AppError("scope", "missing required scope: ingest");
+    }
+    const matter = ctx.store.createMatter(args.name);
+    ctx.store.recordAudit(actorFor(ctx), "ingest", "create_matter", matter.id);
+    return jsonResult(matter);
+  });
+}
+
 function actorFor(ctx: AppContext): string {
   return `mcp:${ctx.tokenScopes.join(",")}`;
 }
@@ -142,4 +166,8 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
     { matter_id: z.string(), doc_id: z.string(), entity_ids: z.array(z.string()).optional() },
     async (args) => redact(ctx, args),
   );
+
+  server.tool("list_matters", {}, async () => listMatters(ctx));
+
+  server.tool("create_matter", { name: z.string() }, async (args) => createMatter(ctx, args));
 }
