@@ -23,7 +23,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
       - name: Install dependencies
@@ -85,7 +85,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
       - name: Download MCP server bundle
@@ -108,15 +108,15 @@ jobs:
 
       - name: Wrap windows
         if: matrix.os == 'windows-latest'
-        run: pnpm dlx @yao-pkg/pkg@5.12.0 services/mcp-server/dist/index.js --targets node20-win-x64 --output xberg-mcp-windows.exe
+        run: pnpm dlx @yao-pkg/pkg@5.12.0 services/mcp-server/dist/index.js --targets node22-win-x64 --output xberg-mcp-windows.exe
 
       - name: Wrap linux
         if: matrix.os == 'ubuntu-latest'
-        run: pnpm dlx @yao-pkg/pkg@5.12.0 services/mcp-server/dist/index.js --targets node20-linux-x64 --output xberg-mcp-linux
+        run: pnpm dlx @yao-pkg/pkg@5.12.0 services/mcp-server/dist/index.js --targets node22-linux-x64 --output xberg-mcp-linux
 
       - name: Wrap darwin
         if: matrix.os == 'macos-latest'
-        run: pnpm dlx @yao-pkg/pkg@5.12.0 services/mcp-server/dist/index.js --targets node20-macos-x64 --output xberg-mcp-darwin
+        run: pnpm dlx @yao-pkg/pkg@5.12.0 services/mcp-server/dist/index.js --targets node22-macos-x64 --output xberg-mcp-darwin
 
       - name: Upload windows binary
         if: matrix.os == 'windows-latest'
