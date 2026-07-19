@@ -1,18 +1,13 @@
-import type { AuthScopes, Matter } from "@xberg-io/core";
+import type { AuthScopes } from "@xberg-io/core";
 import { AppError } from "../error.js";
 
-// Deny-by-default authorization: the caller must hold the required scope (or `admin`) AND the
-// matter they are acting on must match the one their request targets.
-export function authorize(
-  tokenScopes: AuthScopes[],
-  required: AuthScopes,
-  matter: Matter,
-  requestedMatterId: string,
-): void {
-  if (!tokenScopes.includes(required) && !tokenScopes.includes("admin")) {
+/**
+ * Deny-by-default scope check: the caller must hold `required` (or `admin`).
+ * Single-owner model has no per-identity matter scoping, so there is no matter
+ * argument — the old matter check was a tautology and is intentionally gone.
+ */
+export function authorize(scopes: AuthScopes[], required: AuthScopes): void {
+  if (!scopes.includes(required) && !scopes.includes("admin")) {
     throw new AppError("scope", `missing required scope: ${required}`);
-  }
-  if (matter.id !== requestedMatterId) {
-    throw new AppError("scope", "matter scope mismatch");
   }
 }

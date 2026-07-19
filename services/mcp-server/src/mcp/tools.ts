@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { AppContext } from "../index.js";
+import type { Principal } from "../principal.js";
 import { AppError } from "../error.js";
 import { authorize } from "./scopes.js";
 import { requireConsent } from "./consent.js";
@@ -60,86 +61,84 @@ export interface RedactArgs {
   entity_ids?: string[];
 }
 
-export function ragQuery(ctx: AppContext, args: RagQueryArgs): ToolResult {
+export function ragQuery(ctx: AppContext, principal: Principal, args: RagQueryArgs): ToolResult {
   return wrap(() => {
     const matter = getMatter(ctx, args.matter_id);
-    authorize(ctx.tokenScopes, "read", matter, args.matter_id);
-    requireConsent(ctx.store, matter, "pii_read");
+    authorize(principal.scopes, "read");
+    requireConsent(ctx.store, matter, "pii_read", principal.subject);
     const chunks = ctx.mirror.retrieve(args.matter_id, args.query, args.top_k ?? 8);
-    ctx.store.recordAudit(actorFor(ctx), "read", "rag_query", args.matter_id);
+    ctx.store.recordAudit(principal.subject, "read", "rag_query", args.matter_id);
     return jsonResult(chunks);
   });
 }
 
-export function listPii(ctx: AppContext, args: ListPiiArgs): ToolResult {
+export function listPii(ctx: AppContext, principal: Principal, args: ListPiiArgs): ToolResult {
   return wrap(() => {
     const matter = getMatter(ctx, args.matter_id);
-    authorize(ctx.tokenScopes, "read", matter, args.matter_id);
-    requireConsent(ctx.store, matter, "pii_read");
+    authorize(principal.scopes, "read");
+    requireConsent(ctx.store, matter, "pii_read", principal.subject);
     const result = jsonResult(ctx.mirror.listPii(args.matter_id, args.doc_id));
-    ctx.store.recordAudit(actorFor(ctx), "read", "list_pii", args.matter_id);
+    ctx.store.recordAudit(principal.subject, "read", "list_pii", args.matter_id);
     return result;
   });
 }
 
-export function rehydrateChunk(ctx: AppContext, args: RehydrateChunkArgs): ToolResult {
+export function rehydrateChunk(ctx: AppContext, principal: Principal, args: RehydrateChunkArgs): ToolResult {
   return wrap(() => {
     const matter = getMatter(ctx, args.matter_id);
-    authorize(ctx.tokenScopes, "redact", matter, args.matter_id);
-    requireConsent(ctx.store, matter, "redact_rehydrate");
+    authorize(principal.scopes, "redact");
+    requireConsent(ctx.store, matter, "redact_rehydrate", principal.subject);
     const cipher = ctx.mirror.loadCipher(args.matter_id, args.chunk_id);
     const text = ctx.vault.open(cipher).toString("utf8");
-    ctx.store.recordAudit(actorFor(ctx), "redact", "rehydrate_chunk", args.matter_id);
+    ctx.store.recordAudit(principal.subject, "redact", "rehydrate_chunk", args.matter_id);
     return textResult(text);
   });
 }
 
-export function ingestFolder(ctx: AppContext, args: IngestFolderArgs): ToolResult {
+export function ingestFolder(ctx: AppContext, principal: Principal, args: IngestFolderArgs): ToolResult {
   return wrap(() => {
     const matter = getMatter(ctx, args.matter_id);
-    authorize(ctx.tokenScopes, "ingest", matter, args.matter_id);
+    authorize(principal.scopes, "ingest");
     const folder = ctx.store.createFolder(args.matter_id, args.name, args.path);
     const record = ctx.store.recordIngest(folder.id, args.matter_id);
-    ctx.store.recordAudit(actorFor(ctx), "ingest", "ingest_folder", args.matter_id);
+    ctx.store.recordAudit(principal.subject, "ingest", "ingest_folder", args.matter_id);
     return jsonResult({ folder, ingest: record });
   });
 }
 
-export function redact(ctx: AppContext, args: RedactArgs): ToolResult {
+export function redact(ctx: AppContext, principal: Principal, args: RedactArgs): ToolResult {
   return wrap(() => {
     const matter = getMatter(ctx, args.matter_id);
-    authorize(ctx.tokenScopes, "redact", matter, args.matter_id);
-    requireConsent(ctx.store, matter, "redact_rehydrate");
+    authorize(principal.scopes, "redact");
+    requireConsent(ctx.store, matter, "redact_rehydrate", principal.subject);
     const record = ctx.store.recordRedaction(args.doc_id, args.matter_id, args.entity_ids ?? []);
-    ctx.store.recordAudit(actorFor(ctx), "redact", "redact", args.matter_id);
+    ctx.store.recordAudit(principal.subject, "redact", "redact", args.matter_id);
     return jsonResult(record);
   });
 }
 
-function actorFor(ctx: AppContext): string {
-  return `mcp:${ctx.tokenScopes.join(",")}`;
-}
-
-export function registerTools(server: McpServer, ctx: AppContext): void {
+export function registerTools(server: McpServer, ctx: AppContext, principal: Principal): void {
   server.tool(
     "rag_query",
     { matter_id: z.string(), query: z.string(), top_k: z.number().int().min(1).optional() },
-    async (args) => ragQuery(ctx, args),
+    async (args) => ragQuery(ctx, principal, args),
   );
 
-  server.tool("list_pii", { matter_id: z.string(), doc_id: z.string() }, async (args) => listPii(ctx, args));
+  server.tool("list_pii", { matter_id: z.string(), doc_id: z.string() }, async (args) =>
+    listPii(ctx, principal, args),
+  );
 
   server.tool("rehydrate_chunk", { matter_id: z.string(), chunk_id: z.string() }, async (args) =>
-    rehydrateChunk(ctx, args),
+    rehydrateChunk(ctx, principal, args),
   );
 
   server.tool("ingest_folder", { matter_id: z.string(), name: z.string(), path: z.string().optional() }, async (args) =>
-    ingestFolder(ctx, args),
+    ingestFolder(ctx, principal, args),
   );
 
   server.tool(
     "redact",
     { matter_id: z.string(), doc_id: z.string(), entity_ids: z.array(z.string()).optional() },
-    async (args) => redact(ctx, args),
+    async (args) => redact(ctx, principal, args),
   );
 }

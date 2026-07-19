@@ -42,3 +42,18 @@ export const PLACEHOLDER_HTML = `<!doctype html>
   </ul>
 </body>
 </html>`;
+
+// Matches the opening <head> tag, tolerant of attributes and case (e.g. <head lang="en">).
+const HEAD_TAG = /<head(?=[\s>])[^>]*>/i;
+
+/** Insert `window.__XBERG_TOKEN__` so the same-origin UI can read the session token. */
+export function injectToken(html: string, token: string): string {
+  const safe = JSON.stringify(token).replace(/</g, "\\u003c");
+  const tag = `<script>window.__XBERG_TOKEN__=${safe};</script>`;
+  const match = HEAD_TAG.exec(html);
+  if (match) {
+    const insertAt = match.index + match[0].length;
+    return html.slice(0, insertAt) + tag + html.slice(insertAt);
+  }
+  return tag + html;
+}

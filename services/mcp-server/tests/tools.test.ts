@@ -5,6 +5,8 @@ import { join } from "node:path";
 import type { AuthScopes, Matter } from "@xberg-io/core";
 import type { AppContext } from "../src/index.js";
 import type { AppConfig } from "../src/config.js";
+import type { Principal } from "../src/principal.js";
+import { ownerPrincipal } from "../src/auth.js";
 import { MetadataStore } from "../src/store.js";
 import { MirrorStore } from "../src/mirror.js";
 import { ModelCache } from "../src/models.js";
@@ -17,6 +19,7 @@ const VAULT_KEY = Buffer.alloc(32, 7);
 interface Harness {
   dir: string;
   ctx: AppContext;
+  principal: Principal;
   matter: Matter;
 }
 
@@ -51,7 +54,7 @@ function seedBundle(mirror: MirrorStore, vault: KeyVault, matterId: string): voi
   mirror.saveMirror(matterId, Buffer.from(JSON.stringify(bundle)));
 }
 
-async function makeHarness(scopes: AppContext["tokenScopes"], consent: boolean): Promise<Harness> {
+async function makeHarness(scopes: AuthScopes[], consent: boolean): Promise<Harness> {
   const dir = mkdtempSync(join(tmpdir(), "xberg-tools-"));
   writeFileSync(join(dir, "manifest.json"), JSON.stringify({ models: [] }));
   const config = makeConfig(dir);
@@ -65,19 +68,20 @@ async function makeHarness(scopes: AppContext["tokenScopes"], consent: boolean):
   const consentScope = (kind: string): AuthScopes => kind as AuthScopes;
   const matter = store.createMatter("Acme v Doe");
   if (consent) {
-    store.grantConsent({ subject: "*", matter_id: matter.id, scope: consentScope("pii_read") });
-    store.grantConsent({ subject: "*", matter_id: matter.id, scope: consentScope("redact_rehydrate") });
+    // Consent is now enforced per-subject; grant to the owner principal used by the tools.
+    store.grantConsent({ subject: "owner", matter_id: matter.id, scope: consentScope("pii_read") });
+    store.grantConsent({ subject: "owner", matter_id: matter.id, scope: consentScope("redact_rehydrate") });
   }
   seedBundle(mirror, vault, matter.id);
   await mirror.loadMirror(matter.id);
 
-  const ctx: AppContext = { config, store, models, mirror, vault, tokenScopes: scopes };
-  return { dir, ctx, matter };
+  const ctx: AppContext = { config, store, models, mirror, vault };
+  return { dir, ctx, principal: ownerPrincipal(scopes), matter };
 }
 
 let created: Harness[] = [];
 
-async function harness(scopes: AppContext["tokenScopes"], consent: boolean): Promise<Harness> {
+async function harness(scopes: AuthScopes[], consent: boolean): Promise<Harness> {
   const h = await makeHarness(scopes, consent);
   created.push(h);
   return h;
@@ -95,21 +99,21 @@ afterEach(() => {
 });
 
 describe("mcp tools", () => {
-  it("rag_query returns the cited chunk", async () => {
-    const { ctx, matter } = await harness(["read", "ingest", "redact", "admin"], true);
-    const res = ragQuery(ctx, { matter_id: matter.id, query: "who" });
+  it("rag_query returns the cited chunk and audits under the real subject", async () => {
+    const { ctx, principal, matter } = await harness(["read", "ingest", "redact", "admin"], true);
+    const res = ragQuery(ctx, principal, { matter_id: matter.id, query: "who" });
     const chunks = JSON.parse(res.content[0]?.text ?? "[]") as { citation: string; text: string }[];
     expect(chunks).toHaveLength(1);
     expect(chunks[0]?.citation).toBe("d1#0");
     expect(chunks[0]?.text).toBe("redacted");
     const audit = ctx.store.getAuditLog(matter.id);
     expect(audit.some((a) => a.action === "rag_query")).toBe(true);
-    expect(audit[0]?.actor).toBe("mcp:read,ingest,redact,admin");
+    expect(audit[0]?.actor).toBe("owner");
   });
 
   it("list_pii returns the span token, never plaintext", async () => {
-    const { ctx, matter } = await harness(["read", "admin"], true);
-    const res = listPii(ctx, { matter_id: matter.id, doc_id: "d1" });
+    const { ctx, principal, matter } = await harness(["read", "admin"], true);
+    const res = listPii(ctx, principal, { matter_id: matter.id, doc_id: "d1" });
     const spans = JSON.parse(res.content[0]?.text ?? "[]") as { kind: string; text: string }[];
     expect(spans).toHaveLength(1);
     expect(spans[0]?.kind).toBe("PER");
@@ -118,15 +122,15 @@ describe("mcp tools", () => {
   });
 
   it("rehydrate_chunk decrypts to plaintext WITH consent", async () => {
-    const { ctx, matter } = await harness(["read", "redact", "admin"], true);
-    const res = rehydrateChunk(ctx, { matter_id: matter.id, chunk_id: "d1:t1" });
+    const { ctx, principal, matter } = await harness(["read", "redact", "admin"], true);
+    const res = rehydrateChunk(ctx, principal, { matter_id: matter.id, chunk_id: "d1:t1" });
     expect(res.content[0]?.text).toBe("Jane");
   });
 
   it("rehydrate_chunk is rejected WITHOUT consent", async () => {
-    const { ctx, matter } = await harness(["read", "redact", "admin"], false);
+    const { ctx, principal, matter } = await harness(["read", "redact", "admin"], false);
     try {
-      rehydrateChunk(ctx, { matter_id: matter.id, chunk_id: "d1:t1" });
+      rehydrateChunk(ctx, principal, { matter_id: matter.id, chunk_id: "d1:t1" });
       throw new Error("expected consent error");
     } catch (err) {
       expect(isAppError(err)).toBe(true);
@@ -135,9 +139,9 @@ describe("mcp tools", () => {
   });
 
   it("rehydrate_chunk is rejected without redact scope", async () => {
-    const { ctx, matter } = await harness(["read"], true);
+    const { ctx, principal, matter } = await harness(["read"], true);
     try {
-      rehydrateChunk(ctx, { matter_id: matter.id, chunk_id: "d1:t1" });
+      rehydrateChunk(ctx, principal, { matter_id: matter.id, chunk_id: "d1:t1" });
       throw new Error("expected scope error");
     } catch (err) {
       expect(isAppError(err)).toBe(true);
@@ -146,8 +150,8 @@ describe("mcp tools", () => {
   });
 
   it("redact records a marker with consent + scope", async () => {
-    const { ctx, matter } = await harness(["read", "redact", "admin"], true);
-    const res = redact(ctx, { matter_id: matter.id, doc_id: "d1", entity_ids: ["e1"] });
+    const { ctx, principal, matter } = await harness(["read", "redact", "admin"], true);
+    const res = redact(ctx, principal, { matter_id: matter.id, doc_id: "d1", entity_ids: ["e1"] });
     const rec = JSON.parse(res.content[0]?.text ?? "{}") as { doc_id: string; entity_ids: string[] };
     expect(rec.doc_id).toBe("d1");
     expect(rec.entity_ids).toEqual(["e1"]);
