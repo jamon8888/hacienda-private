@@ -44,7 +44,8 @@ export class ModelCache {
         if (!existingNames.has(entry.name)) parsed.models.push(entry);
       }
     } catch {
-      // GLiNER catalog unavailable (e.g. package not built yet) — base manifest still serves.
+      // loadGlinerManifestEntries() can throw if the copied checksum file is missing a required
+      // entry — base manifest still serves in that case.
     }
     this.manifest = parsed;
     this.manifestByFile = new Map(parsed.models.map((m) => [m.file, m]));

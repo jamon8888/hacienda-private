@@ -329,6 +329,9 @@ importers:
       '@xberg-io/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@xberg-io/node-pipeline':
+        specifier: workspace:*
+        version: link:../../packages/node-pipeline
       better-sqlite3:
         specifier: ^11.0.0
         version: 11.10.0
