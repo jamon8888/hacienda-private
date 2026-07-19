@@ -128,153 +128,124 @@ Point Xberg at anything — a PDF, a spreadsheet, a scanned image, an audio file
 
 ## Installation
 
-### Language Packages
+The fastest way to get everything running — the document-intelligence server, the MCP
+endpoint for Claude Desktop, and the in-browser WASM engine — is one downloaded binary.
+No Rust, no Node, no system ONNX Runtime.
 
-<details open>
-<summary><strong>Python</strong></summary>
+### 1. Download a release
 
-```sh
-pip install xberg
-```
+Grab the binary for your OS from the [Releases page](../../releases):
 
-See [Python README](https://github.com/xberg-io/xberg/tree/main/packages/python) for full documentation.
-
-</details>
-
-<details>
-<summary><strong>Node.js / TypeScript</strong></summary>
+| OS | Asset |
+|---|---|
+| Windows | `xberg-mcp-windows.exe` |
+| macOS | `xberg-mcp-darwin` |
+| Linux | `xberg-mcp-linux` |
 
 ```sh
-npm install @xberg-io/xberg
+# macOS / Linux
+chmod +x xberg-mcp-darwin   # or xberg-mcp-linux
+./xberg-mcp-darwin serve
 ```
 
-See [Node.js README](https://github.com/xberg-io/xberg/tree/main/crates/xberg-node) for full documentation.
+```powershell
+# Windows
+.\xberg-mcp-windows.exe serve
+```
 
-</details>
+`serve` opens the bundled UI at **http://localhost:8787**. The browser runs the whole
+extraction → embedding → PII pipeline on-device via the `@xberg-io/xberg-wasm` engine the
+binary already vendors and serves — nothing extra to install for that part.
 
-<details>
-<summary><strong>Rust</strong></summary>
+### 2. Connect it to Claude Desktop (MCP)
+
+Run the same binary in MCP mode instead of `serve`:
 
 ```sh
-cargo add xberg
+./xberg-mcp-darwin mcp   # or xberg-mcp-windows.exe / xberg-mcp-linux
 ```
 
-See [Rust README](https://github.com/xberg-io/xberg/tree/main/crates/xberg) for full documentation.
+Add it to Claude Desktop's config — `~/Library/Application Support/Claude/claude_desktop_config.json`
+(macOS), `%APPDATA%\Claude\claude_desktop_config.json` (Windows), or
+`~/.config/Claude/claude_desktop_config.json` (Linux):
 
-</details>
-
-<details>
-<summary><strong>Go</strong></summary>
-
-```sh
-go get github.com/xberg-io/xberg
+```json
+{
+  "mcpServers": {
+    "xberg": {
+      "command": "xberg-mcp",
+      "args": ["mcp"]
+    }
+  }
+}
 ```
 
-See [Go README](https://github.com/xberg-io/xberg/tree/main/packages/go) for full documentation.
+Restart Claude Desktop — it now has folder-ingest, PII-review, and RAG-query tools backed
+by your local server. Full operator details (offline installs, model pinning, package
+manifests): [services/mcp-server/release/README.md](services/mcp-server/release/README.md).
 
-</details>
+### 3. Use the WASM engine directly (embed in your own app)
 
-<details>
-<summary><strong>Java</strong></summary>
-
-Available on Maven Central as `io.xberg:xberg`. See [Java README](https://github.com/xberg-io/xberg/tree/main/packages/java) for the dependency snippet.
-
-</details>
-
-<details>
-<summary><strong>C#</strong></summary>
-
-```sh
-dotnet add package Xberg
-```
-
-See [C# README](https://github.com/xberg-io/xberg/tree/main/packages/csharp) for full documentation.
-
-</details>
-
-<details>
-<summary><strong>Ruby</strong></summary>
-
-```sh
-gem install xberg
-```
-
-See [Ruby README](https://github.com/xberg-io/xberg/tree/main/packages/ruby) for full documentation.
-
-</details>
-
-<details>
-<summary><strong>PHP</strong></summary>
-
-```sh
-composer require xberg-io/xberg
-```
-
-See [PHP README](https://github.com/xberg-io/xberg/tree/main/packages/php) for full documentation.
-
-</details>
-
-<details>
-<summary><strong>Elixir</strong></summary>
-
-Add `{:xberg, "~> 1.0"}` to your `mix.exs` dependencies. See [Elixir README](https://github.com/xberg-io/xberg/tree/main/packages/elixir) for full documentation.
-
-</details>
-
-<details>
-<summary><strong>WebAssembly</strong></summary>
+The same engine powering the browser UI above is published standalone:
 
 ```sh
 npm install @xberg-io/xberg-wasm
 ```
 
-See [WebAssembly README](https://github.com/xberg-io/xberg/tree/main/crates/xberg-wasm) for full documentation.
+```ts
+import { extract, initWasm } from "@xberg-io/xberg-wasm";
 
-</details>
-
-<details>
-<summary><strong>Kotlin (Android)</strong></summary>
-
-Available on Maven Central as `io.xberg:xberg-android`. See [Kotlin README](https://github.com/xberg-io/xberg/tree/main/packages/kotlin-android) for the dependency snippet.
-
-</details>
-
-<details>
-<summary><strong>Swift</strong></summary>
-
-Add via Swift Package Manager. See [Swift README](https://github.com/xberg-io/xberg/tree/main/packages/swift) for full documentation.
-
-</details>
-
-<details>
-<summary><strong>Dart / Flutter</strong></summary>
-
-```sh
-dart pub add xberg
+await initWasm();
+const bytes = new Uint8Array(await fetch("document.pdf").then((r) => r.arrayBuffer()));
+const output = await extract({ kind: "bytes", bytes, mimeType: "application/pdf", filename: "document.pdf" });
+console.log(output.results[0].content);
 ```
 
-See [Dart README](https://github.com/xberg-io/xberg/tree/main/packages/dart) for full documentation.
+Full API: [WebAssembly README](crates/xberg-wasm/README.md).
+
+### Package managers
+
+| Manager | Command |
+|---|---|
+| Homebrew (tap) | `brew install xberg-io/tap/xberg-mcp` |
+| winget | `winget install xberg-io.XbergMcp` |
+| scoop | `scoop install xberg-mcp` |
+
+---
+
+### Advanced: the underlying engine as a library
+
+Everything above is one app (this repo's document-intelligence server). The same
+extraction/OCR/enrichment engine underneath is also published per-language for embedding
+directly into your own code, plus a generic CLI, Docker image, and extraction-only MCP
+server (distinct from the document-intelligence MCP tools in step 2 above).
+
+<details>
+<summary><strong>Language bindings</strong></summary>
+
+| Language | Install |
+|---|---|
+| Python | `pip install xberg` |
+| Node.js / TypeScript | `npm install @xberg-io/xberg` |
+| Rust | `cargo add xberg` |
+| Go | `go get github.com/xberg-io/xberg` |
+| Java | Maven Central `io.xberg:xberg` |
+| C# | `dotnet add package Xberg` |
+| Ruby | `gem install xberg` |
+| PHP | `composer require xberg-io/xberg` |
+| Elixir | `{:xberg, "~> 1.0"}` in `mix.exs` |
+| Kotlin (Android) | Maven Central `io.xberg:xberg-android` |
+| Swift | Swift Package Manager |
+| Dart / Flutter | `dart pub add xberg` |
+| Zig | `zig fetch` |
+| C/C++ (FFI) | Build from source — [C (FFI) README](crates/xberg-ffi/README.md) |
+
+Each package's own README (linked from its directory) has the full API.
 
 </details>
 
 <details>
-<summary><strong>Zig</strong></summary>
-
-Add via `zig fetch`. See [Zig README](https://github.com/xberg-io/xberg/tree/main/packages/zig) for full documentation.
-
-</details>
-
-<details>
-<summary><strong>C/C++ (FFI)</strong></summary>
-
-Build from source as part of this workspace. See [C (FFI) README](https://github.com/xberg-io/xberg/tree/main/crates/xberg-ffi) for full documentation.
-
-</details>
-
-### CLI & Deployment
-
-<details>
-<summary><strong>CLI Tool</strong></summary>
+<summary><strong>CLI, Docker, REST API, generic MCP</strong></summary>
 
 ```sh
 brew install xberg-io/tap/xberg
@@ -282,52 +253,16 @@ brew install xberg-io/tap/xberg
 
 12 commands: `extract`, `batch`, `detect`, `formats`, `version`, `cache` (stats/clear/manifest/warm), `serve`, `mcp`, `api`, `embed`, `chunk`, `completions`.
 
-See [CLI usage guide](https://docs.xberg.io/cli/usage/) for detailed documentation.
-
-</details>
-
-<details>
-<summary><strong>Docker</strong></summary>
-
 ```sh
-docker pull ghcr.io/xberg-io/xberg:latest
+docker pull ghcr.io/xberg-io/xberg:latest   # API, CLI, or MCP modes
+xberg serve --host 0.0.0.0 --port 8000      # REST API — one POST endpoint, all formats
+xberg mcp --transport stdio                 # extraction-only MCP: extract, extract_batch,
+                                             # detect_mime_type, cache_*, list_formats — no
+                                             # matters/folders/PII/RAG tools (see step 2 above
+                                             # for those)
 ```
 
-Run in API, CLI, or MCP modes. See [Docker guide](https://docs.xberg.io/guides/docker/) for examples.
-
-</details>
-
-<details>
-<summary><strong>REST API Server</strong></summary>
-
-```sh
-xberg serve --host 0.0.0.0 --port 8000
-```
-
-One POST endpoint handles all formats. Returns JSON or Markdown. Stream large files. See [API server guide](https://docs.xberg.io/guides/api-server/).
-
-</details>
-
-<details>
-<summary><strong>MCP Server</strong></summary>
-
-```sh
-xberg mcp --transport stdio
-```
-
-9 tools (extract, extract_batch, detect_mime_type, cache_stats, list_formats, cache_clear, get_version, cache_manifest, cache_warm). 3 prompts (extract_document, extract_with_ocr, semantic_search). 4 resources (formats, models, OCR languages, embedding presets).
-
-Add to Claude Desktop or Cursor:
-
-```json
-{
-  "mcpServers": {
-    "xberg": { "command": "xberg", "args": ["mcp"] }
-  }
-}
-```
-
-See [MCP integration guide](https://docs.xberg.io/guides/mcp-integration/).
+See [CLI usage guide](https://docs.xberg.io/cli/usage/) and [MCP integration guide](https://docs.xberg.io/guides/mcp-integration/).
 
 </details>
 
