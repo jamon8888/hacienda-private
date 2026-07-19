@@ -85,10 +85,12 @@ impl LoraAdapter {
     /// Load a PEFT adapter from a directory.
     pub fn load(adapter_dir: &Path, device: &Device) -> crate::candle::Result<Self> {
         let config_path = adapter_dir.join("adapter_config.json");
-        let cfg_str = std::fs::read_to_string(&config_path)
-            .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("lora: read {}: {e}", config_path.display())))?;
-        let config: LoraConfig = serde_json::from_str(&cfg_str)
-            .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("lora: parse {}: {e}", config_path.display())))?;
+        let cfg_str = std::fs::read_to_string(&config_path).map_err(|e| {
+            crate::candle::GlinerCandleError::Backend(format!("lora: read {}: {e}", config_path.display()))
+        })?;
+        let config: LoraConfig = serde_json::from_str(&cfg_str).map_err(|e| {
+            crate::candle::GlinerCandleError::Backend(format!("lora: parse {}: {e}", config_path.display()))
+        })?;
         if config.r == 0 {
             return Err(crate::candle::GlinerCandleError::Backend(
                 "lora: adapter_config.json has r=0; refusing to merge".into(),
@@ -106,8 +108,9 @@ impl LoraAdapter {
             )));
         };
 
-        let bytes = std::fs::read(&weights_path)
-            .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("lora: read {}: {e}", weights_path.display())))?;
+        let bytes = std::fs::read(&weights_path).map_err(|e| {
+            crate::candle::GlinerCandleError::Backend(format!("lora: read {}: {e}", weights_path.display()))
+        })?;
         let st = SafeTensors::deserialize(&bytes).map_err(|e| {
             crate::candle::GlinerCandleError::Backend(format!("lora: deserialize {}: {e}", weights_path.display()))
         })?;
@@ -145,10 +148,12 @@ impl LoraAdapter {
         // Validate every module has both A and B.
         let mut modules = HashMap::new();
         for (path, (a, b)) in by_module {
-            let lora_a =
-                a.ok_or_else(|| crate::candle::GlinerCandleError::Backend(format!("lora: missing lora_A for module {path}")))?;
-            let lora_b =
-                b.ok_or_else(|| crate::candle::GlinerCandleError::Backend(format!("lora: missing lora_B for module {path}")))?;
+            let lora_a = a.ok_or_else(|| {
+                crate::candle::GlinerCandleError::Backend(format!("lora: missing lora_A for module {path}"))
+            })?;
+            let lora_b = b.ok_or_else(|| {
+                crate::candle::GlinerCandleError::Backend(format!("lora: missing lora_B for module {path}"))
+            })?;
             modules.insert(path, LoraModule { lora_a, lora_b });
         }
 
@@ -201,7 +206,10 @@ pub(crate) fn merge_into_base(
         crate::candle::GlinerCandleError::Backend(format!("lora_merge: read {}: {e}", base_safetensors.display()))
     })?;
     let st = SafeTensors::deserialize(&bytes).map_err(|e| {
-        crate::candle::GlinerCandleError::Backend(format!("lora_merge: deserialize {}: {e}", base_safetensors.display()))
+        crate::candle::GlinerCandleError::Backend(format!(
+            "lora_merge: deserialize {}: {e}",
+            base_safetensors.display()
+        ))
     })?;
 
     let scale = adapter.config.lora_alpha / (adapter.config.r as f64);
@@ -226,7 +234,9 @@ pub(crate) fn merge_into_base(
                 scale,
                 adapter.config.fan_in_fan_out,
             )
-            .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("lora_merge: apply delta to {mod_path}: {e}")))?;
+            .map_err(|e| {
+                crate::candle::GlinerCandleError::Backend(format!("lora_merge: apply delta to {mod_path}: {e}"))
+            })?;
             applied.insert(mod_path.to_string());
         }
 

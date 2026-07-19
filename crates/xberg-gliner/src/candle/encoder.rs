@@ -74,8 +74,9 @@ impl Encoder {
     /// into the `encoder.` prefix; this constructor calls `DebertaV2Model::load`
     /// directly on the provided VarBuilder.
     pub fn from_var_builder(vb: VarBuilder<'_>, config: &DebertaV2Config) -> crate::candle::Result<Self> {
-        let model = DebertaV2Model::load(vb, config)
-            .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("encoder DebertaV2Model::load (vb): {e}")))?;
+        let model = DebertaV2Model::load(vb, config).map_err(|e| {
+            crate::candle::GlinerCandleError::Backend(format!("encoder DebertaV2Model::load (vb): {e}"))
+        })?;
         Ok(Self {
             model,
             config: config.clone(),

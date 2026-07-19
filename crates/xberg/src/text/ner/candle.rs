@@ -77,11 +77,10 @@ impl CandleBackend {
     /// access, which wasm32 does not have. Use [`Self::from_bytes`] there instead.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn from_local(model_dir: &Path, lora_adapter_dir: Option<&Path>) -> crate::Result<Self> {
-        let mut model = Gliner2Candle::from_local(model_dir)
-            .map_err(|e| crate::XbergError::Plugin {
-                message: format!("CandleBackend load: {e}"),
-                plugin_name: "ner-candle".to_string(),
-            })?;
+        let mut model = Gliner2Candle::from_local(model_dir).map_err(|e| crate::XbergError::Plugin {
+            message: format!("CandleBackend load: {e}"),
+            plugin_name: "ner-candle".to_string(),
+        })?;
         if let Some(adapter_dir) = lora_adapter_dir {
             let adapter_name = adapter_dir.file_name().and_then(|n| n.to_str()).unwrap_or("adapter");
             model
@@ -117,11 +116,12 @@ impl CandleBackend {
     /// Load from in-memory model bytes (no filesystem access; required on `wasm32`,
     /// also usable natively when the caller already has the model bytes in memory).
     pub fn from_bytes(safetensors: &[u8], tokenizer_json: &[u8], encoder_config_json: &[u8]) -> crate::Result<Self> {
-        let model = Gliner2Candle::from_bytes(safetensors, tokenizer_json, encoder_config_json)
-            .map_err(|e| crate::XbergError::Plugin {
+        let model = Gliner2Candle::from_bytes(safetensors, tokenizer_json, encoder_config_json).map_err(|e| {
+            crate::XbergError::Plugin {
                 message: format!("CandleBackend load: {e}"),
                 plugin_name: "ner-candle".to_string(),
-            })?;
+            }
+        })?;
         Ok(Self {
             model: Mutex::new(model),
         })
@@ -154,23 +154,22 @@ impl NerBackend for CandleBackend {
             categories.iter().map(category_to_label).collect()
         };
 
-        let model = self
-            .model
-            .lock()
-            .map_err(|_| crate::XbergError::Plugin {
-                message: "CandleBackend: model mutex poisoned".to_string(),
-                plugin_name: "ner-candle".to_string(),
-            })?;
+        let model = self.model.lock().map_err(|_| crate::XbergError::Plugin {
+            message: "CandleBackend: model mutex poisoned".to_string(),
+            plugin_name: "ner-candle".to_string(),
+        })?;
 
         // extract_ner is CPU-bound (tensor inference). On native targets, block_in_place
         // signals tokio to move other tasks off this thread for the duration without
         // requiring Send. wasm32 has no multi-threaded tokio runtime (and is single-threaded
         // regardless), so extract_ner is called directly; it is already synchronous.
         #[cfg(not(target_arch = "wasm32"))]
-        let spans = tokio::task::block_in_place(|| model.extract_ner(text, &labels, DEFAULT_THRESHOLD))
-            .map_err(|e| crate::XbergError::Plugin {
-                message: format!("CandleBackend inference: {e}"),
-                plugin_name: "ner-candle".to_string(),
+        let spans =
+            tokio::task::block_in_place(|| model.extract_ner(text, &labels, DEFAULT_THRESHOLD)).map_err(|e| {
+                crate::XbergError::Plugin {
+                    message: format!("CandleBackend inference: {e}"),
+                    plugin_name: "ner-candle".to_string(),
+                }
             })?;
 
         #[cfg(target_arch = "wasm32")]
@@ -283,8 +282,8 @@ mod tests {
 
     #[test]
     fn spans_to_entities_converts_fields_correctly() {
-        let span = xberg_gliner::Span::new(0, 0, 5, "Alice".to_string(), "person".to_string(), 0.92)
-            .expect("valid span");
+        let span =
+            xberg_gliner::Span::new(0, 0, 5, "Alice".to_string(), "person".to_string(), 0.92).expect("valid span");
         let entities = spans_to_entities(vec![span]);
 
         assert_eq!(entities.len(), 1);

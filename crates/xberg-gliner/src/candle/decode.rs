@@ -158,7 +158,11 @@ mod tests {
         // truncated the third at the position-embedding limit). Decoding must
         // stay inside the tensor instead of panicking on the third word.
         let text = "one two three";
-        let words = vec![Token::new(0, 3, "one"), Token::new(4, 7, "two"), Token::new(8, 13, "three")];
+        let words = vec![
+            Token::new(0, 3, "one"),
+            Token::new(4, 7, "two"),
+            Token::new(8, 13, "three"),
+        ];
         let labels = vec!["person".to_string()];
         let mut scores = ndarray::Array4::<f32>::zeros((MAX_COUNT, 2, MAX_WIDTH, 1));
         scores[[0, 1, 0, 0]] = 0.9;

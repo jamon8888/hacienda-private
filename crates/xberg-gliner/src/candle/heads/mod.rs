@@ -59,7 +59,11 @@ impl AllHeads {
     /// path). Mirrors [`Self::from_safetensors`] but reads from a buffer.
     /// `dtype` matches the encoder's dtype (kept in sync by callers) so heads
     /// and encoder share the same in-memory representation.
-    pub fn from_buffered_safetensors(bytes: &[u8], device: &Device, dtype: candle_core::DType) -> crate::candle::Result<Self> {
+    pub fn from_buffered_safetensors(
+        bytes: &[u8],
+        device: &Device,
+        dtype: candle_core::DType,
+    ) -> crate::candle::Result<Self> {
         let tensors = crate::candle::streaming_load::load_buffer_streaming(bytes, device, dtype)?;
         let vb = VarBuilder::from_tensors(tensors, dtype, device);
         Self::load(vb, device)
