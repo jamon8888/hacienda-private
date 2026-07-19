@@ -1,14 +1,7 @@
+import type { AuthScopes } from "@xberg-io/core";
+
+/** The effective identity of a single request/connection. Single-owner model: subject is "owner". */
 export interface Principal {
   subject: string;
   scopes: AuthScopes[];
-}
-
-export type AuthScopes = "read" | "ingest" | "redact" | "admin";
-
-export function ownerPrincipal(scopes: AuthScopes[]): Principal {
-  return { subject: "owner", scopes };
-}
-
-export function anonymousPrincipal(): Principal {
-  return { subject: "anonymous", scopes: [] };
 }

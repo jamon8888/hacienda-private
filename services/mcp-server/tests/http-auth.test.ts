@@ -1,73 +1,98 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildConfig, parseArgs } from "../src/config.js";
-import { createAppContext, createHttpServer } from "../src/index.js";
+import type { AddressInfo } from "node:net";
+import type { Server } from "node:http";
+import type { Matter } from "@xberg-io/core";
+import { buildConfig } from "../src/config.js";
+import { createAppContext, createHttpServer, type AppContext } from "../src/index.js";
 
-let dirs: string[] = [];
-let servers: ReturnType<typeof createHttpServer>[] = [];
+const TOKEN = "b".repeat(64);
+let dir: string;
+let ctx: AppContext;
+let server: Server;
+let base: string;
 
-afterEach(() => {
-  for (const s of servers) {
-    try { s.close(); } catch { }
-  }
-  servers = [];
-  for (const d of dirs) {
-    try { rmSync(d, { recursive: true, force: true }); } catch { }
-  }
-  dirs = [];
-});
-
-function makeServer() {
-  const dir = mkdtempSync(join(tmpdir(), "xberg-http-auth-"));
-  dirs.push(dir);
-  const config = buildConfig(parseArgs(["node", "xberg-mcp", "serve", "--data-dir", dir]));
-  const ctx = createAppContext(config);
-  const server = createHttpServer(ctx);
-  servers.push(server);
-  return { dir, config, server, token: config.sessionToken };
+async function start(scopes: ("read" | "ingest" | "redact" | "admin")[]) {
+  // buildConfig rejects port <= 0; this port is unused because we listen(0) below.
+  ctx = createAppContext(buildConfig({ command: "serve", host: "127.0.0.1", port: 8787, dataDir: dir }));
+  server = createHttpServer(ctx, { token: TOKEN, scopes });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+  base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 }
 
-describe("HTTP auth guard with origin check", () => {
-  it("rejects /api/* with wrong origin header even with valid token", async () => {
-    const { server, token } = makeServer();
-    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-    const address = server.address();
-    if (typeof address !== "object" || address === null) throw new Error("no server address");
-    const res = await fetch(`http://127.0.0.1:${address.port}/api/matters`, {
-      headers: {
-        authorization: `Bearer ${token}`,
-        "sec-fetch-site": "cross-site",
-      },
-    });
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), "xberg-http-"));
+});
+afterEach(async () => {
+  await new Promise<void>((r) => server.close(() => r()));
+  ctx.store.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+describe("HTTP auth surface", () => {
+  it("401 without a Bearer token", async () => {
+    await start(["read", "ingest", "redact", "admin"]);
+    const res = await fetch(`${base}/matters`);
     expect(res.status).toBe(401);
-    server.close();
   });
 
-  it("accepts /api/* with same-origin header and valid token", async () => {
-    const { server, token } = makeServer();
-    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-    const address = server.address();
-    if (typeof address !== "object" || address === null) throw new Error("no server address");
-    const res = await fetch(`http://127.0.0.1:${address.port}/api/matters`, {
-      headers: {
-        authorization: `Bearer ${token}`,
-        "sec-fetch-site": "same-origin",
-      },
+  it("403 on a cross-site request even with a valid token", async () => {
+    await start(["read", "ingest", "redact", "admin"]);
+    const res = await fetch(`${base}/matters`, {
+      headers: { authorization: `Bearer ${TOKEN}`, "sec-fetch-site": "cross-site" },
     });
-    expect(res.status).toBe(200);
-    server.close();
+    expect(res.status).toBe(403);
   });
 
-  it("GET / injects session token into HTML", async () => {
-    const { server, token } = makeServer();
-    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-    const address = server.address();
-    if (typeof address !== "object" || address === null) throw new Error("no server address");
-    const res = await fetch(`http://127.0.0.1:${address.port}/`);
-    const html = await res.text();
-    expect(html).toContain(`window.__XBERG_TOKEN__="${token}"`);
-    server.close();
+  it("200 with a valid token (non-browser client, no sec-fetch-site)", async () => {
+    await start(["read", "ingest", "redact", "admin"]);
+    const res = await fetch(`${base}/matters`, { headers: { authorization: `Bearer ${TOKEN}` } });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ matters: [] });
+  });
+
+  it("POST /matters records an audit entry under 'owner'", async () => {
+    await start(["read", "ingest", "redact", "admin"]);
+    const res = await fetch(`${base}/matters`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
+      body: JSON.stringify({ name: "Dossier A" }),
+    });
+    expect(res.status).toBe(201);
+    const matter = (await res.json()) as Matter;
+    const audit = ctx.store.getAuditLog(matter.id);
+    expect(audit).toHaveLength(1);
+    expect(audit[0]!.actor).toBe("owner");
+    expect(audit[0]!.action).toBe("create_matter");
+  });
+
+  it("403 when the launch scopes lack the required scope", async () => {
+    await start(["read"]);
+    const res = await fetch(`${base}/matters`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
+      body: JSON.stringify({ name: "x" }),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("GET / injects window.__XBERG_TOKEN__, needs no token, and is not cacheable", async () => {
+    await start(["read"]);
+    const res = await fetch(`${base}/`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(await res.text()).toContain("__XBERG_TOKEN__");
+  });
+
+  it("400 on POST /consent with an unsupported scope", async () => {
+    await start(["read", "ingest", "redact", "admin"]);
+    const res = await fetch(`${base}/consent`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
+      body: JSON.stringify({ subject: "owner", matter_id: "m-1", scope: "bogus" }),
+    });
+    expect(res.status).toBe(400);
   });
 });

@@ -18,6 +18,7 @@ interface Harness {
   dir: string;
   ctx: AppContext;
   matter: Matter;
+  principal: { subject: string; scopes: AuthScopes[] };
 }
 
 function makeConfig(dir: string): AppConfig {
@@ -79,9 +80,10 @@ async function makeHarness(scopes: AuthScopes[], consent: boolean): Promise<Harn
   // ConsentGrant.scope type is AuthScopes, so widen the kind at this test boundary only.
   const consentScope = (kind: string): AuthScopes => kind as AuthScopes;
   const matter = store.createMatter("Acme v Doe");
+  const principal = { subject: "owner", scopes };
   if (consent) {
-    store.grantConsent({ subject: "*", matter_id: matter.id, scope: consentScope("pii_read") });
-    store.grantConsent({ subject: "*", matter_id: matter.id, scope: consentScope("redact_rehydrate") });
+    store.grantConsent({ subject: principal.subject, matter_id: matter.id, scope: consentScope("pii_read") });
+    store.grantConsent({ subject: principal.subject, matter_id: matter.id, scope: consentScope("redact_rehydrate") });
   }
   seedBundle(mirror, vault, matter.id);
   await mirror.loadMirror(matter.id);
@@ -95,7 +97,7 @@ async function makeHarness(scopes: AuthScopes[], consent: boolean): Promise<Harn
     httpAuth: { token: config.sessionToken, scopes },
     pipeline: makeFakePipeline(),
   };
-  return { dir, ctx, matter };
+  return { dir, ctx, matter, principal };
 }
 
 let created: Harness[] = [];
@@ -120,7 +122,7 @@ afterEach(() => {
 describe("mcp tools", () => {
   it("rag_query returns the cited chunk", async () => {
     const { ctx, matter } = await harness(["read", "ingest", "redact", "admin"], true);
-    const res = ragQuery(ctx, { matter_id: matter.id, query: "who" });
+    const res = ragQuery(ctx, principal, { matter_id: matter.id, query: "who" });
     const chunks = JSON.parse(res.content[0]?.text ?? "[]") as { citation: string; text: string }[];
     expect(chunks).toHaveLength(1);
     expect(chunks[0]?.citation).toBe("d1#0");
@@ -132,7 +134,7 @@ describe("mcp tools", () => {
 
   it("list_pii returns the span token, never plaintext", async () => {
     const { ctx, matter } = await harness(["read", "admin"], true);
-    const res = listPii(ctx, { matter_id: matter.id, doc_id: "d1" });
+    const res = listPii(ctx, principal, { matter_id: matter.id, doc_id: "d1" });
     const spans = JSON.parse(res.content[0]?.text ?? "[]") as { kind: string; text: string }[];
     expect(spans).toHaveLength(1);
     expect(spans[0]?.kind).toBe("PER");
@@ -142,14 +144,14 @@ describe("mcp tools", () => {
 
   it("rehydrate_chunk decrypts to plaintext WITH consent", async () => {
     const { ctx, matter } = await harness(["read", "redact", "admin"], true);
-    const res = rehydrateChunk(ctx, { matter_id: matter.id, chunk_id: "d1:t1" });
+    const res = rehydrateChunk(ctx, principal, { matter_id: matter.id, chunk_id: "d1:t1" });
     expect(res.content[0]?.text).toBe("Jane");
   });
 
   it("rehydrate_chunk is rejected WITHOUT consent", async () => {
     const { ctx, matter } = await harness(["read", "redact", "admin"], false);
     try {
-      rehydrateChunk(ctx, { matter_id: matter.id, chunk_id: "d1:t1" });
+      rehydrateChunk(ctx, principal, { matter_id: matter.id, chunk_id: "d1:t1" });
       throw new Error("expected consent error");
     } catch (err) {
       expect(isAppError(err)).toBe(true);
@@ -160,7 +162,7 @@ describe("mcp tools", () => {
   it("rehydrate_chunk is rejected without redact scope", async () => {
     const { ctx, matter } = await harness(["read"], true);
     try {
-      rehydrateChunk(ctx, { matter_id: matter.id, chunk_id: "d1:t1" });
+      rehydrateChunk(ctx, principal, { matter_id: matter.id, chunk_id: "d1:t1" });
       throw new Error("expected scope error");
     } catch (err) {
       expect(isAppError(err)).toBe(true);
@@ -170,7 +172,7 @@ describe("mcp tools", () => {
 
   it("redact records a marker with consent + scope", async () => {
     const { ctx, matter } = await harness(["read", "redact", "admin"], true);
-    const res = redact(ctx, { matter_id: matter.id, doc_id: "d1", entity_ids: ["e1"] });
+    const res = redact(ctx, principal, { matter_id: matter.id, doc_id: "d1", entity_ids: ["e1"] });
     const rec = JSON.parse(res.content[0]?.text ?? "{}") as { doc_id: string; entity_ids: string[] };
     expect(rec.doc_id).toBe("d1");
     expect(rec.entity_ids).toEqual(["e1"]);
@@ -180,26 +182,26 @@ describe("mcp tools", () => {
 describe("list_matters / create_matter", () => {
   it("lists existing matters", async () => {
     const { ctx, matter } = await harness(["read"], false);
-    const result = listMatters(ctx);
+    const result = listMatters(ctx, principal);
     const parsed = JSON.parse(result.content[0]!.text) as { matters: { id: string }[] };
     expect(parsed.matters.some((m) => m.id === matter.id)).toBe(true);
   });
 
   it("rejects list_matters without read scope", async () => {
     const { ctx } = await harness([], false);
-    expect(() => listMatters(ctx)).toThrow(/missing required scope/);
+    expect(() => listMatters(ctx, principal)).toThrow(/missing required scope/);
   });
 
   it("creates a new matter", async () => {
     const { ctx } = await harness(["ingest"], false);
-    const result = createMatter(ctx, { name: "Roe v Wade" });
+    const result = createMatter(ctx, principal, { name: "Roe v Wade" });
     const parsed = JSON.parse(result.content[0]!.text) as { name: string };
     expect(parsed.name).toBe("Roe v Wade");
   });
 
   it("rejects create_matter without ingest scope", async () => {
     const { ctx } = await harness(["read"], false);
-    expect(() => createMatter(ctx, { name: "x" })).toThrow(/missing required scope/);
+    expect(() => createMatter(ctx, principal, { name: "x" })).toThrow(/missing required scope/);
   });
 });
 
@@ -225,7 +227,7 @@ describe("ingest_folder", () => {
     writeFileSync(join(folderDir, "one.txt"), "Jane Doe met Acme Corp.");
     writeFileSync(join(folderDir, "two.txt"), "Second document, no PII here.");
 
-    const result = await ingestFolder(ctx, { matter_id: matter.id, path: folderDir });
+    const result = await ingestFolder(ctx, principal, { matter_id: matter.id, path: folderDir });
     const parsed = JSON.parse(result.content[0]!.text) as {
       documents_processed: number;
       documents_skipped: number;
@@ -242,8 +244,8 @@ describe("ingest_folder", () => {
     const folderDir = makeFolderDir("xberg-ingest-folder-2-");
     writeFileSync(join(folderDir, "one.txt"), "stable content");
 
-    await ingestFolder(ctx, { matter_id: matter.id, path: folderDir });
-    const second = await ingestFolder(ctx, { matter_id: matter.id, path: folderDir });
+    await ingestFolder(ctx, principal, { matter_id: matter.id, path: folderDir });
+    const second = await ingestFolder(ctx, principal, { matter_id: matter.id, path: folderDir });
     const parsed = JSON.parse(second.content[0]!.text) as { documents_skipped: number };
 
     expect(parsed.documents_skipped).toBe(1);
@@ -251,6 +253,6 @@ describe("ingest_folder", () => {
 
   it("rejects ingest_folder without ingest scope", async () => {
     const { ctx, matter } = await harness(["read"], false);
-    await expect(ingestFolder(ctx, { matter_id: matter.id, path: "." })).rejects.toThrow(/missing required scope/);
+    await expect(ingestFolder(ctx, principal, { matter_id: matter.id, path: "." })).rejects.toThrow(/missing required scope/);
   });
 });

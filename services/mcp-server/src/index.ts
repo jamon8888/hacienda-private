@@ -14,9 +14,14 @@ import { PLACEHOLDER_HTML, resolveUiDir, resolveWasmPackageDir, injectToken } fr
 import { runMcp } from "./mcp/mod.js";
 import type { IngestDeps } from "@xberg-io/node-pipeline";
 import { DEFAULT_GLINER_MODEL, RUST_ALIGNED_PII_TYPES, detectPii, embedText } from "@xberg-io/node-pipeline";
-import { loadOrCreateSessionToken, resolveLaunchScopes, isSameOriginRequest, authenticateHttp, type HttpAuth } from "./auth.js";
-import { ownerPrincipal, type Principal } from "./principal.js";
+import { loadOrCreateSessionToken, resolveLaunchScopes, isSameOriginRequest, authenticateHttp, ownerPrincipal } from "./auth.js";
+import type { Principal } from "./principal.js";
 import { authorize } from "./mcp/scopes.js";
+
+export interface HttpAuth {
+  token: string;
+  scopes: AuthScopes[];
+}
 
 export interface AppContext {
   config: AppConfig;
@@ -200,12 +205,12 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
   }
 
   if (pathname === "/api/matters" && method === "GET") {
-    authorize(principal, "read", { id: "", name: "", created_at: "" });
+    authorize(principal.scopes, "read");
     sendJson(res, 200, { matters: ctx.store.getMatters() });
     return;
   }
   if (pathname === "/api/matters" && method === "POST") {
-    authorize(principal, "ingest", { id: "", name: "", created_at: "" });
+    authorize(principal.scopes, "ingest");
     const body = await readJson<{ name: string }>(req);
     if (!body.name) throw new AppError("bad_request", "name is required");
     const matter = ctx.store.createMatter(body.name);
@@ -216,7 +221,7 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
 
   const forgetMatch = pathname.match(/^\/api\/matters\/([^/]+)$/);
   if (forgetMatch && method === "DELETE") {
-    authorize(principal, "admin", { id: "", name: "", created_at: "" });
+    authorize(principal.scopes, "admin");
     const matterId = decodeURIComponent(forgetMatch[1] ?? "");
     const forgotten = ctx.store.forgetMatter(matterId);
     ctx.mirror.forget(matterId);
@@ -226,14 +231,14 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
   }
 
   if (pathname === "/api/folders" && method === "GET") {
-    authorize(principal, "read", { id: "", name: "", created_at: "" });
+    authorize(principal.scopes, "read");
     const matterId = url.searchParams.get("matter_id");
     if (!matterId) throw new AppError("bad_request", "matter_id is required");
     sendJson(res, 200, { folders: ctx.store.getFolders(matterId) });
     return;
   }
   if (pathname === "/api/folders" && method === "POST") {
-    authorize(principal, "ingest", { id: "", name: "", created_at: "" });
+    authorize(principal.scopes, "ingest");
     const body = await readJson<{ matter_id: string; name: string; path?: string }>(req);
     if (!body.matter_id || !body.name) throw new AppError("bad_request", "matter_id and name are required");
     const folder = ctx.store.createFolder(body.matter_id, body.name, body.path);
@@ -242,14 +247,14 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
   }
 
   if (pathname === "/api/consent" && method === "GET") {
-    authorize(principal, "admin", { id: "", name: "", created_at: "" });
+    authorize(principal.scopes, "admin");
     const matterId = url.searchParams.get("matter_id");
     if (!matterId) throw new AppError("bad_request", "matter_id is required");
     sendJson(res, 200, { consent: ctx.store.getConsent(matterId) });
     return;
   }
   if (pathname === "/api/consent" && method === "POST") {
-    authorize(principal, "admin", { id: "", name: "", created_at: "" });
+    authorize(principal.scopes, "admin");
     const body = await readJson<{ subject: string; matter_id: string; scope: string; expires_at?: string }>(req);
     if (!body.subject || !body.matter_id || !body.scope) {
       throw new AppError("bad_request", "subject, matter_id and scope are required");
@@ -259,7 +264,7 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
   }
 
   if (pathname === "/api/rag/mirror" && method === "POST") {
-    authorize(principal, "ingest", { id: "", name: "", created_at: "" });
+    authorize(principal.scopes, "ingest");
     const matterId = url.searchParams.get("matter_id");
     if (!matterId) throw new AppError("bad_request", "matter_id is required");
     const body = await readBody(req);
@@ -270,7 +275,7 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
 
   const mirrorStatus = pathname.match(/^\/api\/rag\/mirror\/([^/]+)\/status$/);
   if (mirrorStatus && method === "GET") {
-    authorize(principal, "read", { id: "", name: "", created_at: "" });
+    authorize(principal.scopes, "read");
     const matterId = decodeURIComponent(mirrorStatus[1] ?? "");
     const status = ctx.mirror.status(matterId);
     if (!status) throw new AppError("not_found", `no mirror for matter ${matterId}`);
@@ -281,7 +286,7 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
   // Folder documents + PII routes (for Web UI polling)
   const folderDocsMatch = pathname.match(/^\/api\/folders\/([^/]+)\/documents$/);
   if (folderDocsMatch && method === "GET") {
-    authorize(principal, "read", { id: "", name: "", created_at: "" });
+    authorize(principal.scopes, "read");
     const folderId = decodeURIComponent(folderDocsMatch[1] ?? "");
     sendJson(res, 200, { documents: ctx.store.getDocumentsByFolder(folderId) });
     return;
@@ -289,7 +294,7 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
 
   const docPiiMatch = pathname.match(/^\/api\/documents\/([^/]+)\/pii$/);
   if (docPiiMatch && method === "GET") {
-    authorize(principal, "read", { id: "", name: "", created_at: "" });
+    authorize(principal.scopes, "read");
     const documentId = decodeURIComponent(docPiiMatch[1] ?? "");
     sendJson(res, 200, { pii: ctx.store.getPiiByDocument(documentId) });
     return;
@@ -306,7 +311,7 @@ export function createAppContext(config: AppConfig): AppContext {
   const vault = new KeyVault({ vaultKeyPath: config.vaultKeyPath });
 
   // Launch-time scopes from XBERG_SCOPES env (default: all). HTTP auth derives per-request Principal.
-  const launchScopes = resolveLaunchScopes();
+  const launchScopes = resolveLaunchScopes(process.env);
   const httpAuth: HttpAuth = { token: config.sessionToken, scopes: launchScopes };
 
   const pipeline: AppContext["pipeline"] = {

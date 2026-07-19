@@ -1,71 +1,93 @@
-import { randomBytes, timingSafeEqual } from "node:crypto";
-import { writeFileSync, readFileSync, existsSync, mkdirSync } from "node:fs";
-import { resolve } from "node:path";
-import type { Principal, AuthScopes } from "./principal.js";
+import { randomBytes, timingSafeEqual, createHash } from "node:crypto";
+import { readFileSync, writeFileSync, mkdirSync, chmodSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import type { IncomingMessage } from "node:http";
+import type { AuthScopes } from "@xberg-io/core";
+import { AppError } from "./error.js";
+import type { Principal } from "./principal.js";
 
-const SESSION_TOKEN_FILE = "session.token";
-const TOKEN_BYTES = 32;
+const ALL_SCOPES: AuthScopes[] = ["read", "ingest", "redact", "admin"];
 
-export interface HttpAuth {
-  token: string;
-  scopes: AuthScopes[];
-}
-
+/** Load the persisted session token, or generate + persist a new 256-bit one (file mode 0600). */
 export function loadOrCreateSessionToken(dataDir: string): string {
-  mkdirSync(dataDir, { recursive: true });
-  const tokenPath = resolve(dataDir, SESSION_TOKEN_FILE);
-
-  // Atomic exclusive create: if another process created it, read that one
+  const path = resolve(dataDir, "session.token");
   try {
-    const token = randomBytes(TOKEN_BYTES).toString("hex");
-    writeFileSync(tokenPath, `${token}\n`, { mode: 0o600, flag: "wx" });
-    return token;
-  } catch {
-    // File exists — read the existing token
-    return readFileSync(tokenPath, "utf8").trim();
+    return readFileSync(path, "utf8").trim();
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
   }
-}
-
-export function resolveLaunchScopes(env: NodeJS.ProcessEnv = process.env): AuthScopes[] {
-  const raw = env.XBERG_SCOPES?.trim();
-  if (!raw) return ["read", "ingest", "redact", "admin"];
-  const scopes = raw.split(",").map((s) => s.trim()).filter(Boolean) as AuthScopes[];
-  const valid: AuthScopes[] = ["read", "ingest", "redact", "admin"];
-  for (const s of scopes) {
-    if (!valid.includes(s)) {
-      throw new Error(`XBERG_SCOPES contains invalid scope: ${s}`);
+  mkdirSync(dirname(path), { recursive: true });
+  const token = randomBytes(32).toString("hex");
+  try {
+    // Exclusive create ("wx") — atomic against a concurrent launch racing to create
+    // the same file. If another process won, read and reuse its token instead.
+    writeFileSync(path, token, { mode: 0o600, flag: "wx" });
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "EEXIST") {
+      return readFileSync(path, "utf8").trim();
     }
+    throw err;
   }
-  return scopes.length > 0 ? scopes : ["read", "ingest", "redact", "admin"];
-}
-
-function normalizeHeaderValue(value: string | string[] | undefined): string {
-  if (!value) return "";
-  return Array.isArray(value) ? value[0] ?? "" : value;
-}
-
-export function isSameOriginRequest(req: { headers: Record<string, string | string[] | undefined> }): boolean {
-  const secFetchSite = normalizeHeaderValue(req.headers["sec-fetch-site"]);
-  return secFetchSite === "same-origin" || secFetchSite === "same-site";
-}
-
-export function authenticateHttp(
-  req: { headers: Record<string, string | string[] | undefined> },
-  expectedToken: string,
-  launchScopes: AuthScopes[],
-): Principal {
-  const authHeader = normalizeHeaderValue(req.headers.authorization);
-  const provided = authHeader && authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : "";
-
-  // Constant-time comparison
-  const expectedBuf = Buffer.from(expectedToken, "utf8");
-  const providedBuf = Buffer.from(provided, "utf8");
-  const tokenOk = expectedBuf.length === providedBuf.length && timingSafeEqual(expectedBuf, providedBuf);
-
-  const originOk = isSameOriginRequest(req);
-
-  if (!tokenOk || !originOk) {
-    return { subject: "anonymous", scopes: [] };
+  // Some platforms ignore the write-time mode; enforce it explicitly (mirrors vault.ts).
+  try {
+    chmodSync(path, 0o600);
+  } catch {
+    /* best-effort on platforms without POSIX perms */
   }
-  return { subject: "owner", scopes: launchScopes };
+  return token;
+}
+
+/** Scopes granted to this launch: XBERG_SCOPES (comma list) or all four by default. */
+export function resolveLaunchScopes(env: NodeJS.ProcessEnv): AuthScopes[] {
+  const raw = env.XBERG_SCOPES;
+  if (!raw) return [...ALL_SCOPES];
+  const valid = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s): s is AuthScopes => (ALL_SCOPES as string[]).includes(s));
+  if (valid.length === 0) {
+    throw new AppError("bad_request", "XBERG_SCOPES set but contains no valid scope");
+  }
+  return valid;
+}
+
+export function ownerPrincipal(scopes: AuthScopes[]): Principal {
+  return { subject: "owner", scopes };
+}
+
+/**
+ * Same-origin guard. Reject only when the browser explicitly reports a cross-site
+ * or same-site fetch. A missing header (non-browser client, e.g. curl) passes here
+ * and is gated by the Bearer token instead.
+ */
+export function isSameOriginRequest(req: IncomingMessage): boolean {
+  const site = req.headers["sec-fetch-site"];
+  if (site === undefined) return true;
+  return site === "same-origin" || site === "none";
+}
+
+function extractBearer(req: IncomingMessage): string | null {
+  const header = req.headers["authorization"];
+  if (typeof header !== "string") return null;
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1]!.trim() : null;
+}
+
+/** Constant-time string compare via fixed-length SHA-256 digests (avoids length leak). */
+function tokenMatches(candidate: string, token: string): boolean {
+  const a = createHash("sha256").update(candidate).digest();
+  const b = createHash("sha256").update(token).digest();
+  return timingSafeEqual(a, b);
+}
+
+/** Origin guard + Bearer verification. Returns the owner principal or throws AppError. */
+export function authenticateHttp(req: IncomingMessage, token: string, scopes: AuthScopes[]): Principal {
+  if (!isSameOriginRequest(req)) {
+    throw new AppError("scope", "cross-origin request rejected");
+  }
+  const bearer = extractBearer(req);
+  if (!bearer || !tokenMatches(bearer, token)) {
+    throw new AppError("auth", "invalid or missing session token");
+  }
+  return ownerPrincipal(scopes);
 }
