@@ -363,6 +363,13 @@ export function createHttpServer(ctx: AppContext) {
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv);
+
+  if (args.version) {
+    const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+    console.log(`xberg-mcp ${pkg.version}`);
+    return;
+  }
+
   const config = buildConfig(args);
   const ctx = createAppContext(config);
 

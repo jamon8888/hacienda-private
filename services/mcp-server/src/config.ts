@@ -24,6 +24,7 @@ export interface CliArgs {
   port: number;
   dataDir?: string;
   elevated?: boolean;
+  version?: boolean;
 }
 
 const PLACEHOLDER_SHA = "TODO_PIN_SHA256";
@@ -35,6 +36,7 @@ export function parseArgs(argv: string[]): CliArgs {
   let port = 8787;
   let dataDir: string | undefined;
   let elevated = false;
+  let version = false;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -58,6 +60,8 @@ export function parseArgs(argv: string[]): CliArgs {
       dataDir = v;
     } else if (arg === "--elevated") {
       elevated = true;
+    } else if (arg === "--version" || arg === "-v") {
+      version = true;
     } else if (arg.startsWith("--port=")) {
       port = Number.parseInt(arg.slice("--port=".length), 10);
     } else if (arg.startsWith("--host=")) {
@@ -67,7 +71,7 @@ export function parseArgs(argv: string[]): CliArgs {
     }
   }
 
-  return { command, host, port, dataDir, elevated };
+  return { command, host, port, dataDir, elevated, version };
 }
 
 export function buildConfig(args: CliArgs, env: NodeJS.ProcessEnv = process.env): AppConfig {
