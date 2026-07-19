@@ -30,18 +30,39 @@ async function disableRemoteModels(): Promise<void> {
  * published export map — never a hardcoded `node_modules` layout, which
  * pnpm hoisting/symlinking can rearrange at any time.
  *
- * `onnxruntime-web/package.json` isn't itself an exported subpath (its
- * exports map has no "./package.json" entry), so we resolve one of the
- * package's actually-exported WASM binaries instead — the file gliner's
- * ONNXWebWrapper looks for at inference time — and take its directory.
+ * Under pnpm's isolated node_modules, `gliner` pins its own private copy of
+ * `onnxruntime-web` — a different, potentially incompatible version from
+ * whatever `node-pipeline` itself depends on directly (e.g. gliner@0.0.19
+ * pins onnxruntime-web@1.19.2, while node-pipeline's own direct dependency
+ * can resolve to a newer 1.x). Its compiled ONNXWebWrapper imports
+ * `onnxruntime-web` as a bare specifier resolved from *gliner's own*
+ * installed location — not from this module's. Handing that wrapper a WASM
+ * directory from a different onnxruntime-web version than its own JS
+ * runtime is a real interface mismatch (the WASM binary set/format has
+ * changed between versions). So resolution must walk through gliner's own
+ * module context: resolve gliner's own package entry point first, then
+ * create a second `require` scoped there, and use *that* to resolve
+ * onnxruntime-web — landing on the exact copy gliner will actually import
+ * at runtime, regardless of what version node-pipeline itself depends on.
+ *
+ * We resolve onnxruntime-web's main entry (not a WASM binary subpath
+ * directly): older onnxruntime-web releases (e.g. the 1.19.2 gliner pins)
+ * don't expose the `.wasm` files as their own entries in the package's
+ * `exports` map at all, only newer releases do — so resolving a binary
+ * subpath by name isn't portable across the versions different gliner
+ * releases might pin. The main entry's directory (`dist/`) is where the
+ * WASM binaries physically live alongside the JS bundle in every observed
+ * onnxruntime-web layout, exported subpath or not.
  *
  * Returned with a trailing "/" because ONNXWebWrapper builds binary URLs
  * via plain string concatenation: `wasmPaths + "ort-wasm-simd-threaded.wasm"`.
  */
 export function resolveLocalOnnxWasmPaths(): string {
   const require = createRequire(import.meta.url);
-  const wasmBinaryPath = require.resolve("onnxruntime-web/ort-wasm-simd-threaded.wasm");
-  const wasmDir = dirname(wasmBinaryPath).replaceAll("\\", "/");
+  const glinerEntryPath = require.resolve("gliner");
+  const glinerRequire = createRequire(glinerEntryPath);
+  const onnxEntryPath = glinerRequire.resolve("onnxruntime-web");
+  const wasmDir = dirname(onnxEntryPath).replaceAll("\\", "/");
   return `${wasmDir}/`;
 }
 
