@@ -14,6 +14,12 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
+export const dynamicParams = true;
+
+export function generateStaticParams(): { id: string }[] {
+  return [{ id: "_" }];
+}
+
 export default async function FolderView({ params }: PageProps) {
   const resolvedParams = await params;
   const folderId = resolvedParams.id;
