@@ -265,4 +265,14 @@ describe("ingest_folder", () => {
 			/missing required scope/,
 		);
 	});
+
+	it("marks the folder as errored instead of leaving it stuck in 'processing' when the path doesn't exist", async () => {
+		const { ctx, matter, principal } = await harness(["ingest"], false);
+		const missingDir = join(tmpdir(), "xberg-ingest-folder-does-not-exist");
+
+		await expect(ingestFolder(ctx, principal, { matter_id: matter.id, path: missingDir })).rejects.toThrow(AppError);
+
+		const folder = ctx.store.getFolders(matter.id).find((f) => f.path === missingDir);
+		expect(folder?.status).toBe("error");
+	});
 });

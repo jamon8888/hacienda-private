@@ -18,6 +18,7 @@ import { DEFAULT_GLINER_MODEL, RUST_ALIGNED_PII_TYPES, detectPii, embedText } fr
 import { loadOrCreateSessionToken, resolveLaunchScopes, authenticateHttp, ownerPrincipal } from "./auth.js";
 import type { Principal } from "./principal.js";
 import { authorize } from "./mcp/scopes.js";
+import { requireConsent } from "./mcp/consent.js";
 
 export interface HttpAuth {
 	token: string;
@@ -313,6 +314,13 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
 	if (docPiiMatch && method === "GET") {
 		authorize(principal.scopes, "read");
 		const documentId = decodeURIComponent(docPiiMatch[1] ?? "");
+		const doc = ctx.store.getDocument(documentId);
+		if (!doc) throw new AppError("not_found", `document ${documentId} not found`);
+		const matter = ctx.store.getMatter(doc.matter_id);
+		if (!matter) throw new AppError("not_found", `matter ${doc.matter_id} not found`);
+		// Mirrors the MCP list_pii tool's gating — this route returns the same raw PII text, so it
+		// must not skip the consent check just because it's reached over HTTP instead of MCP.
+		requireConsent(ctx.store, matter, "pii_read", principal.subject);
 		sendJson(res, 200, { pii: ctx.store.getPiiByDocument(documentId) });
 		return;
 	}
@@ -330,6 +338,28 @@ export function createAppContext(config: AppConfig): AppContext {
 	// Launch-time scopes from XBERG_SCOPES env (default: all). HTTP auth derives per-request Principal.
 	const launchScopes = resolveLaunchScopes(process.env);
 	const httpAuth: HttpAuth = { token: config.sessionToken, scopes: launchScopes };
+
+	// ModelCache.ensureModel() re-hashes the full cached model file on every call, even on a cache
+	// hit — embed()/detectPii() are called once per chunk/document, so resolving these paths fresh
+	// each time would make repeated hashing dominate ingestion cost far more than actual inference.
+	// Memoized once per AppContext (mirrors the getXbergWasm lazy-promise pattern above), not
+	// module-level, so a fresh createAppContext (e.g. in tests) doesn't reuse another context's cache.
+	let e5PathsPromise: Promise<{ modelPath: string; tokenizerPath: string }> | null = null;
+	const e5Paths = () => {
+		e5PathsPromise ??= (async () => ({
+			modelPath: await models.ensureModel("e5-fp32"),
+			tokenizerPath: await models.ensureModel("e5-tokenizer"),
+		}))();
+		return e5PathsPromise;
+	};
+	let glinerPathsPromise: Promise<{ modelPath: string; tokenizerPath: string }> | null = null;
+	const glinerPaths = () => {
+		glinerPathsPromise ??= (async () => ({
+			modelPath: await models.ensureModel(`${DEFAULT_GLINER_MODEL}.model`),
+			tokenizerPath: await models.ensureModel(`${DEFAULT_GLINER_MODEL}.tokenizer`),
+		}))();
+		return glinerPathsPromise;
+	};
 
 	const pipeline: AppContext["pipeline"] = {
 		extract: async (path: string) => {
@@ -351,13 +381,11 @@ export function createAppContext(config: AppConfig): AppContext {
 			return chunks.length > 0 ? chunks : [content];
 		},
 		embed: async (text: string) => {
-			const modelPath = await models.ensureModel("e5-fp32");
-			const tokenizerPath = await models.ensureModel("e5-tokenizer");
+			const { modelPath, tokenizerPath } = await e5Paths();
 			return embedText(text, modelPath, tokenizerPath);
 		},
 		detectPii: async (text: string) => {
-			const modelPath = await models.ensureModel(`${DEFAULT_GLINER_MODEL}.model`);
-			const tokenizerPath = await models.ensureModel(`${DEFAULT_GLINER_MODEL}.tokenizer`);
+			const { modelPath, tokenizerPath } = await glinerPaths();
 			return detectPii(text, modelPath, tokenizerPath, RUST_ALIGNED_PII_TYPES);
 		},
 	};

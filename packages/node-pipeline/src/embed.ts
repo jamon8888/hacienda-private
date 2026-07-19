@@ -28,7 +28,12 @@ async function getSession(modelPath: string): Promise<InferenceSession> {
     cached = (async () => {
       const ort = await import("onnxruntime-web");
       return ort.InferenceSession.create(modelPath, { executionProviders: ["wasm"] });
-    })();
+    })().catch((err) => {
+      // Don't let a transient init failure (e.g. a momentarily locked model file) permanently
+      // poison the cache — the next call should retry instead of replaying the same rejection.
+      sessionCache.delete(modelPath);
+      throw err;
+    });
     sessionCache.set(modelPath, cached);
   }
   return cached;

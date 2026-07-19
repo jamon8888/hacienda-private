@@ -54,7 +54,6 @@ export interface RehydrateChunkArgs {
 export interface IngestFolderArgs {
 	matter_id: string;
 	path: string;
-	recursive?: boolean;
 }
 export interface RedactArgs {
 	matter_id: string;
@@ -109,41 +108,54 @@ export async function ingestFolder(ctx: AppContext, principal: Principal, args: 
 		ctx.store.createFolder(args.matter_id, args.path.split(/[/\\]/).pop() ?? args.path, args.path);
 	ctx.store.updateFolderStatus(folder.id, "processing");
 
-	const files = await walkFolder(args.path);
-	let processed = 0;
-	let skipped = 0;
-	let piiFound = 0;
-	const errors: { path: string; message: string }[] = [];
+	// Unlike ragQuery/listPii/etc., this tool is async and can't route through the sync-only
+	// wrap() helper — it needs its own error containment so a thrown error (bad path, permission
+	// denied, a store call failing mid-loop) doesn't leave the folder stuck in "processing"
+	// forever from the perspective of anyone polling its status, and still normalizes to AppError
+	// like every other tool.
+	try {
+		const files = await walkFolder(args.path);
+		let processed = 0;
+		let skipped = 0;
+		let piiFound = 0;
+		const errors: { path: string; message: string }[] = [];
 
-	for (const file of files) {
-		const existing = ctx.store.findDocumentByHash(folder.id, file.contentHash);
-		if (existing) {
-			skipped += 1;
-			continue;
+		for (const file of files) {
+			const existing = ctx.store.findDocumentByHash(folder.id, file.contentHash);
+			// A previously-errored document must be retried, not counted as already-skipped —
+			// ingestFile applies the same rule internally when it re-processes it below.
+			if (existing && existing.status !== "error") {
+				skipped += 1;
+				continue;
+			}
+			const doc = await ingestFile({ ...ctx.pipeline, store: ctx.store, mirror: ctx.mirror }, file, {
+				folderId: folder.id,
+				matterId: args.matter_id,
+				ingestedVia: "mcp",
+			});
+			if (doc.status === "error") {
+				errors.push({ path: file.path, message: doc.error_message ?? "unknown error" });
+			} else {
+				processed += 1;
+				piiFound += doc.pii_count;
+			}
 		}
-		const doc = await ingestFile({ ...ctx.pipeline, store: ctx.store, mirror: ctx.mirror }, file, {
-			folderId: folder.id,
-			matterId: args.matter_id,
-			ingestedVia: "mcp",
+
+		ctx.store.updateFolderStatus(folder.id, errors.length > 0 && processed === 0 ? "error" : "done");
+		ctx.store.recordAudit(principal.subject, "ingest", "ingest_folder", args.matter_id);
+
+		return jsonResult({
+			folder,
+			documents_processed: processed,
+			documents_skipped: skipped,
+			pii_entities_found: piiFound,
+			errors,
 		});
-		if (doc.status === "error") {
-			errors.push({ path: file.path, message: doc.error_message ?? "unknown error" });
-		} else {
-			processed += 1;
-			piiFound += doc.pii_count;
-		}
+	} catch (err) {
+		ctx.store.updateFolderStatus(folder.id, "error");
+		if (err instanceof AppError) throw err;
+		throw new AppError("store", err instanceof Error ? err.message : "ingest_folder failed");
 	}
-
-	ctx.store.updateFolderStatus(folder.id, errors.length > 0 && processed === 0 ? "error" : "done");
-	ctx.store.recordAudit(principal.subject, "ingest", "ingest_folder", args.matter_id);
-
-	return jsonResult({
-		folder,
-		documents_processed: processed,
-		documents_skipped: skipped,
-		pii_entities_found: piiFound,
-		errors,
-	});
 }
 
 export function redact(ctx: AppContext, principal: Principal, args: RedactArgs): ToolResult {
@@ -192,10 +204,8 @@ export function registerTools(server: McpServer, ctx: AppContext, principal: Pri
 		rehydrateChunk(ctx, principal, args),
 	);
 
-	server.tool(
-		"ingest_folder",
-		{ matter_id: z.string(), path: z.string(), recursive: z.boolean().optional() },
-		async (args) => ingestFolder(ctx, principal, args),
+	server.tool("ingest_folder", { matter_id: z.string(), path: z.string() }, async (args) =>
+		ingestFolder(ctx, principal, args),
 	);
 
 	server.tool(

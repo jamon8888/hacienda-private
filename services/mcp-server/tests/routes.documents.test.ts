@@ -60,7 +60,7 @@ describe("document routes", () => {
 		server.close();
 	});
 
-	it("returns PII entities for a document", async () => {
+	it("rejects PII entities for a document without pii_read consent", async () => {
 		const { ctx, server, authedFetch } = await makeAuthedServer();
 		const matter = ctx.store.createMatter("Acme v Doe");
 		const folder = ctx.store.createFolder(matter.id, "Discovery");
@@ -72,6 +72,25 @@ describe("document routes", () => {
 			ingested_via: "mcp",
 		});
 		ctx.store.insertPiiEntities(doc.id, [{ kind: "person", start: 0, end: 8, text: "Jane Doe" }]);
+
+		const res = await authedFetch(`/api/documents/${doc.id}/pii`);
+		expect(res.status).toBe(403);
+		server.close();
+	});
+
+	it("returns PII entities for a document once pii_read consent is granted", async () => {
+		const { ctx, server, authedFetch } = await makeAuthedServer();
+		const matter = ctx.store.createMatter("Acme v Doe");
+		const folder = ctx.store.createFolder(matter.id, "Discovery");
+		const doc = ctx.store.createDocument({
+			folder_id: folder.id,
+			matter_id: matter.id,
+			path: "/tmp/a.txt",
+			content_hash: "h1",
+			ingested_via: "mcp",
+		});
+		ctx.store.insertPiiEntities(doc.id, [{ kind: "person", start: 0, end: 8, text: "Jane Doe" }]);
+		ctx.store.grantConsent({ subject: "owner", matter_id: matter.id, scope: "pii_read" as never });
 
 		const res = await authedFetch(`/api/documents/${doc.id}/pii`);
 		const body = (await res.json()) as { pii: { kind: string }[] };

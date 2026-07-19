@@ -95,7 +95,12 @@ async function getModel(modelPath: string, tokenizerPath: string): Promise<Gline
 			const model = new GlinerClass(config);
 			await model.initialize();
 			return model;
-		})();
+		})().catch((err) => {
+			// Don't let a transient init failure permanently poison the cache — the next call
+			// should retry instead of replaying the same rejection forever.
+			modelCache.delete(key);
+			throw err;
+		});
 		modelCache.set(key, cached);
 	}
 	return cached;

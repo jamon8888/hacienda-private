@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS documents (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_documents_folder ON documents(folder_id);
-CREATE INDEX IF NOT EXISTS idx_documents_hash ON documents(folder_id, content_hash);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_hash ON documents(folder_id, content_hash);
 CREATE TABLE IF NOT EXISTS document_pii (
   id TEXT PRIMARY KEY,
   document_id TEXT NOT NULL REFERENCES documents(id),
@@ -92,6 +92,27 @@ function ensureColumn(db: Database.Database, table: string, column: string, defi
 	}
 }
 
+// `CREATE UNIQUE INDEX IF NOT EXISTS` is a no-op against an existing dev database whose
+// same-named index was created non-unique by an older schema version — SQLite's IF NOT EXISTS
+// checks the name, not the definition. Drop and recreate it as unique if it isn't already, so
+// the dedupe-by-hash guarantee (idx_documents_hash) is actually enforced on upgrade, not just
+// on a fresh database.
+function ensureUniqueIndex(db: Database.Database, indexName: string, createUniqueSql: string): void {
+	const row = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?").get(indexName) as
+		| { sql: string | null }
+		| undefined;
+	if (row && row.sql && !/UNIQUE/i.test(row.sql)) {
+		db.exec(`DROP INDEX ${indexName}`);
+		try {
+			db.exec(createUniqueSql);
+		} catch {
+			// A dev database from before this constraint existed may already hold duplicate
+			// (folder_id, content_hash) rows — don't crash store construction over it; leave the
+			// index absent rather than half-applied. Fresh databases never hit this path.
+		}
+	}
+}
+
 export class MetadataStore {
 	private readonly db: Database.Database;
 
@@ -102,6 +123,11 @@ export class MetadataStore {
 		this.db.exec(SCHEMA);
 		ensureColumn(this.db, "folders", "status", "TEXT NOT NULL DEFAULT 'pending'");
 		ensureColumn(this.db, "folders", "last_ingested_at", "TEXT NULL");
+		ensureUniqueIndex(
+			this.db,
+			"idx_documents_hash",
+			"CREATE UNIQUE INDEX idx_documents_hash ON documents(folder_id, content_hash)",
+		);
 	}
 
 	close(): void {
@@ -228,6 +254,15 @@ export class MetadataStore {
          FROM documents WHERE folder_id = ? AND content_hash = ?`,
 			)
 			.get(folderId, contentHash) as Document | undefined;
+	}
+
+	getDocument(id: string): Document | undefined {
+		return this.db
+			.prepare(
+				`SELECT id, folder_id, matter_id, path, content_hash, status, pages, chunk_count, pii_count, ingested_via, error_message, created_at
+         FROM documents WHERE id = ?`,
+			)
+			.get(id) as Document | undefined;
 	}
 
 	updateDocumentStatus(

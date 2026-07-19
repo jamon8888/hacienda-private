@@ -49,7 +49,7 @@ function makeFakeStore(): DocumentStore & { documents: Document[]; pii: Record<s
 			pii[documentId] = inserted;
 			return inserted;
 		},
-		getDocumentsByFolder: (folderId) => documents.filter((d) => d.folder_id === folderId),
+		getDocument: (id) => documents.find((d) => d.id === id),
 	};
 }
 
@@ -64,7 +64,7 @@ function makeFakeMirror(): MirrorSink & { appended: { matterId: string; pii: unk
 }
 
 describe("ingestFile", () => {
-	it("extracts, chunks, embeds, detects PII, and persists both outputs", async () => {
+	it("extracts, chunks, detects PII, and persists both outputs", async () => {
 		const store = makeFakeStore();
 		const mirror = makeFakeMirror();
 		const extract = vi.fn().mockResolvedValue({ content: "Jane Doe works at Acme Corp.", pageCount: 1 });
@@ -87,7 +87,9 @@ describe("ingestFile", () => {
 		expect(mirror.appended).toHaveLength(1);
 		expect(mirror.appended[0]?.matterId).toBe("matter-1");
 		expect(mirror.appended[0]?.chunks).toHaveLength(1);
-		expect(embed).toHaveBeenCalledWith("Jane Doe works at Acme Corp.");
+		// Not consumed by anything yet (mirror chunks still carry a static score) — computing and
+		// discarding an embedding per chunk would just pay full inference cost for nothing.
+		expect(embed).not.toHaveBeenCalled();
 	});
 
 	it("skips a file whose content hash was already ingested for the folder", async () => {
@@ -129,5 +131,38 @@ describe("ingestFile", () => {
 		expect(doc.error_message).toBe("corrupt PDF");
 		expect(store.pii[doc.id]).toBeUndefined();
 		expect(mirror.appended).toHaveLength(0);
+	});
+
+	it("retries a previously-errored document in place instead of creating a duplicate row", async () => {
+		const store = makeFakeStore();
+		const mirror = makeFakeMirror();
+		const file = { path: "/tmp/flaky.txt", contentHash: hashBytes(Buffer.from("flaky content")) };
+		const ctx = { folderId: "folder-1", matterId: "matter-1", ingestedVia: "mcp" as const };
+
+		const failing = {
+			extract: vi.fn().mockRejectedValue(new Error("transient failure")),
+			chunk: vi.fn(),
+			embed: vi.fn(),
+			detectPii: vi.fn(),
+			store,
+			mirror,
+		};
+		const first = await ingestFile(failing, file, ctx);
+		expect(first.status).toBe("error");
+		expect(store.documents).toHaveLength(1);
+
+		const succeeding = {
+			extract: vi.fn().mockResolvedValue({ content: "flaky content", pageCount: 1 }),
+			chunk: vi.fn().mockReturnValue(["flaky content"]),
+			embed: vi.fn(),
+			detectPii: vi.fn().mockResolvedValue([]),
+			store,
+			mirror,
+		};
+		const second = await ingestFile(succeeding, file, ctx);
+
+		expect(second.status).toBe("done");
+		expect(second.id).toBe(first.id); // same row reused, not a duplicate
+		expect(store.documents).toHaveLength(1);
 	});
 });
