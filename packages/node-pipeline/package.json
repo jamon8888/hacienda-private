@@ -13,7 +13,7 @@
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --clean",
+    "build": "tsup src/index.ts --format esm --clean && cp src/gliner-models.sha256 dist/gliner-models.sha256",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

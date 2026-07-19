@@ -3,6 +3,7 @@ import { createReadStream, existsSync, mkdirSync, readFileSync, writeFileSync } 
 import { chmodSync } from "node:fs";
 import { dirname } from "node:path";
 import type { ModelManifest, ModelManifestEntry } from "@xberg-io/core";
+import { loadGlinerManifestEntries } from "@xberg-io/node-pipeline";
 import { PLACEHOLDER_SHA } from "./config.js";
 import { AppError } from "./error.js";
 
@@ -35,6 +36,15 @@ export class ModelCache {
     }
     if (!parsed || !Array.isArray(parsed.models)) {
       throw new AppError("model", "model manifest is malformed");
+    }
+    try {
+      const glinerEntries = loadGlinerManifestEntries();
+      const existingNames = new Set(parsed.models.map((m) => m.name));
+      for (const entry of glinerEntries) {
+        if (!existingNames.has(entry.name)) parsed.models.push(entry);
+      }
+    } catch {
+      // GLiNER catalog unavailable (e.g. package not built yet) — base manifest still serves.
     }
     this.manifest = parsed;
     this.manifestByFile = new Map(parsed.models.map((m) => [m.file, m]));
