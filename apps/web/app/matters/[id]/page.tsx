@@ -3,10 +3,10 @@ import MatterView from "./MatterView";
 export const dynamicParams = true;
 
 export function generateStaticParams(): { id: string }[] {
-  return [{ id: "_" }];
+	return [{ id: "_" }];
 }
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  return <MatterView id={id} />;
+	const { id } = await params;
+	return <MatterView id={id} />;
 }
