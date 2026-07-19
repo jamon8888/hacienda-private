@@ -890,18 +890,21 @@ git commit -m "feat(node-pipeline): scaffold package with recursive folder walk 
 **Interfaces:**
 - Produces: `GLINER_MODEL_DEFINITIONS`, `parseGlinerChecksums(text: string): Record<string,string>`, `buildGlinerManifestEntries(checksums: Record<string,string>): ModelManifestEntry[]`.
 
-This mirrors `crates/xberg-gliner/src/lib.rs`'s `GLINER_MODELS` table and
-checksum-manifest format exactly, so Node and Rust download and verify the
+This mirrors `crates/xberg/src/text/ner/gline.rs`'s `GLINER_MODELS` table and
+checksum-manifest format exactly (that Rust *core crate* module wraps the
+lower-level `crates/xberg-gliner` ONNX engine and owns the model catalog +
+pinned manifest — `crates/xberg-gliner` itself has no catalog, only the
+inference/decode plumbing), so Node and Rust download and verify the
 identical artifacts from the identical `xberg-io/gliner-models` HF repo. The
 checksum values themselves are **not** retyped here — copying
-`crates/xberg-gliner/src/gliner-models.sha256` verbatim (Step 1) is a
+`crates/xberg/src/text/ner/gliner-models.sha256` verbatim (Step 1) is a
 mechanical `cp`, not a re-derivation, so there is no risk of transcription
 error diverging from the pinned values Rust already verifies against.
 
 - [ ] **Step 1: Copy the pinned checksum manifest verbatim**
 
 ```bash
-cp "crates/xberg-gliner/src/gliner-models.sha256" "packages/node-pipeline/src/gliner-models.sha256"
+cp "crates/xberg/src/text/ner/gliner-models.sha256" "packages/node-pipeline/src/gliner-models.sha256"
 ```
 
 - [ ] **Step 2: Write the failing test**
@@ -970,7 +973,7 @@ export interface GlinerModelDefinition {
   tokenizerFile: string;
 }
 
-// Mirrors crates/xberg-gliner/src/lib.rs::GLINER_MODELS exactly.
+// Mirrors crates/xberg/src/text/ner/gline.rs::GLINER_MODELS exactly.
 export const GLINER_MODEL_DEFINITIONS: GlinerModelDefinition[] = [
   {
     id: "gliner_small-v2.5",
@@ -1123,7 +1126,7 @@ Expected: PASS (existing `ModelCache` tests in `tests/static.test.ts` and
 
 ```bash
 git add packages/node-pipeline/src/gliner-catalog.ts packages/node-pipeline/src/gliner-catalog.test.ts packages/node-pipeline/src/gliner-models.sha256 packages/node-pipeline/src/index.ts packages/node-pipeline/package.json services/mcp-server/src/models.ts services/mcp-server/package.json
-git commit -m "feat(node-pipeline): pin GLiNER model catalog to the same manifest crates/xberg-gliner uses"
+git commit -m "feat(node-pipeline): pin GLiNER model catalog to the same manifest crates/xberg's gline.rs uses"
 ```
 
 ---
@@ -1148,7 +1151,7 @@ needed, this is just the label string list handed to the model.
 
 This test is marked `skip` by default because it needs a real downloaded
 GLiNER model (network + several hundred MB) — it is the equivalent of
-`crates/xberg-gliner`'s own `#[ignore] smoke_test_real_inference`. Run it
+`crates/xberg/src/text/ner/gline.rs`'s own `#[ignore] smoke_test_real_inference`. Run it
 explicitly during implementation to prove the integration works, then leave it
 skipped in CI (mirroring the Rust smoke test's `--ignored` convention).
 
@@ -1407,7 +1410,7 @@ This is the per-file pipeline the MCP tool (Task 10) drives in a loop over
 `IngestDeps` is an explicit dependency-injection object so the function is
 unit-testable without real ONNX models or a real database — tests inject fake
 `embed`/`detectPii` functions and an in-memory fake store/mirror, and assert
-the orchestration/persistence logic, matching how `crates/xberg-gliner`'s own
+the orchestration/persistence logic, matching how `crates/xberg`'s `gline.rs`
 tests separate model-dependent smoke tests from pure-logic tests.
 
 **Why structural interfaces, not the real classes:** `packages/node-pipeline`
