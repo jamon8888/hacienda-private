@@ -96,6 +96,9 @@ jobs:
             pnpm install
           fi
 
+      - name: Build node-pipeline (dependency of MCP server)
+        run: pnpm --filter @xberg-io/node-pipeline build
+
       - name: Smoke check (serve --version)
         shell: bash
         run: node services/mcp-server/dist/index.js serve --version
