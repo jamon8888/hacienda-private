@@ -1,6 +1,19 @@
 import type { Document, DocumentPiiEntity, Folder, Matter } from "@xberg-io/core";
 
-const BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8787";
+// The mcp-server serves the API and the static UI from the same origin (see
+// services/mcp-server/src/auth.ts's isSameOriginRequest check, which every /api/* route relies
+// on) — but on ANY port, not just the 8787 default. Hardcoding that default broke every
+// deployment running on a different port: the browser would try to reach a server that was
+// never there. NEXT_PUBLIC_API_BASE remains a real override for genuinely cross-origin setups;
+// the browser's own origin is the correct default otherwise.
+function resolveBase(): string {
+	const override = process.env.NEXT_PUBLIC_API_BASE;
+	if (override) return override;
+	if (typeof window !== "undefined" && window.location?.origin) return window.location.origin;
+	return "http://localhost:8787";
+}
+
+const BASE = resolveBase();
 const API = `${BASE}/api`;
 
 async function json<T>(res: Response): Promise<T> {

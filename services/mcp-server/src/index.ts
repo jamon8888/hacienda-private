@@ -224,6 +224,23 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
 		return;
 	}
 
+	// Static assets from the export: also public — Next.js's own built JS/CSS chunks
+	// (/_next/static/*) plus anything else next export drops next to the pages (favicon, etc.).
+	// There was previously NO route for these at all: every page's HTML loaded fine (200), but
+	// every script/stylesheet it referenced 404'd, so nothing ever hydrated — the app has never
+	// actually been able to run against this server, only against `next dev`'s own server on a
+	// separate port.
+	if (method === "GET" && !pathname.startsWith("/api/") && pathname !== "/") {
+		const uiDir = resolveUiDir();
+		if (uiDir) {
+			const assetPath = join(uiDir, decodeURIComponent(pathname));
+			if (assetPath.startsWith(uiDir) && existsSync(assetPath) && !statSync(assetPath).isDirectory()) {
+				serveFile(res, assetPath);
+				return;
+			}
+		}
+	}
+
 	// SPA fallback: also public, same reasoning as "/" above — the static export only ever
 	// produces a page per *route*, not per dynamic id (`app/documents/[id]/page.tsx`'s
 	// generateStaticParams emits a single `documents/_.html` shell that reads the real id

@@ -12,6 +12,7 @@ import { FileDropzone } from "@/components/ui/file-dropzone";
 import { useAuth } from "@/lib/auth";
 import { getFolders, getFolderDocuments, createDocument, updateDocumentStatus } from "@/lib/api";
 import { saveOriginalFile } from "@/lib/file-store";
+import { routeIdFromLocation } from "@/lib/route-id";
 
 interface FolderViewProps {
 	id: string;
@@ -30,7 +31,8 @@ interface UploadState {
 	error?: string;
 }
 
-export default function FolderView({ id: folderId }: FolderViewProps) {
+export default function FolderView({ id: propId }: FolderViewProps) {
+	const folderId = routeIdFromLocation("folders", propId);
 	const searchParams = useSearchParams();
 	const matterId = searchParams.get("matter_id") ?? "";
 	const { auth, setPassphrase } = useAuth();

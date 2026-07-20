@@ -15,6 +15,7 @@ import { getDocument } from "@/lib/api";
 import { getOriginalFile, saveReviewedPii, saveSplits, type StoredDocument } from "@/lib/file-store";
 import { createInitialSplits, type DocumentSplit } from "@/components/ui/document-splits";
 import { getMatterTemplate } from "@/lib/matter-templates";
+import { routeIdFromLocation } from "@/lib/route-id";
 
 // bounding-box-citations renders via Glide Data Grid (JSON tab), which requires browser APIs not
 // present during SSR/static export.
@@ -45,7 +46,8 @@ interface DocumentViewProps {
 	id: string;
 }
 
-export default function DocumentView({ id }: DocumentViewProps) {
+export default function DocumentView({ id: propId }: DocumentViewProps) {
+	const id = routeIdFromLocation("documents", propId);
 	const router = useRouter();
 	const { auth } = useAuth();
 	const [doc, setDoc] = useState<DocumentType | null>(null);

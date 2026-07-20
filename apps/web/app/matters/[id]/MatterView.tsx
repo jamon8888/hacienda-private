@@ -11,6 +11,7 @@ import { useAuth } from "@/lib/auth";
 import { getMatters, createFolder, getFolders, getFolderDocuments, forgetMatter } from "@/lib/api";
 import { getMatterTemplate, saveMatterTemplate, deleteMatterTemplate } from "@/lib/matter-templates";
 import { deleteOriginalFiles } from "@/lib/file-store";
+import { routeIdFromLocation } from "@/lib/route-id";
 import type { SchemaBuilderSchema } from "@/components/ui/schema-builder";
 
 // schema-builder uses @dnd-kit pointer sensors, which need a real browser environment.
@@ -30,8 +31,9 @@ interface MatterViewProps {
 	id: string;
 }
 
-export default function MatterView({ id: matterId }: MatterViewProps) {
+export default function MatterView({ id: propId }: MatterViewProps) {
 	const router = useRouter();
+	const matterId = routeIdFromLocation("matters", propId);
 	const { auth } = useAuth();
 	const [matter, setMatter] = useState<Matter | null>(null);
 	const [folders, setFolders] = useState<Folder[]>([]);
