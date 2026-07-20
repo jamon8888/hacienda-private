@@ -28,6 +28,14 @@ export async function createMatter(token: string, name: string): Promise<Matter>
 	return json<Matter>(res);
 }
 
+export async function forgetMatter(token: string, matterId: string): Promise<{ forgotten: unknown }> {
+	const res = await fetch(`${API}/matters/${encodeURIComponent(matterId)}`, {
+		method: "DELETE",
+		headers: { authorization: `Bearer ${token}` },
+	});
+	return json<{ forgotten: unknown }>(res);
+}
+
 export async function getFolders(token: string, matterId: string): Promise<Folder[]> {
 	const res = await fetch(`${API}/folders?matter_id=${encodeURIComponent(matterId)}`, {
 		headers: { authorization: `Bearer ${token}` },

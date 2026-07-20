@@ -38,9 +38,11 @@ interface PiiReviewPanelProps {
 	mirror?: Uint8Array;
 	reviewedPii?: Record<string, { expected: string | null }>;
 	onSave: (reviewedPii: Record<string, { expected: string | null }>) => void;
+	// Matter's extraction template (Step 8) — non-empty means collapse kinds outside it.
+	selectedKinds?: string[];
 }
 
-export function PiiReviewPanel({ pii, mirror, reviewedPii, onSave }: PiiReviewPanelProps) {
+export function PiiReviewPanel({ pii, mirror, reviewedPii, onSave, selectedKinds }: PiiReviewPanelProps) {
 	const fields = useMemo<ReviewField[]>(() => {
 		let chunks: MirrorChunkLoc[] = [];
 		if (mirror) {
@@ -52,7 +54,12 @@ export function PiiReviewPanel({ pii, mirror, reviewedPii, onSave }: PiiReviewPa
 			}
 		}
 
-		return pii.map((e) => {
+		const filtered =
+			selectedKinds && selectedKinds.length > 0
+				? pii.filter((e) => selectedKinds.some((k) => k.toLowerCase() === e.kind.toLowerCase()))
+				: pii;
+
+		return filtered.map((e) => {
 			const key = fieldKey(e);
 			const chunkIndex = chunkIndexFromToken(e.text);
 			const chunk = chunkIndex !== null ? chunks.find((c) => c.chunk_index === chunkIndex) : undefined;
@@ -65,7 +72,7 @@ export function PiiReviewPanel({ pii, mirror, reviewedPii, onSave }: PiiReviewPa
 				location: chunk?.page !== undefined && chunk.bbox ? { page: chunk.page, area: bboxToHighlightArea(chunk.bbox) } : undefined,
 			} satisfies ReviewField;
 		});
-	}, [pii, mirror, reviewedPii]);
+	}, [pii, mirror, reviewedPii, selectedKinds]);
 
 	const expectedRef = useMemo(() => ({ current: {} as JsonObject }), [fields]);
 

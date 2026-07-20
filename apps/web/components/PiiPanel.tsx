@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 function maskFor(kind: string, indexInKind: number): string {
 	const cat = kind
@@ -29,9 +30,12 @@ interface PiiPanelProps {
 	// Raw mirror payload bytes for this document (IngestResult.mirror). Required to reveal a span —
 	// without it, the panel only ever shows masked tokens.
 	mirror?: Uint8Array;
+	// Matter's extraction template (Step 8) — kinds the matter cares about. Non-selected kinds are
+	// dimmed rather than removed, since detection itself is unaffected by the template.
+	selectedKinds?: string[];
 }
 
-export function PiiPanel({ pii, mirror }: PiiPanelProps) {
+export function PiiPanel({ pii, mirror, selectedKinds }: PiiPanelProps) {
 	const masked = useMemo(() => {
 		const counters = new Map<string, number>();
 		return pii.map((e) => {
@@ -40,6 +44,9 @@ export function PiiPanel({ pii, mirror }: PiiPanelProps) {
 			return { entity: e, mask: maskFor(e.kind, n) };
 		});
 	}, [pii]);
+
+	const isSelected = (kind: string) =>
+		!selectedKinds || selectedKinds.length === 0 || selectedKinds.some((k) => k.toLowerCase() === kind.toLowerCase());
 
 	return (
 		<Card className="col-span-1">
@@ -52,7 +59,13 @@ export function PiiPanel({ pii, mirror }: PiiPanelProps) {
 				) : (
 					<ul className="space-y-2">
 						{masked.map(({ entity, mask }, i) => (
-							<li key={i} className="flex items-center justify-between gap-2 text-sm">
+							<li
+								key={i}
+								className={cn(
+									"flex items-center justify-between gap-2 text-sm",
+									!isSelected(entity.kind) && "opacity-40",
+								)}
+							>
 								<RevealableSpan mask={mask} entity={entity} mirror={mirror} />
 								<Badge variant="destructive">{entity.kind}</Badge>
 							</li>

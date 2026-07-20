@@ -1,5 +1,6 @@
 import { get, set, del } from "idb-keyval";
 import type { PiiEntity } from "@xberg-io/core";
+import type { DocumentSplit } from "@/components/ui/document-splits";
 
 // Client-only cache of the original file bytes + ingest results, keyed by the server-assigned
 // Document id. Nothing here ever leaves the browser: the server only ever sees the mirror bundle
@@ -20,6 +21,8 @@ export interface StoredDocument {
 	// Confirming/correcting/rejecting a span doesn't rebuild the mirror or vault — only the
 	// reviewer's expected value is recorded locally, alongside the original detection.
 	reviewedPii?: Record<string, { expected: string | null }>;
+	// User-defined page groupings for large filings — segments become selectable review units.
+	splits?: DocumentSplit[];
 }
 
 function keyFor(docId: string): string {
@@ -47,6 +50,12 @@ export async function saveReviewedPii(
 	const existing = await get<StoredDocument>(keyFor(docId));
 	if (!existing) return;
 	await set(keyFor(docId), { ...existing, reviewedPii });
+}
+
+export async function saveSplits(docId: string, splits: DocumentSplit[]): Promise<void> {
+	const existing = await get<StoredDocument>(keyFor(docId));
+	if (!existing) return;
+	await set(keyFor(docId), { ...existing, splits });
 }
 
 export async function deleteOriginalFile(docId: string): Promise<void> {
