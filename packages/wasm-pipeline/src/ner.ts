@@ -39,15 +39,20 @@ async function configureOrtEnv(): Promise<void> {
     const { env: transformersEnv } = await import("@xenova/transformers");
     transformersEnv.remoteHost = `${API_BASE}/models/`;
     transformersEnv.remotePathTemplate = "{model}/";
-  } catch {
-    // transformers runtime unavailable here (e.g. typecheck-only) — no-op.
+  } catch (e) {
+    // Module-resolution failure (e.g. typecheck-only / not installed) is expected and harmless.
+    if ((e as NodeJS.ErrnoException)?.code !== "ERR_MODULE_NOT_FOUND") {
+      console.warn("wasm-pipeline: failed to configure @xenova/transformers remote paths", e);
+    }
   }
   try {
     const ort = await import("onnxruntime-web");
     ort.env.wasm.numThreads = 1;
     ort.env.wasm.wasmPaths = ONNXRUNTIME_WEB_WASM_PATHS;
-  } catch {
-    // onnxruntime-web unavailable here (e.g. typecheck-only) — no-op.
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException)?.code !== "ERR_MODULE_NOT_FOUND") {
+      console.warn("wasm-pipeline: failed to configure onnxruntime-web wasmPaths", e);
+    }
   }
 }
 

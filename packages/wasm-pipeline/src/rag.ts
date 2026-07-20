@@ -59,7 +59,11 @@ function vectorKey(matterId: string): string {
 
 function saveMetadata(matterId: string, metaById: Record<number, EdgeVecMetadata>): void {
   if (typeof localStorage === "undefined") return;
-  localStorage.setItem(metaKey(matterId), JSON.stringify(metaById));
+  try {
+    localStorage.setItem(metaKey(matterId), JSON.stringify(metaById));
+  } catch {
+    // Quota exceeded or storage unavailable — non-fatal; index still lives in memory.
+  }
 }
 
 function loadMetadata(matterId: string): Record<number, EdgeVecMetadata> {
@@ -73,7 +77,11 @@ function loadMetadata(matterId: string): Record<number, EdgeVecMetadata> {
 
 function saveVectors(matterId: string, vectorsById: Record<number, number[]>): void {
   if (typeof localStorage === "undefined") return;
-  localStorage.setItem(vectorKey(matterId), JSON.stringify(vectorsById));
+  try {
+    localStorage.setItem(vectorKey(matterId), JSON.stringify(vectorsById));
+  } catch {
+    // Quota exceeded or storage unavailable — non-fatal; index still lives in memory.
+  }
 }
 
 function loadVectors(matterId: string): Record<number, number[]> {
@@ -90,8 +98,14 @@ export async function buildIndex(matterId: string, items: IndexedChunk[]): Promi
   const config = new EdgeVecConfig(EMBED_DIM);
   config.metric = "cosine";
   const db = new EdgeVecClass(config);
-  const metaById: Record<number, EdgeVecMetadata> = {};
-  const vectorsById: Record<number, number[]> = {};
+  // Preserve an existing matter's stored metadata/vectors: replay the previously persisted
+  // vectors into the fresh index first (in id order, so ids match), then append the provided
+  // items. This extends a stored index instead of discarding it on rebuild.
+  const metaById: Record<number, EdgeVecMetadata> = loadMetadata(matterId);
+  const vectorsById: Record<number, number[]> = loadVectors(matterId);
+  for (const id of Object.keys(vectorsById).map(Number).sort((a, b) => a - b)) {
+    db.insert(new Float32Array(vectorsById[id] ?? []));
+  }
   for (const item of items) {
     const id = db.insert(item.vector);
     metaById[id] = {

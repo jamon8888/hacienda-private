@@ -97,13 +97,6 @@ function FolderPageInner() {
             );
           },
         });
-        setFiles((prev) =>
-          prev.map((s) =>
-            s.file && s.file.name === result.name
-              ? { ...s, status: "done" as const, progress: 100, result }
-              : s,
-          ),
-        );
         await pushMirror(auth.token, matterId, result.mirror);
         await saveDocument({
           doc_id: result.doc_id,
@@ -117,6 +110,13 @@ function FolderPageInner() {
           blob: file,
           mimeType: file.type,
         });
+        setFiles((prev) =>
+          prev.map((s) =>
+            s.file && s.file.name === result.name
+              ? { ...s, status: "done" as const, progress: 100, result }
+              : s,
+          ),
+        );
       }
     } catch (e) {
       // eslint-disable-next-line no-console

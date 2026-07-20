@@ -36,7 +36,9 @@ const ScrollArea = React.forwardRef<
       ...props
     },
     ref
-  ) => (
+  ) => {
+    const { className: viewportClassNameProp, ...restViewportProps } = viewportProps ?? {}
+    return (
     <ScrollAreaPrimitive.Root
       ref={ref}
       className={cn("relative overflow-hidden", className)}
@@ -49,9 +51,10 @@ const ScrollArea = React.forwardRef<
           scrollFade &&
             "[mask-image:linear-gradient(to_bottom,transparent,black_12px,black_calc(100%-12px),transparent)]",
           scrollbarGutter && "[scrollbar-gutter:stable]",
-          viewportClassName
+          viewportClassName,
+          viewportClassNameProp
         )}
-        {...viewportProps}
+        {...restViewportProps}
       >
         {children}
       </ScrollAreaPrimitive.Viewport>
@@ -63,7 +66,8 @@ const ScrollArea = React.forwardRef<
       )}
       <ScrollAreaPrimitive.Corner />
     </ScrollAreaPrimitive.Root>
-  )
+    )
+  }
 )
 ScrollArea.displayName = ScrollAreaPrimitive.Root.displayName
 

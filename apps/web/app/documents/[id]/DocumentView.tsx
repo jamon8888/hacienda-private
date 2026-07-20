@@ -53,15 +53,30 @@ export default function DocumentView() {
   const docId = useRouteId();
   const [doc, setDoc] = useState<StoredDocument | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
     if (!docId) return;
+    let stale = false;
     setLoaded(false);
+    setError(null);
     getDocument(docId)
-      .then((d) => setDoc(d))
-      .finally(() => setLoaded(true));
+      .then((d) => {
+        if (stale) return;
+        setDoc(d);
+      })
+      .catch((e) => {
+        if (stale) return;
+        setError(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => {
+        if (!stale) setLoaded(true);
+      });
+    return () => {
+      stale = true;
+    };
   }, [docId]);
 
   useEffect(() => {
@@ -76,6 +91,17 @@ export default function DocumentView() {
 
   if (!loaded) {
     return <main className="mx-auto max-w-3xl p-6">Loading…</main>;
+  }
+
+  if (error) {
+    return (
+      <main className="mx-auto max-w-3xl p-6 text-center">
+        <p className="text-destructive">Failed to load document: {error}</p>
+        <Button className="mt-4" variant="ghost" onClick={() => router.back()}>
+          ← Back
+        </Button>
+      </main>
+    );
   }
 
   if (!doc) {

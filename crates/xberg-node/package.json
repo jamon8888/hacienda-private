@@ -23,8 +23,7 @@
     "@xberg-io/xberg-linux-x64-musl": "1.0.0-rc.29",
     "@xberg-io/xberg-linux-arm64-musl": "1.0.0-rc.29",
     "@xberg-io/xberg-darwin-arm64": "1.0.0-rc.29",
-    "@xberg-io/xberg-win32-x64-msvc": "1.0.0-rc.29",
-    "@xberg-io/xberg-win32-arm64-msvc": "1.0.0-rc.29"
+    "@xberg-io/xberg-win32-x64-msvc": "1.0.0-rc.29"
   },
   "napi": {
     "packageName": "@xberg-io/xberg",
@@ -35,8 +34,7 @@
       "x86_64-unknown-linux-musl",
       "aarch64-unknown-linux-musl",
       "aarch64-apple-darwin",
-      "x86_64-pc-windows-msvc",
-      "aarch64-pc-windows-msvc"
+      "x86_64-pc-windows-msvc"
     ]
   },
   "scripts": {

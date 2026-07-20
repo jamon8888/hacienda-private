@@ -23,9 +23,6 @@ export function selectScenario(p: DeviceProfile): ModelScenario {
   const isMobile = p.formFactor === "mobile" || p.formFactor === "tablet";
   const lowRam = (p.deviceMemoryGb ?? 8) <= 4;
   const weakCpu = threads <= 4;
-  const gpuLooksDiscrete =
-    !!p.gpuVendor && !!p.gpuArchitecture && p.gpuIsFallback !== true &&
-    (p.gpuMaxBufferBytes ?? 0) >= 128 * 1024 * 1024;
 
   // Quantization: INT4 is gated off for now — the published int4 ONNX graph uses operators
   // (e.g. CumSum) that onnxruntime-web's wasm/CPU execution provider does not implement
@@ -33,11 +30,14 @@ export function selectScenario(p: DeviceProfile): ModelScenario {
   // execution provider guaranteed to be available (GPU is opportunistic/best-effort, with
   // silent fallback to wasm on failure) — so INT4 would break exactly the constrained
   // devices it's meant to help. INT8 uses standard ops the wasm backend does support.
-  // TODO(plan2): flip this on once CumSum support (or an INT4 export without it) is
+  // If INT4 is ever enabled, it should target constrained low-RAM / mobile devices (which
+  // need the smaller footprint most), never discrete GPUs — those capable devices stay on
+  // INT8. TODO(plan2): flip this on once CumSum support (or an INT4 export without it) is
   // confirmed on the wasm EP, not just capability-detected.
   const int4Verified = false;
+  const constrainedDevice = lowRam || isMobile;
   const quant: ModelScenario["quant"] =
-    int4Verified && gpuLooksDiscrete && !lowRam && !isMobile ? "int4" : "int8";
+    int4Verified && constrainedDevice ? "int4" : "int8";
 
   // Chunk size: smaller on constrained devices to bound peak memory.
   let chunkSize = 1024;

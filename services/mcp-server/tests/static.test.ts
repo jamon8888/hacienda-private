@@ -101,4 +101,16 @@ describe("static UI serving", () => {
     const res = await fetch(`${baseUrl}/../../../../etc/passwd`);
     expect(res.status).not.toBe(200);
   });
+
+  it("returns 404 for /vendor/onnxruntime-web/* when the package is not installed", async () => {
+    const res = await fetch(`${baseUrl}/vendor/onnxruntime-web/ort.wasm.bundle.min.mjs`);
+    expect(res.status).toBe(404);
+    expect(await res.text()).toContain("onnxruntime-web package not installed");
+  });
+
+  it("returns 404 for /vendor/embedpdf/* when the package is not installed", async () => {
+    const res = await fetch(`${baseUrl}/vendor/embedpdf/pdfium.wasm`);
+    expect(res.status).toBe(404);
+    expect(await res.text()).toContain("@embedpdf/pdfium package not installed");
+  });
 });

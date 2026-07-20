@@ -14,7 +14,13 @@ export function useRouteId(): string {
   if (typeof window !== "undefined") {
     const segments = window.location.pathname.split("/").filter(Boolean);
     const last = segments[segments.length - 1];
-    if (last && last !== "_") return decodeURIComponent(last);
+    if (last && last !== "_") {
+      try {
+        return decodeURIComponent(last);
+      } catch {
+        return params.id ?? "";
+      }
+    }
   }
   return params.id ?? "";
 }

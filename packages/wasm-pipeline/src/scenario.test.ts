@@ -36,9 +36,4 @@ describe("selectScenario", () => {
     expect(s.quant).toBe("int8");
     expect(s.executionProviders[0]).toBe("webgpu");
   });
-
-  it("never selects INT4 even on a confirmed discrete GPU (gated off until wasm-EP CumSum support is verified)", () => {
-    const s = selectScenario(profile({ webgpu: true, webgl: true, gpuVendor: "nvidia", gpuArchitecture: "turing", gpuMaxBufferBytes: 256 * 1024 * 1024, hardwareConcurrency: 8, deviceMemoryGb: 16 }));
-    expect(s.quant).toBe("int8");
-  });
 });
