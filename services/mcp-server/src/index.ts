@@ -286,7 +286,10 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
 		const matterId = url.searchParams.get("matter_id");
 		if (!matterId) throw new AppError("bad_request", "matter_id is required");
 		const body = await readBody(req);
+		// saveMirror is atomic (all-or-nothing on disk), so only a successful write reaches this
+		// audit call — a failed write throws above and is never audited.
 		const status = ctx.mirror.saveMirror(matterId, body);
+		ctx.store.recordAudit(principal.subject, "ingest", "save_mirror", matterId);
 		sendJson(res, 201, status);
 		return;
 	}

@@ -171,10 +171,18 @@ process par le client propriétaire est la frontière d'authentification.*
 | Menace | Couvert ? | Par quoi |
 |--------|-----------|----------|
 | Onglet navigateur tiers → `fetch` DELETE sans credential | ✅ | Garde d'origine (couche 1) + SOP sur le token injecté |
-| Autre process local → curl vers l'API HTTP | ✅ | Token Bearer 0600 (couche 2) |
+| Autre process local → curl vers l'API HTTP | ⚠️ **Risque accepté, pas bloqué** | Le token est injecté par `GET /`, **non authentifié** — un `curl` local sans en-tête `Sec-Fetch-Site` passe la garde d'origine et peut lire le token dans le HTML, puis le rejouer en `Bearer`. Ce n'est **pas** un secret cross-process ; c'est une **capability same-machine**. Voir issue #10 (durcissement Jupyter-style `?token=` descopé — persona solo). |
 | Accès distant off-box | ✅ | bind `127.0.0.1` (existant) |
 | Attaquant ayant déjà l'accès fichier au home de l'utilisateur | ❌ (hors périmètre) | Pourrait lire vault/SQLite de toute façon — même frontière de confiance |
 | Multi-utilisateur / multi-tenant | ❌ (par design) | Non-objectif ; `subject="owner"` unique |
+
+**Décision (issue #10, item A) :** le bootstrap style Jupyter (`?token=` au lancement, `GET /` sans
+credential ne divulgue rien) a été envisagé pour fermer la ligne ci-dessus, puis **descopé** :
+le persona ciblé est un avocat **solo sur son propre poste**, pas une machine partagée. Sur ce
+modèle de menace, un attaquant capable d'atteindre le port loopback tourne déjà sous le compte du
+propriétaire et pourrait lire le vault/SQLite directement — le bootstrap ajouterait de la
+complexité (coordination avec le flux UI web, gestion de cookie) sans réduire un risque réel pour
+ce persona. À reconsidérer si un jour le produit vise des postes multi-comptes/multi-utilisateurs.
 
 ## 6. État de PR #6 et stratégie de portage vers `main`
 
