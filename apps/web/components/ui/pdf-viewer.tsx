@@ -376,7 +376,7 @@ function getVisibleThumbnailItems({
 	if (start === -1) start = items.length - 1;
 
 	let end = start;
-	while (end < items.length && items[end].top <= viewportBottom) {
+	while (end < items.length && items[end]!.top <= viewportBottom) {
 		end += 1;
 	}
 
@@ -1902,9 +1902,9 @@ function PDFViewerInner({
 				});
 				const heightDelta = nextRotatedSize.height - previousRotatedSize.height;
 
-				if (pageIndex < referencePageIndex) {
+				if (pageIndex < (referencePageIndex ?? -1)) {
 					scrollDelta += heightDelta;
-				} else if (pageIndex === referencePageIndex) {
+				} else if (pageIndex === (referencePageIndex ?? -1)) {
 					scrollDelta += heightDelta / 2;
 				}
 
@@ -2103,13 +2103,13 @@ function PDFViewerInner({
 										variant="ghost"
 										size="icon-sm"
 										aria-label="Zoom out"
-										disabled={controlsDisabled || currentZoomLevel <= ZOOM_OPTIONS[0]}
+										disabled={controlsDisabled || currentZoomLevel <= (ZOOM_OPTIONS[0] ?? 1)}
 										onClick={() => {
 											const nextZoom = [...ZOOM_OPTIONS]
 												.reverse()
 												.find((option) => option < currentZoomLevel);
 
-											zoom?.requestZoom(nextZoom ?? ZOOM_OPTIONS[0]);
+											zoom?.requestZoom(nextZoom ?? ZOOM_OPTIONS[0] ?? 1);
 										}}
 									>
 										<HugeiconsIcon icon={MinusSignCircleIcon} className="size-4" />
@@ -2142,12 +2142,12 @@ function PDFViewerInner({
 										aria-label="Zoom in"
 										disabled={
 											controlsDisabled ||
-											currentZoomLevel >= ZOOM_OPTIONS[ZOOM_OPTIONS.length - 1]
+											currentZoomLevel >= (ZOOM_OPTIONS[ZOOM_OPTIONS.length - 1] ?? 1)
 										}
 										onClick={() => {
 											const nextZoom = ZOOM_OPTIONS.find((option) => option > currentZoomLevel);
 
-											zoom?.requestZoom(nextZoom ?? ZOOM_OPTIONS[ZOOM_OPTIONS.length - 1]);
+											zoom?.requestZoom(nextZoom ?? ZOOM_OPTIONS[ZOOM_OPTIONS.length - 1] ?? 1);
 										}}
 									>
 										<HugeiconsIcon icon={PlusSignCircleIcon} className="size-4" />
