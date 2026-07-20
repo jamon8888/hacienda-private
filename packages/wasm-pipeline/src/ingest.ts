@@ -44,13 +44,15 @@ export async function ingestFolder(
 	file: File | Uint8Array,
 	options: IngestOptions,
 ): Promise<{ accepted: number }> {
-	const base = await defaultExtractionConfig();
-	const ocrConfig = await withTesseractOcr(base, "tesseract", options.language);
 	const profile = await detectCapabilities();
 	const scenario = selectScenario(profile);
+	const base = await defaultExtractionConfig(scenario);
+	const ocrConfig = await withTesseractOcr(base, "tesseract", options.language);
+	const lowRam = (profile.deviceMemoryGb ?? 8) <= 4;
+	const isMobile = profile.formFactor === "mobile" || profile.formFactor === "tablet";
 	const config = await withChunking(ocrConfig, {
 		maxCharacters: options.maxCharacters ?? scenario.chunkSize,
-		chunkerType: "markdown",
+		chunkerType: lowRam || isMobile ? "text" : "markdown",
 	});
 
 	const result = await extractDocument(file, config);
