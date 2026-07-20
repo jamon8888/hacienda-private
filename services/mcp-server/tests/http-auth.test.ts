@@ -95,4 +95,26 @@ describe("HTTP auth surface", () => {
     });
     expect(res.status).toBe(400);
   });
+
+  it("POST /api/rag/mirror records a save_mirror audit entry under 'owner'", async () => {
+    await start(["read", "ingest", "redact", "admin"]);
+    const matterRes = await fetch(`${base}/api/matters`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
+      body: JSON.stringify({ name: "Dossier B" }),
+    });
+    const matter = (await matterRes.json()) as Matter;
+
+    const res = await fetch(`${base}/api/rag/mirror?matter_id=${matter.id}`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${TOKEN}` },
+      body: "mirror-bytes",
+    });
+    expect(res.status).toBe(201);
+
+    const audit = ctx.store.getAuditLog(matter.id);
+    const saveMirrorEntry = audit.find((a) => a.action === "save_mirror");
+    expect(saveMirrorEntry).toBeDefined();
+    expect(saveMirrorEntry?.actor).toBe("owner");
+  });
 });

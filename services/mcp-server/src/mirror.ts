@@ -1,5 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import type { PiiEntity, RetrievedChunk } from "@xberg-io/core";
 import { AppError } from "./error.js";
@@ -77,24 +76,38 @@ export class MirrorStore {
 		mkdirSync(mirrorsDir, { recursive: true });
 	}
 
+	// Every matter's mirror files live under one directory, so a re-save can swap the whole
+	// directory in with a single atomic rename (see saveMirror) instead of writing 3 files
+	// independently, which could leave a crash-torn mix of old/new files on disk.
+	private matterDir(matterId: string): string {
+		return `${this.mirrorsDir}/${encodeURIComponent(matterId)}`;
+	}
+
 	private indexPath(matterId: string): string {
-		return `${this.mirrorsDir}/${encodeURIComponent(matterId)}.bin`;
+		return `${this.matterDir(matterId)}/index.bin`;
 	}
 
 	private vaultPath(matterId: string): string {
-		return `${this.mirrorsDir}/${encodeURIComponent(matterId)}.vault.bin`;
+		return `${this.matterDir(matterId)}/vault.bin`;
 	}
 
 	private metaPath(matterId: string): string {
-		return `${this.mirrorsDir}/${encodeURIComponent(matterId)}.json`;
+		return `${this.matterDir(matterId)}/meta.json`;
 	}
 
 	// The full JSON MirrorBundle, kept at its own path so it survives loadMirror() overwriting
 	// indexPath() with the raw (non-JSON) EdgeVec index bytes — see getBundle().
 	private bundlePath(matterId: string): string {
-		return `${this.mirrorsDir}/${encodeURIComponent(matterId)}.bundle.json`;
+		return `${this.matterDir(matterId)}/bundle.json`;
 	}
 
+	// Atomic (crash-safe) mirror write: stage all 3 files in a temp directory, then swap it into
+	// place with directory renames, which POSIX guarantees are atomic on the same filesystem. A
+	// crash never leaves a torn mix of old/new files — either the previous mirror is intact, or
+	// the new one is, in full. On re-save there's a sub-millisecond window between moving the old
+	// directory aside and moving the new one in; a crash exactly there leaves the mirror
+	// temporarily absent (never corrupted) until the next ingest — an accepted, documented
+	// residual risk for this single-owner deployment.
 	saveMirror(matterId: string, body: Buffer): MirrorStatus {
 		if (!matterId) {
 			throw new AppError("bad_request", "matter_id is required");
@@ -102,11 +115,29 @@ export class MirrorStore {
 		if (body.length === 0) {
 			throw new AppError("bad_request", "mirror payload is empty");
 		}
-		mkdirSync(dirname(this.indexPath(matterId)), { recursive: true });
 		const syncedAt = new Date().toISOString();
-		writeFileSync(this.indexPath(matterId), body);
-		writeFileSync(this.bundlePath(matterId), body);
-		writeFileSync(this.metaPath(matterId), JSON.stringify({ matter_id: matterId, synced_at: syncedAt }));
+		const staging = `${this.mirrorsDir}/${encodeURIComponent(matterId)}.staging-${randomUUID()}`;
+		mkdirSync(staging, { recursive: true });
+		writeFileSync(`${staging}/index.bin`, body);
+		writeFileSync(`${staging}/bundle.json`, body);
+		writeFileSync(`${staging}/meta.json`, JSON.stringify({ matter_id: matterId, synced_at: syncedAt }));
+
+		const finalDir = this.matterDir(matterId);
+		if (existsSync(finalDir)) {
+			const stale = `${this.mirrorsDir}/${encodeURIComponent(matterId)}.stale-${randomUUID()}`;
+			renameSync(finalDir, stale);
+			renameSync(staging, finalDir);
+			// Best-effort cleanup: the swap above already completed, so a failure here doesn't
+			// affect correctness, only leaves a harmless orphaned directory behind.
+			try {
+				rmSync(stale, { recursive: true, force: true });
+			} catch {
+				/* not correctness-critical */
+			}
+		} else {
+			renameSync(staging, finalDir);
+		}
+
 		// A re-save must not leave listPii/retrieve/loadCipher serving the previous bundle.
 		this.bundles.delete(matterId);
 		return { matter_id: matterId, synced_at: syncedAt, bytes: body.length };
@@ -278,15 +309,9 @@ export class MirrorStore {
 	// leave that deletion half-applied and skip the audit entry that follows.
 	forget(matterId: string): void {
 		this.bundles.delete(matterId);
-		for (const p of [
-			this.indexPath(matterId),
-			this.vaultPath(matterId),
-			this.metaPath(matterId),
-			this.bundlePath(matterId),
-		]) {
-			if (existsSync(p)) {
-				unlinkSync(p);
-			}
+		const dir = this.matterDir(matterId);
+		if (existsSync(dir)) {
+			rmSync(dir, { recursive: true, force: true });
 		}
 	}
 }

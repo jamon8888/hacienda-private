@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { MirrorStore } from "../src/mirror.js";
@@ -68,5 +68,26 @@ describe("MirrorStore", () => {
   it("forget is idempotent for a matter with no mirror", () => {
     const store = new MirrorStore(dir);
     expect(() => store.forget("never-ingested")).not.toThrow();
+  });
+
+  it("re-save is atomic: no leftover staging/stale directories and only the new content is served", () => {
+    const store = new MirrorStore(dir);
+    store.saveMirror("m", bundle("first"));
+    store.saveMirror("m", bundle("second"));
+    store.saveMirror("m", bundle("third"));
+    expect(store.retrieve("m", "q")[0]?.text).toBe("third");
+
+    // Only the final per-matter directory should remain — no .staging-*/.stale-* siblings.
+    const entries = readdirSync(dir);
+    expect(entries).toEqual(["m"]);
+  });
+
+  it("a first-time save (no prior directory) is a single atomic rename", () => {
+    const store = new MirrorStore(dir);
+    const status = store.saveMirror("brand-new", Buffer.from("bytes"));
+    expect(status.bytes).toBe(5);
+
+    expect(existsSync(join(dir, encodeURIComponent("brand-new"), "index.bin"))).toBe(true);
+    expect(readdirSync(dir).some((e) => e.includes(".staging-"))).toBe(false);
   });
 });

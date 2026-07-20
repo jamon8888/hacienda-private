@@ -42,8 +42,8 @@ describe("forget lifecycle", () => {
     };
     mirror.saveMirror(matter.id, Buffer.from(JSON.stringify(bundle)));
 
-    const idxPath = join(mirrorsDir, `${encodeURIComponent(matter.id)}.bin`);
-    const jsonPath = join(mirrorsDir, `${encodeURIComponent(matter.id)}.json`);
+    const idxPath = join(mirrorsDir, encodeURIComponent(matter.id), "index.bin");
+    const jsonPath = join(mirrorsDir, encodeURIComponent(matter.id), "meta.json");
     expect(existsSync(idxPath)).toBe(true);
 
     const forgotten = store.forgetMatter(matter.id);
