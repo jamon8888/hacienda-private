@@ -78,29 +78,81 @@ async function getModel(scenario: ModelScenario): Promise<Gliner> {
 	return modelPromise;
 }
 
+function warnIfDefaultScenario(): void {
+	if (!warnedDefaultScenario) {
+		warnedDefaultScenario = true;
+		console.warn(
+			"[wasm-pipeline] detectPii/detectPiiBatched called without a ModelScenario — using DEFAULT_SCENARIO; callers should pass selectScenario() output (see plan task 4-5)",
+		);
+	}
+}
+
+const MIN_BATCHABLE_TEXT_LENGTH = 20;
+
+async function runInference(
+	texts: readonly string[],
+	types: readonly string[],
+	scenario: ModelScenario,
+): Promise<PiiEntity[][]> {
+	const model = await getModel(scenario);
+	const result = await model.inference({
+		texts: [...texts],
+		entities: [...types],
+		flatNer: true,
+		threshold: 0.5,
+	});
+	return result.map((ents: IEntityResult[]) =>
+		ents.map((e) => ({
+			kind: e.label,
+			start: e.start,
+			end: e.end,
+			text: e.spanText,
+		})),
+	);
+}
+
+/**
+ * Runs GLiNER inference over N texts in a single model.inference() call
+ * instead of one call per text. Texts shorter than MIN_BATCHABLE_TEXT_LENGTH
+ * are skipped (empty result) without being sent to the model -- meant for
+ * ingest-time batches of many chunks, where a handful of near-empty trailing
+ * fragments shouldn't cost a model round trip. This skip is intentionally
+ * NOT applied to detectPii()'s single-text path below: a caller passing one
+ * (possibly short) string expects it to actually be scanned -- e.g. a short
+ * trailing chunk like "Signed, J. Doe" still carries real PII, and silently
+ * skipping it there would be a redaction regression, not an optimization.
+ */
+export async function detectPiiBatched(
+	texts: readonly string[],
+	types: readonly string[] = PII_TYPES,
+	scenario: ModelScenario = DEFAULT_SCENARIO,
+): Promise<PiiEntity[][]> {
+	if (scenario === DEFAULT_SCENARIO) warnIfDefaultScenario();
+
+	const batchable = texts
+		.map((text, index) => ({ text, index }))
+		.filter((t) => t.text.length >= MIN_BATCHABLE_TEXT_LENGTH);
+
+	const out: PiiEntity[][] = texts.map(() => []);
+	if (batchable.length === 0) return out;
+
+	const results = await runInference(
+		batchable.map((t) => t.text),
+		types,
+		scenario,
+	);
+	batchable.forEach(({ index }, i) => {
+		out[index] = results[i] ?? [];
+	});
+	return out;
+}
+
 export async function detectPii(
 	text: string,
 	types: readonly string[] = PII_TYPES,
 	scenario: ModelScenario = DEFAULT_SCENARIO,
 ): Promise<PiiEntity[]> {
-	if (scenario === DEFAULT_SCENARIO && !warnedDefaultScenario) {
-		warnedDefaultScenario = true;
-		console.warn(
-			"[wasm-pipeline] detectPii called without a ModelScenario — using DEFAULT_SCENARIO; callers should pass selectScenario() output (see plan task 4-5)",
-		);
-	}
-	const model = await getModel(scenario);
-	const result = await model.inference({
-		texts: [text],
-		entities: [...types],
-		flatNer: true,
-		threshold: 0.5,
-	});
-	const ents = result[0] ?? [];
-	return ents.map((e: IEntityResult) => ({
-		kind: e.label,
-		start: e.start,
-		end: e.end,
-		text: e.spanText,
-	}));
+	if (scenario === DEFAULT_SCENARIO) warnIfDefaultScenario();
+	const [entities] = await runInference([text], types, scenario);
+	return entities ?? [];
 }
