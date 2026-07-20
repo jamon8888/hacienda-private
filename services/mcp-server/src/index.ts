@@ -323,6 +323,56 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
 		sendJson(res, 200, { documents: ctx.store.getDocumentsByFolder(folderId) });
 		return;
 	}
+	// Registers a document ingested entirely client-side (browser WASM pipeline): the browser
+	// never uploads the raw file here, only the metadata needed for matter-nav/folder-view to
+	// show it — extraction, OCR, PII detection, and redaction all already happened locally.
+	if (folderDocsMatch && method === "POST") {
+		authorize(principal.scopes, "ingest");
+		const folderId = decodeURIComponent(folderDocsMatch[1] ?? "");
+		const folder = ctx.store.getFolder(folderId);
+		if (!folder) throw new AppError("not_found", `folder ${folderId} not found`);
+		const body = await readJson<{ path: string; content_hash: string }>(req);
+		if (!body.path || !body.content_hash) {
+			throw new AppError("bad_request", "path and content_hash are required");
+		}
+		const doc = ctx.store.createDocument({
+			folder_id: folderId,
+			matter_id: folder.matter_id,
+			path: body.path,
+			content_hash: body.content_hash,
+			ingested_via: "browser",
+		});
+		ctx.store.recordAudit(principal.subject, "ingest", "create_document", folder.matter_id);
+		sendJson(res, 201, doc);
+		return;
+	}
+
+	// Client-side ingestion is synchronous from the browser's perspective, but the folder-view
+	// poll loop needs a status transition to reflect completion (or failure) without a reload.
+	const docStatusMatch = pathname.match(/^\/api\/documents\/([^/]+)$/);
+	if (docStatusMatch && method === "PATCH") {
+		authorize(principal.scopes, "ingest");
+		const documentId = decodeURIComponent(docStatusMatch[1] ?? "");
+		const existing = ctx.store.getDocument(documentId);
+		if (!existing) throw new AppError("not_found", `document ${documentId} not found`);
+		const body = await readJson<{
+			status: "processing" | "done" | "error";
+			pages?: number;
+			chunk_count?: number;
+			pii_count?: number;
+			error_message?: string;
+		}>(req);
+		if (!body.status) throw new AppError("bad_request", "status is required");
+		ctx.store.updateDocumentStatus(documentId, body.status, {
+			pages: body.pages,
+			chunk_count: body.chunk_count,
+			pii_count: body.pii_count,
+			error_message: body.error_message,
+		});
+		ctx.store.recordAudit(principal.subject, "ingest", "update_document_status", existing.matter_id);
+		sendJson(res, 200, ctx.store.getDocument(documentId));
+		return;
+	}
 
 	const docPiiMatch = pathname.match(/^\/api\/documents\/([^/]+)\/pii$/);
 	if (docPiiMatch && method === "GET") {

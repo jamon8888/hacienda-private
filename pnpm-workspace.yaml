@@ -19,4 +19,5 @@ autoInstallPeers: true
 hoist: true
 overrides:
   glob: "10.5.0"
+  "@xberg-io/xberg-win32-arm64-msvc": "0.0.1"
 minimumReleaseAge: 0

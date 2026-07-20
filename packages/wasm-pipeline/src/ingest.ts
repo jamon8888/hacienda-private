@@ -104,7 +104,7 @@ export async function ingestFolder(
 	const db = await buildIndex(matter.id, items);
 	const indexBytes = await serializeIndex(db);
 	const sealed = await sealVault(allEntries, options.passphrase);
-	const payload = serializeMirrorToBytes(indexBytes, sealed.cipher);
+	const payload = serializeMirrorToBytes(indexBytes, sealed.cipher, sealed.salt);
 	await pushMirror(matter, payload, options.scopeToken);
 
 	return { accepted: items.length };
