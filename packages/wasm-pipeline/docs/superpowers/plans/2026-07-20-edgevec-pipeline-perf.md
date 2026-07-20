@@ -8,7 +8,7 @@
 
 **Tech Stack:** `edgevec@0.9.0` (WASM vector DB: hybrid RRF, sparse BM25, BQ, metadata filter), `onnxruntime-web@1.26.0` (threaded wasm / WebGPU), `gliner@0.0.19` (batched inference), `xberg-wasm` (extraction, quality ON + WebGPU accel + cache), vitest (wasm-pipeline tests), `@playwright/test` (browser capability spike).
 
-**Spec:** `docs/superpowers/specs/2026-07-20-turso-pipeline-perf-design.md` (rewritten for keep-EdgeVec).
+**Spec:** `docs/superpowers/specs/2026-07-20-edgevec-pipeline-perf-design.md` (keep-EdgeVec redesign).
 
 ---
 
