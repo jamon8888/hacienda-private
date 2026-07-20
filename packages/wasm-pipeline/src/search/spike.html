@@ -1,0 +1,84 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>turso-wasm B-gate</title>
+  </head>
+  <body>
+    <pre id="out">running...</pre>
+    <script type="module">
+      import { connect } from "/vendor/database-wasm-bundle.js";
+
+      const result = {
+        vectorExact: false,
+        vectorIndexed: false,
+        vector: false,
+        fts: false,
+        errors: {},
+      };
+
+      const setOut = (t) => {
+        document.getElementById("out").textContent = t;
+      };
+      const tryLeg = async (name, fn) => {
+        try {
+          await fn();
+        } catch (e) {
+          result.errors[name] = String((e && e.message) || e);
+        }
+      };
+
+      // Vector exact-distance (no index) — must work if F32_BLOB + vector_distance_* compiled in
+      await tryLeg("vectorExact", async () => {
+        const db = await connect(":memory:");
+        await db.exec("CREATE TABLE v(id INTEGER PRIMARY KEY, e F32_BLOB(4))");
+        await db.exec(
+          "INSERT INTO v VALUES (1, vector32('[1,0,0,0]')),(2, vector32('[0,1,0,0]'))"
+        );
+        const rows = await db
+          .prepare(
+            "SELECT id, vector_distance_cos(e, vector32('[1,0,0,0]')) AS d FROM v ORDER BY d ASC LIMIT 1"
+          )
+          .all();
+        result.vectorExact = Array.isArray(rows) && rows.length === 1 && rows[0].id === 1;
+        await db.close();
+      });
+
+      // Vector INDEXED (ANN) — gated behind --experimental-index-method in this build
+      await tryLeg("vectorIndexed", async () => {
+        const db = await connect(":memory:");
+        await db.exec("CREATE TABLE t(id INTEGER PRIMARY KEY, e F32_BLOB(4))");
+        await db.exec(
+          "CREATE INDEX ti ON t(libsql_vector_idx(e,'metric=cosine'))"
+        );
+        await db.exec("INSERT INTO t VALUES (1, vector32('[1,0,0,0]'))");
+        const rows = await db
+          .prepare(
+            "SELECT id FROM vector_top_k('ti', vector32('[1,0,0,0]'), 1) vt JOIN t ON t.id=vt.id"
+          )
+          .all();
+        result.vectorIndexed = Array.isArray(rows) && rows.length === 1;
+        await db.close();
+      });
+      result.vector = result.vectorIndexed || result.vectorExact;
+
+      // FTS (Tantivy) — gated behind --experimental-index-method in this build
+      await tryLeg("fts", async () => {
+        const db = await connect(":memory:");
+        await db.exec("CREATE TABLE d(id INTEGER PRIMARY KEY, text TEXT)");
+        await db.exec("CREATE INDEX di ON d USING fts (text)");
+        await db.exec("INSERT INTO d VALUES (1, 'client Acme Corp clause 9')");
+        const rows = await db
+          .prepare(
+            "SELECT id, fts_score(text,?) AS s FROM di WHERE fts_match(text,?)"
+          )
+          .all("Acme", "Acme");
+        result.fts = Array.isArray(rows) && rows.length === 1;
+        await db.close();
+      });
+
+      window.__RESULT__ = result;
+      setOut(JSON.stringify(result, null, 2));
+    </script>
+  </body>
+</html>
