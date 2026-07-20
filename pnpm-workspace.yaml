@@ -19,4 +19,8 @@ autoInstallPeers: true
 hoist: true
 overrides:
   glob: "10.5.0"
+  # Pinned rc.29 was never published for this optional native binary (only
+  # 0.0.1 exists on npm); this override just lets resolution complete on
+  # non-Windows hosts. Unused at runtime (win32-only), not shipped.
+  "@xberg-io/xberg-win32-arm64-msvc": "0.0.1"
 minimumReleaseAge: 0
