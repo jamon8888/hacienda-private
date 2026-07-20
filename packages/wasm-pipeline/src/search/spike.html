@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>libsql browser-wasm B-gate spike</title>
+  </head>
+  <body>
+    <pre id="out">running...</pre>
+    <script type="module">
+      import { runSpike } from "/spike.test.ts";
+
+      const out = document.getElementById("out");
+      try {
+        const result = await runSpike();
+        window.__SPIKE_RESULT__ = result;
+        out.textContent = JSON.stringify(result, null, 2);
+      } catch (e) {
+        window.__SPIKE_RESULT__ = { fatal: e instanceof Error ? `${e.name}: ${e.message}` : String(e) };
+        out.textContent = "FATAL: " + (e instanceof Error ? e.stack : String(e));
+      }
+    </script>
+  </body>
+</html>
