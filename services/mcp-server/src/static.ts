@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
@@ -24,6 +24,26 @@ export function resolveWasmPackageDir(): string | null {
   try {
     const pkg = require.resolve("@xberg-io/xberg-wasm/package.json");
     return dirname(pkg);
+  } catch {
+    return null;
+  }
+}
+
+// The PDF viewer's default config points pdfium.wasm at jsdelivr's CDN — a real egress leak for a
+// "no document content leaves the device" app (the WASM binary itself isn't document content, but
+// every PDF view would silently phone home). Serve @embedpdf/pdfium's own dist/ locally instead so
+// the browser loads it from a same-origin route with no external request.
+export function resolveEmbedPdfiumDir(): string | null {
+  try {
+    const entry = require.resolve("@embedpdf/pdfium");
+    // Walk up from the resolved entry to the package root (where package.json lives),
+    // so the served root is `.../pdfium` and `/vendor/embedpdf/dist/pdfium.wasm` maps correctly.
+    let dir = dirname(entry);
+    while (dir && dir !== dirname(dir)) {
+      if (existsSync(join(dir, "package.json"))) return dir;
+      dir = dirname(dir);
+    }
+    return null;
   } catch {
     return null;
   }
