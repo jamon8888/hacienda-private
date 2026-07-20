@@ -54,16 +54,24 @@ interface GpuLike {
 export async function detectCapabilities(): Promise<DeviceProfile> {
   const nav = typeof navigator !== "undefined" ? navigator : ({} as Navigator);
   const gpu = (nav as unknown as { gpu?: GpuLike }).gpu;
-  const hasGpu = gpu != null;
+  const hasGpuApi = gpu != null;
+  // navigator.gpu can exist (API surface present) while requestAdapter() still fails
+  // (no real backend, e.g. headless/driverless environments) — onnxruntime-web's
+  // WebGPU execution provider only implements a subset of ONNX ops (unlike wasm, which
+  // implements all of them), so requesting it based on API presence alone causes op
+  // resolution to fail against that partial op table instead of ever reaching wasm.
+  // Only report webgpu: true once an adapter is actually obtained.
+  let webgpuUsable = false;
   let gpuVendor: string | undefined;
   let gpuArchitecture: string | undefined;
   let gpuIsFallback: boolean | undefined;
   let gpuMaxBufferBytes: number | undefined;
 
-  if (hasGpu) {
+  if (hasGpuApi) {
     try {
       const adapter = await gpu!.requestAdapter({ powerPreference: "high-performance" });
       if (adapter) {
+        webgpuUsable = true;
         const info = (adapter.info ?? (typeof adapter.requestAdapterInfo === "function"
           ? await adapter.requestAdapterInfo()
           : undefined)) as GpuAdapterLike["info"] | undefined;
@@ -73,7 +81,7 @@ export async function detectCapabilities(): Promise<DeviceProfile> {
         gpuMaxBufferBytes = adapter.limits?.maxBufferSize;
       }
     } catch {
-      // privacy masking / unsupported — leave undefined
+      // privacy masking / unsupported — leave webgpuUsable false
     }
   }
 
@@ -92,7 +100,7 @@ export async function detectCapabilities(): Promise<DeviceProfile> {
   }
 
   const raw = {
-    webgpu: hasGpu,
+    webgpu: webgpuUsable,
     webgl: hasWebGL(),
     wasmSimd: hasWasmSimd(),
     hardwareConcurrency: nav.hardwareConcurrency || 4,

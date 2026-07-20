@@ -4,11 +4,27 @@ import * as React from "react"
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu"
 import { Check, ChevronRight, Circle } from "lucide-react"
 
-import { cn } from "@/lib/utils"
+import { cn, withRenderProp } from "@/lib/utils"
 
 const DropdownMenu = DropdownMenuPrimitive.Root
 
-const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger
+const DropdownMenuTrigger = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.Trigger>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Trigger> & {
+    render?: React.ReactElement
+  }
+>(({ render, children, ...props }, ref) =>
+  render ? (
+    <DropdownMenuPrimitive.Trigger ref={ref} asChild {...props}>
+      {withRenderProp(render, children)}
+    </DropdownMenuPrimitive.Trigger>
+  ) : (
+    <DropdownMenuPrimitive.Trigger ref={ref} {...props}>
+      {children}
+    </DropdownMenuPrimitive.Trigger>
+  )
+)
+DropdownMenuTrigger.displayName = DropdownMenuPrimitive.Trigger.displayName
 
 const DropdownMenuGroup = DropdownMenuPrimitive.Group
 
@@ -94,23 +110,47 @@ DropdownMenuItem.displayName = DropdownMenuPrimitive.Item.displayName
 
 const DropdownMenuCheckboxItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.CheckboxItem>,
-  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem>
->(({ className, children, checked, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem> & {
+    variant?: "default" | "switch"
+  }
+>(({ className, children, checked, variant = "default", ...props }, ref) => (
   <DropdownMenuPrimitive.CheckboxItem
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex cursor-default select-none items-center rounded-sm py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      variant === "switch" ? "justify-between gap-2 pl-2 pr-2" : "pl-8 pr-2",
       className
     )}
     checked={checked}
     {...props}
   >
-    <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
-      <DropdownMenuPrimitive.ItemIndicator>
-        <Check className="h-4 w-4" />
-      </DropdownMenuPrimitive.ItemIndicator>
-    </span>
-    {children}
+    {variant === "switch" ? (
+      <>
+        {children}
+        <span
+          className={cn(
+            "relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors",
+            checked ? "bg-primary" : "bg-input"
+          )}
+        >
+          <span
+            className={cn(
+              "inline-block h-3 w-3 transform rounded-full bg-background transition-transform",
+              checked ? "translate-x-3.5" : "translate-x-0.5"
+            )}
+          />
+        </span>
+      </>
+    ) : (
+      <>
+        <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+          <DropdownMenuPrimitive.ItemIndicator>
+            <Check className="h-4 w-4" />
+          </DropdownMenuPrimitive.ItemIndicator>
+        </span>
+        {children}
+      </>
+    )}
   </DropdownMenuPrimitive.CheckboxItem>
 ))
 DropdownMenuCheckboxItem.displayName =

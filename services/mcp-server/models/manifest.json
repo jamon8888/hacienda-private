@@ -25,6 +25,24 @@
       "sha256": "62c24cdc13d4c9952d63718d6c9fa4c287974249e16b7ade6d5a85e7bbb75626"
     },
     {
+      "name": "e5-tokenizer-config",
+      "url": "https://huggingface.co/Xenova/multilingual-e5-base/resolve/main/tokenizer_config.json",
+      "file": "e5.tokenizer_config.json",
+      "sha256": "efb5c0d09722e5fe59a462cd2a9976ee216d55b037597d997cd3fe833216da15"
+    },
+    {
+      "name": "gliner-tokenizer",
+      "url": "https://huggingface.co/onnx-community/gliner_small-v2.1/resolve/main/tokenizer.json",
+      "file": "gliner-tokenizer/tokenizer.json",
+      "sha256": "677203884d026e721115cf0daccf70ec4239545a13d6619e3e66d7151e0c9ce3"
+    },
+    {
+      "name": "gliner-tokenizer-config",
+      "url": "https://huggingface.co/onnx-community/gliner_small-v2.1/resolve/main/tokenizer_config.json",
+      "file": "gliner-tokenizer/tokenizer_config.json",
+      "sha256": "cef106fb5c03d234f0af80f7577f1fc90b4317f26c26888d625abba11331dc89"
+    },
+    {
       "name": "gliner-pii-fp32",
       "url": "https://huggingface.co/onnx-community/gliner_small-v2.1/resolve/main/onnx/model.onnx",
       "file": "gliner-pii.fp32.onnx",

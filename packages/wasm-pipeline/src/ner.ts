@@ -1,6 +1,6 @@
 import type { PiiEntity } from "@xberg-io/core";
 import type { Gliner, IEntityResult, InitConfig, IONNXWebSettings, ITransformersSettings } from "gliner";
-import { GLINER_TOKENIZER_URL, glinerModelUrl } from "./constants";
+import { API_BASE, GLINER_TOKENIZER_MODEL_ID, glinerModelUrl, ONNXRUNTIME_WEB_WASM_PATHS } from "./constants";
 import type { ModelScenario } from "./scenario";
 
 // DEFAULT_SCENARIO is a defensive fallback; ingest.ts and query.ts now pass a real selectScenario() output.
@@ -14,15 +14,40 @@ const DEFAULT_SCENARIO: ModelScenario = {
 };
 let warnedDefaultScenario = false;
 
-// Remote-model guard: gliner's `initialize()` calls `AutoTokenizer.from_pretrained(tokenizerPath)`
-// via `@xenova/transformers`. Turn off remote fetching up-front so it can never fall back to
-// huggingface.co / hf.co. `env` only exists in the browser/Node transformers build; guard the import.
-async function disableRemoteModels(): Promise<void> {
+// gliner's `initialize()` calls `AutoTokenizer.from_pretrained(tokenizerPath)` via
+// `@xenova/transformers`. That function never treats `tokenizerPath` as a literal URL — it's
+// always inserted as the `{model}` segment of transformers.js's hub URL template
+// (`${env.remoteHost}${tokenizerPath}${env.remotePathTemplate}${filename}`), which defaults to
+// `https://huggingface.co/{model}/resolve/{revision}/{filename}`. Passing an absolute URL as
+// `tokenizerPath` (an earlier, incorrect fix) produced a mangled request like
+// "https://huggingface.co/http://localhost:8787/models/gliner-tokenizer/resolve/main/tokenizer.json"
+// — a real, non-huggingface.co host string doesn't parse as a URL, so the browser rejects it with
+// a bare "TypeError: Failed to fetch" (no network request is even attempted). The correct fix:
+// repoint `env.remoteHost`/`env.remotePathTemplate` at our own server, and pass a bare model id
+// (GLINER_TOKENIZER_MODEL_ID) so the template produces `${API_BASE}/models/gliner-tokenizer/tokenizer.json`
+// — exactly what services/mcp-server's ModelCache serves.
+//
+// Also does the same as embed.ts's getSession(): forces single-threaded wasm so it never
+// constructs a Worker, and repoints onnxruntime-web's wasmPaths at our own served copy —
+// gliner's `AutoTokenizer.from_pretrained()` call (inside model.initialize(), below) imports
+// @xenova/transformers internally, which clobbers that same global with its own CDN default on
+// import (see constants.ts's ONNXRUNTIME_WEB_WASM_PATHS doc comment). Called both before
+// initialize() and again right before the actual inference call, since it's unclear which
+// internal step first constructs gliner's onnx session, and re-asserting is cheap and idempotent.
+async function configureOrtEnv(): Promise<void> {
   try {
-    const { env } = await import("@xenova/transformers");
-    env.allowRemoteModels = false;
+    const { env: transformersEnv } = await import("@xenova/transformers");
+    transformersEnv.remoteHost = `${API_BASE}/models/`;
+    transformersEnv.remotePathTemplate = "{model}/";
   } catch {
     // transformers runtime unavailable here (e.g. typecheck-only) — no-op.
+  }
+  try {
+    const ort = await import("onnxruntime-web");
+    ort.env.wasm.numThreads = 1;
+    ort.env.wasm.wasmPaths = ONNXRUNTIME_WEB_WASM_PATHS;
+  } catch {
+    // onnxruntime-web unavailable here (e.g. typecheck-only) — no-op.
   }
 }
 
@@ -47,35 +72,38 @@ let modelPromise: Promise<Gliner> | null = null;
 // Local tokenizer loading (no Hugging Face egress).
 //
 // gliner's `initialize()` calls `AutoTokenizer.from_pretrained(tokenizerPath)` internally via
-// `@xenova/transformers`. We point `tokenizerPath` at the Node-served local tokenizer JSON
-// (`${API_BASE}/models/gliner-tokenizer.json`) rather than an HF repo id, so no runtime request
-// to huggingface.co / hf.co is made. We also disable remote model loading in transformers.js
-// (`env.allowRemoteModels = false`) and tell gliner to only use local models, as belt-and-suspenders
-// guards so the library can never fall back to a remote HF fetch.
+// `@xenova/transformers`, which configureOrtEnv() (above) has repointed at our own server — see
+// its doc comment for exactly how GLINER_TOKENIZER_MODEL_ID resolves to a servable file.
 //
-// NOTE (cross-plan dependency): this requires Plan 1's `services/mcp-server` ModelCache to serve a
-// GLiNER tokenizer file at `/models/gliner-tokenizer.json` (standard transformers tokenizer.json
-// layout). If the Node service serves it under a different name, update `GLINER_TOKENIZER_URL`.
+// NOTE (cross-plan dependency): this requires Plan 1's `services/mcp-server` ModelCache to serve
+// the GLiNER tokenizer file at `/models/gliner-tokenizer/tokenizer.json`. If the Node service
+// serves it under a different name, update `GLINER_TOKENIZER_MODEL_ID`.
 async function getModel(scenario: ModelScenario): Promise<Gliner> {
-  const sig = JSON.stringify({
-    quant: scenario.quant,
-    ep: scenario.executionProviders[0],
-  });
+  // executionProvider is always "wasm" (see onnxSettings below), so only quant affects which
+  // model actually gets (re)loaded.
+  const sig = scenario.quant;
   if (!modelPromise || sig !== cachedSig) {
     cachedSig = sig;
     modelPromise = (async () => {
       const { Gliner: GlinerClass } = await import("gliner");
-      await disableRemoteModels();
+      await configureOrtEnv();
       const transformersSettings: ITransformersSettings = {
         allowLocalModels: true,
         useBrowserCache: false,
       };
+      // Unlike our own onnxruntime-web session (embed.ts), gliner's `executionProvider` is a
+      // single string with no fallback chain — if it fails, GLiNER has no automatic wasm
+      // retry the way ORT's own multi-provider `executionProviders` array does. webgpu (when
+      // scenario.executionProviders[0]) can pass capability detection (a real adapter is
+      // obtainable, e.g. a software/SwiftShader adapter) yet still fail at actual ONNX
+      // execution time ("no available backend found"), with nothing to fall back to. Always
+      // use wasm here — the one backend verified to work reliably.
       const onnxSettings: IONNXWebSettings = {
         modelPath: glinerModelUrl(scenario.quant),
-        executionProvider: scenario.executionProviders[0],
+        executionProvider: "wasm",
       };
       const config: InitConfig = {
-        tokenizerPath: GLINER_TOKENIZER_URL,
+        tokenizerPath: GLINER_TOKENIZER_MODEL_ID,
         onnxSettings,
         transformersSettings,
       };
@@ -97,6 +125,7 @@ export async function detectPii(
     console.warn("[wasm-pipeline] detectPii called without a ModelScenario — using DEFAULT_SCENARIO; callers should pass selectScenario() output (see plan task 4-5)");
   }
   const model = await getModel(scenario);
+  await configureOrtEnv();
   const result = await model.inference({
     texts: [text],
     entities: [...types],

@@ -1,23 +1,23 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import type { Folder } from "@xberg-io/core";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth";
+import { useRouteId } from "@/lib/useRouteId";
 import { getFolders, createFolder } from "@/lib/api";
 
 export default function MatterView() {
-  const params = useParams();
+  const matterId = useRouteId();
   const router = useRouter();
   const { auth } = useAuth();
-  const matterId = params.id as string;
   const [folders, setFolders] = useState<Folder[]>([]);
   const [name, setName] = useState("");
 
   useEffect(() => {
-    if (!auth) return;
+    if (!auth || !matterId) return;
     getFolders(auth.token, matterId).then(setFolders).catch(() => setFolders([]));
   }, [auth, matterId]);
 

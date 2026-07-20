@@ -20,7 +20,7 @@
     "@xberg-io/xberg-wasm": "1.0.0-rc.26",
     "@xberg-io/core": "workspace:*",
     "@xenova/transformers": "^2.17.2",
-    "onnxruntime-web": "^1.24.2",
+    "onnxruntime-web": "1.26.0",
     "gliner": "^0.0.19",
     "edgevec": "^0.9.0",
     "zod": "^3.23.8"

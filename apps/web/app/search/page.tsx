@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { RetrievedChunkCard } from "@/components/RetrievedChunkCard";
 import { useAuth } from "@/lib/auth";
 import { getMatters } from "@/lib/api";
+import { describeError } from "@/lib/utils";
 import { queryRag } from "@xberg-io/wasm-pipeline";
 import type { Matter, RetrievedChunk } from "@xberg-io/core";
 
@@ -39,7 +40,9 @@ function SearchPageInner() {
       const chunks = await queryRag(matter, query.trim(), 8);
       setResults(chunks);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Search failed");
+      // eslint-disable-next-line no-console
+      console.error("search failed:", e);
+      setError(describeError(e));
     } finally {
       setLoading(false);
     }

@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { extname, join, normalize } from "node:path";
+import { extname, join, normalize, resolve as resolvePath } from "node:path";
+import { fileURLToPath } from "node:url";
 import { AppConfig, buildConfig, parseArgs } from "./config.js";
 import { AppError, isAppError } from "./error.js";
 import type { AuthScopes } from "@xberg-io/core";
@@ -8,7 +9,13 @@ import { MetadataStore, openStore } from "./store.js";
 import { ModelCache } from "./models.js";
 import { MirrorStore } from "./mirror.js";
 import { KeyVault } from "./vault.js";
-import { PLACEHOLDER_HTML, resolveUiDir, resolveWasmPackageDir } from "./static.js";
+import {
+  PLACEHOLDER_HTML,
+  resolveUiDir,
+  resolveWasmPackageDir,
+  resolveOnnxRuntimeWebDistDir,
+  resolveEmbedPdfiumDir,
+} from "./static.js";
 import { runMcp } from "./mcp/mod.js";
 
 export interface AppContext {
@@ -81,6 +88,36 @@ function serveStaticDir(res: ServerResponse, rootDir: string, relPath: string): 
   serveFile(res, filePath);
 }
 
+// apps/web is exported via `next build` with `output: "export"`: every route gets its own .html
+// (e.g. /onboarding -> onboarding.html), and a dynamic [id] segment (no matching real ids at
+// export time) is emitted once as a literal "_" placeholder (e.g. /folders/[id] -> folders/_.html)
+// that the client reads the real id from via useParams() at runtime. Try, in order: the exact
+// path, path + ".html", path + "/index.html", then the same three with the last segment replaced
+// by "_" for dynamic routes.
+function resolveUiFile(rootDir: string, pathname: string): string | null {
+  // URL.pathname leaves percent-encoding intact (e.g. "[id]" arrives as "%5Bid%5D" in chunk
+  // paths under a [id] route dir) — decode before touching the filesystem. Malformed sequences
+  // fall back to the raw pathname rather than throwing.
+  let decoded = pathname;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    // keep raw pathname
+  }
+  const safe = normalize(decoded.replace(/^\/+/, "")).replace(/^(\.\.[/\\])+/, "");
+  const segments = safe.split(/[/\\]/).filter(Boolean);
+  const placeholder = segments.length > 1 ? [...segments.slice(0, -1), "_"].join("/") : null;
+  const candidates = [safe, `${safe}.html`, `${safe}/index.html`];
+  if (placeholder) candidates.push(`${placeholder}.html`, `${placeholder}/index.html`);
+  for (const candidate of candidates) {
+    const filePath = join(rootDir, candidate);
+    if (filePath.startsWith(rootDir) && existsSync(filePath) && !statSync(filePath).isDirectory()) {
+      return filePath;
+    }
+  }
+  return null;
+}
+
 async function handleModels(ctx: AppContext, res: ServerResponse, file: string): Promise<void> {
   const entry = ctx.models.resolveByFile(file);
   if (!entry) {
@@ -127,23 +164,48 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
     return;
   }
 
+  if (pathname.startsWith("/vendor/onnxruntime-web/") && method === "GET") {
+    const ortDir = resolveOnnxRuntimeWebDistDir();
+    if (!ortDir) {
+      res.writeHead(404, { "content-type": "text/plain" });
+      res.end("onnxruntime-web package not installed");
+      return;
+    }
+    serveStaticDir(res, ortDir, pathname.slice("/vendor/onnxruntime-web/".length));
+    return;
+  }
+
+  if (pathname.startsWith("/vendor/embedpdf/") && method === "GET") {
+    const pdfiumDir = resolveEmbedPdfiumDir();
+    if (!pdfiumDir) {
+      res.writeHead(404, { "content-type": "text/plain" });
+      res.end("@embedpdf/pdfium package not installed");
+      return;
+    }
+    serveStaticDir(res, pdfiumDir, pathname.slice("/vendor/embedpdf/".length));
+    return;
+  }
+
   if (pathname.startsWith("/models/") && method === "GET") {
     await handleModels(ctx, res, pathname.slice("/models/".length));
     return;
   }
 
-  if (pathname === "/matters" && method === "GET") {
+  // Data API routes live under /api/* — the app's own page routes (matters.html, folders/_.html,
+  // etc.) are served from the same bare paths (/matters, /folders/[id], ...) by the static
+  // fallback below, so an unprefixed /matters would permanently shadow the /matters page.
+  if (pathname === "/api/matters" && method === "GET") {
     sendJson(res, 200, { matters: ctx.store.getMatters() });
     return;
   }
-  if (pathname === "/matters" && method === "POST") {
+  if (pathname === "/api/matters" && method === "POST") {
     const body = await readJson<{ name: string }>(req);
     if (!body.name) throw new AppError("bad_request", "name is required");
     sendJson(res, 201, ctx.store.createMatter(body.name));
     return;
   }
 
-  const forgetMatch = pathname.match(/^\/matters\/([^/]+)$/);
+  const forgetMatch = pathname.match(/^\/api\/matters\/([^/]+)$/);
   if (forgetMatch && method === "DELETE") {
     if (!ctx.tokenScopes.includes("admin")) {
       throw new AppError("scope", "admin scope required to forget a matter");
@@ -156,26 +218,26 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
     return;
   }
 
-  if (pathname === "/folders" && method === "GET") {
+  if (pathname === "/api/folders" && method === "GET") {
     const matterId = url.searchParams.get("matter_id");
     if (!matterId) throw new AppError("bad_request", "matter_id is required");
     sendJson(res, 200, { folders: ctx.store.getFolders(matterId) });
     return;
   }
-  if (pathname === "/folders" && method === "POST") {
+  if (pathname === "/api/folders" && method === "POST") {
     const body = await readJson<{ matter_id: string; name: string; path?: string }>(req);
     if (!body.matter_id || !body.name) throw new AppError("bad_request", "matter_id and name are required");
     sendJson(res, 201, ctx.store.createFolder(body.matter_id, body.name, body.path));
     return;
   }
 
-  if (pathname === "/consent" && method === "GET") {
+  if (pathname === "/api/consent" && method === "GET") {
     const matterId = url.searchParams.get("matter_id");
     if (!matterId) throw new AppError("bad_request", "matter_id is required");
     sendJson(res, 200, { consent: ctx.store.getConsent(matterId) });
     return;
   }
-  if (pathname === "/consent" && method === "POST") {
+  if (pathname === "/api/consent" && method === "POST") {
     const body = await readJson<{ subject: string; matter_id: string; scope: string; expires_at?: string }>(req);
     if (!body.subject || !body.matter_id || !body.scope) {
       throw new AppError("bad_request", "subject, matter_id and scope are required");
@@ -184,7 +246,7 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
     return;
   }
 
-  if (pathname === "/rag/mirror" && method === "POST") {
+  if (pathname === "/api/rag/mirror" && method === "POST") {
     const matterId = url.searchParams.get("matter_id");
     if (!matterId) throw new AppError("bad_request", "matter_id is required");
     const body = await readBody(req);
@@ -193,13 +255,24 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
     return;
   }
 
-  const mirrorStatus = pathname.match(/^\/rag\/mirror\/([^/]+)\/status$/);
+  const mirrorStatus = pathname.match(/^\/api\/rag\/mirror\/([^/]+)\/status$/);
   if (mirrorStatus && method === "GET") {
     const matterId = decodeURIComponent(mirrorStatus[1] ?? "");
     const status = ctx.mirror.status(matterId);
     if (!status) throw new AppError("not_found", `no mirror for matter ${matterId}`);
     sendJson(res, 200, status);
     return;
+  }
+
+  // Fallback: any other GET is a request for a static asset or a client-routed page from the
+  // apps/web static export (_next/static/*, per-route .html files, dynamic-route "_" shells).
+  if (method === "GET") {
+    const uiDir = resolveUiDir();
+    const filePath = uiDir ? resolveUiFile(uiDir, pathname) : null;
+    if (filePath) {
+      serveFile(res, filePath);
+      return;
+    }
   }
 
   res.writeHead(404, { "content-type": "text/plain" });
@@ -247,7 +320,12 @@ async function main(): Promise<void> {
   });
 }
 
-main().catch((err) => {
-  console.error(err instanceof Error ? err.message : err);
-  process.exit(1);
-});
+// Only run when executed directly (`node dist/index.js ...`), not when imported — this module is
+// also imported by tests to reuse createAppContext/createHttpServer without launching a real server.
+const isMainModule = process.argv[1] !== undefined && fileURLToPath(import.meta.url) === resolvePath(process.argv[1]);
+if (isMainModule) {
+  main().catch((err) => {
+    console.error(err instanceof Error ? err.message : err);
+    process.exit(1);
+  });
+}

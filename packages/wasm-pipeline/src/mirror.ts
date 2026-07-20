@@ -68,7 +68,7 @@ export async function pushMirror(
   scopeToken: string,
 ): Promise<void> {
   const res = await fetch(
-    `${API_BASE}/rag/mirror?matter_id=${encodeURIComponent(matter.id)}`,
+    `${API_BASE}/api/rag/mirror?matter_id=${encodeURIComponent(matter.id)}`,
     {
       method: "POST",
       headers: {

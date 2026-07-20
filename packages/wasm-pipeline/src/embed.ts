@@ -1,4 +1,4 @@
-import { E5_TOKENIZER_URL, E5_TOKENIZER_CONFIG_URL, EMBED_DIM, e5ModelUrl } from "./constants";
+import { E5_TOKENIZER_URL, E5_TOKENIZER_CONFIG_URL, EMBED_DIM, e5ModelUrl, ONNXRUNTIME_WEB_WASM_PATHS } from "./constants";
 import type { ModelScenario } from "./scenario";
 
 export interface EmbeddableChunk {
@@ -55,9 +55,18 @@ async function getSession(scenario: ModelScenario = DEFAULT_SCENARIO): Promise<O
     cachedSig = sig;
     sessionPromise = (async () => {
       const ort = await import("onnxruntime-web");
-      ort.env.wasm.numThreads = scenario.numThreads;
+      // Multi-threaded wasm execution needs a Worker; force single-threaded so it runs on
+      // the main thread and never constructs one (simpler, and we only ever embed one
+      // chunk of text at a time so the concurrency wouldn't help much anyway).
+      ort.env.wasm.numThreads = 1;
       const resp = await fetch(e5ModelUrl(scenario.modelVariant, scenario.quant));
       const buf = await resp.arrayBuffer();
+      // Set synchronously right before use, not right after import: embedOne() runs this
+      // concurrently with getTokenizer(), whose @xenova/transformers import clobbers this
+      // same global with its own CDN default (see constants.ts's ONNXRUNTIME_WEB_WASM_PATHS
+      // doc comment) — setting it here, with no further await before InferenceSession.create
+      // reads it, avoids a races where that clobber lands after our own assignment.
+      ort.env.wasm.wasmPaths = ONNXRUNTIME_WEB_WASM_PATHS;
       const session = await ort.InferenceSession.create(buf, {
         executionProviders: scenario.executionProviders,
         graphOptimizationLevel: "all",
@@ -85,14 +94,18 @@ async function fetchJson(url: string): Promise<unknown> {
 // `multilingual-e5-base` is XLM-RoBERTa based, and its `tokenizer_config.json` declares
 // `tokenizer_class: "XLMRobertaTokenizer"`, so we construct that class directly from the JSON —
 // no `from_pretrained(repoId)` call, and therefore no runtime request to huggingface.co / hf.co.
-// `env.allowRemoteModels` is forced off as a belt-and-suspenders guard so the library can never
-// fall back to a remote HF fetch.
+//
+// Deliberately does NOT touch `env.allowRemoteModels`/`allowLocalModels`: this code fetches the
+// tokenizer JSON directly via `fetchJson()` below, never through transformers.js's hub/from_pretrained
+// machinery, so those flags have no effect here — but `env` is a module-level singleton shared with
+// ner.ts's gliner usage (which *does* call `from_pretrained`), and embedChunks() runs before
+// detectPii() in the ingest pipeline, so setting `allowRemoteModels = false` here previously broke
+// gliner's later same-origin tokenizer fetch with "env.allowRemoteModels=false, but attempted to
+// load a remote file from: ...".
 async function getTokenizer(): Promise<CallableTokenizer> {
   if (!tokenizerPromise) {
     tokenizerPromise = (async () => {
-      const { env, XLMRobertaTokenizer } = await import("@xenova/transformers");
-      env.allowRemoteModels = false;
-      env.allowLocalModels = false;
+      const { XLMRobertaTokenizer } = await import("@xenova/transformers");
 
       const [tokenizerJSON, tokenizerConfig] = await Promise.all([
         fetchJson(E5_TOKENIZER_URL),
@@ -117,11 +130,12 @@ async function embedOne(text: string, prefix: Prefix, scenario: ModelScenario = 
   const ort = await import("onnxruntime-web");
   const ids = BigInt64Array.from(inputIds.map((x: number) => BigInt(x)));
   const mask = BigInt64Array.from(attn.map((x: number) => BigInt(x)));
-  const types = new BigInt64Array(seqLen);
+  // The exported graph only declares `input_ids` and `attention_mask` as inputs (no
+  // `token_type_ids` — XLM-RoBERTa doesn't use segment embeddings); feeding an extra tensor
+  // makes onnxruntime-web reject the whole feeds object with "invalid input 'token_type_ids'".
   const feeds: Record<string, OrtTensor> = {
     input_ids: new ort.Tensor("int64", ids, [1, seqLen]) as unknown as OrtTensor,
     attention_mask: new ort.Tensor("int64", mask, [1, seqLen]) as unknown as OrtTensor,
-    token_type_ids: new ort.Tensor("int64", types, [1, seqLen]) as unknown as OrtTensor,
   };
 
   const out = await session.run(feeds);

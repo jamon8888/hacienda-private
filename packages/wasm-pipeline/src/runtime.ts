@@ -28,8 +28,14 @@ export async function extractDocument(
 ): Promise<WasmExtractionResult> {
   const m = await getWasm();
   const bytes = file instanceof Uint8Array ? file : new Uint8Array(await file.arrayBuffer());
+  // extract() takes a WasmExtractInput, not raw bytes — a bare Uint8Array gets misread as an
+  // (empty, invalid) URI input rather than a bytes input, failing wasm-side validation with
+  // "extract input kind 'uri' requires the 'uri' field".
+  const mimeType = file instanceof File && file.type ? file.type : "application/octet-stream";
+  const filename = file instanceof File ? file.name : undefined;
+  const input = m.WasmExtractInput.fromBytes(bytes, mimeType, filename);
   const cfg = config ?? new m.WasmExtractionConfig();
-  return m.extract(bytes, cfg);
+  return m.extract(input, cfg);
 }
 
 export function firstDocument(result: WasmExtractionResult): WasmExtractedDocument | undefined {

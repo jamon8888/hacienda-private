@@ -20,7 +20,7 @@ describe("serializeMirror", () => {
 });
 
 describe("pushMirror", () => {
-  it("posts raw bundled body to /rag/mirror?matter_id=<id>", async () => {
+  it("posts raw bundled body to /api/rag/mirror?matter_id=<id>", async () => {
     const index = new Uint8Array([1, 2, 3]);
     const vault = new Uint8Array([9]);
     const payload = serializeMirrorToBytes(index, vault);
@@ -41,7 +41,7 @@ describe("pushMirror", () => {
 
     await pushMirror(matter, payload, "tok");
 
-    expect(capturedUrl).toBe(`${API_BASE}/rag/mirror?matter_id=matter-42`);
+    expect(capturedUrl).toBe(`${API_BASE}/api/rag/mirror?matter_id=matter-42`);
     expect(capturedContentType).toBe("application/octet-stream");
     expect(capturedAuth).toBe("Bearer tok");
     const parsed = JSON.parse(new TextDecoder().decode(capturedBody));

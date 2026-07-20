@@ -26,4 +26,24 @@ describe("detectCapabilities", () => {
     expect(profile.gpuArchitecture).toBe("turing");
     expect(profile.hardwareConcurrency).toBe(8);
   });
+
+  it("reports webgpu: false when navigator.gpu exists but requestAdapter yields no adapter", async () => {
+    vi.stubGlobal("navigator", {
+      gpu: { requestAdapter: async () => null },
+      hardwareConcurrency: 4,
+      userAgent: "Mozilla/5.0 (X11; Linux x86_64)",
+    });
+    const profile = await detectCapabilities();
+    expect(profile.webgpu).toBe(false);
+  });
+
+  it("reports webgpu: false when navigator.gpu exists but requestAdapter throws", async () => {
+    vi.stubGlobal("navigator", {
+      gpu: { requestAdapter: async () => { throw new Error("backend not found"); } },
+      hardwareConcurrency: 4,
+      userAgent: "Mozilla/5.0 (X11; Linux x86_64)",
+    });
+    const profile = await detectCapabilities();
+    expect(profile.webgpu).toBe(false);
+  });
 });

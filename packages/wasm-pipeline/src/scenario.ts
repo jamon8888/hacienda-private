@@ -27,9 +27,17 @@ export function selectScenario(p: DeviceProfile): ModelScenario {
     !!p.gpuVendor && !!p.gpuArchitecture && p.gpuIsFallback !== true &&
     (p.gpuMaxBufferBytes ?? 0) >= 128 * 1024 * 1024;
 
-  // Quantization: discrete GPU + decent RAM → INT8; otherwise INT4 to fit.
+  // Quantization: INT4 is gated off for now — the published int4 ONNX graph uses operators
+  // (e.g. CumSum) that onnxruntime-web's wasm/CPU execution provider does not implement
+  // ("cannot resolve operator 'CumSum' with opsets: ai.onnx v11"), and wasm is the only
+  // execution provider guaranteed to be available (GPU is opportunistic/best-effort, with
+  // silent fallback to wasm on failure) — so INT4 would break exactly the constrained
+  // devices it's meant to help. INT8 uses standard ops the wasm backend does support.
+  // TODO(plan2): flip this on once CumSum support (or an INT4 export without it) is
+  // confirmed on the wasm EP, not just capability-detected.
+  const int4Verified = false;
   const quant: ModelScenario["quant"] =
-    gpuLooksDiscrete && !lowRam && !isMobile ? "int8" : "int4";
+    int4Verified && gpuLooksDiscrete && !lowRam && !isMobile ? "int4" : "int8";
 
   // Chunk size: smaller on constrained devices to bound peak memory.
   let chunkSize = 1024;

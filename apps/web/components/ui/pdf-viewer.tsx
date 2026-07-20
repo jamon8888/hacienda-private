@@ -430,7 +430,7 @@ function getVisibleThumbnailItems({
   if (start === -1) start = items.length - 1
 
   let end = start
-  while (end < items.length && items[end].top <= viewportBottom) {
+  while (end < items.length && (items[end]?.top ?? Infinity) <= viewportBottom) {
     end += 1
   }
 
@@ -2051,10 +2051,12 @@ function PDFViewerInner({
 
       const previousDeltas = pageRotationDeltasRef.current
       const nextDeltas = new Map(previousDeltas)
+      // targetPageIndexes[0] is safe: the `targetPageIndexes.length === 0` guard above
+      // already returned, so it's non-empty here.
       const referencePageIndex =
         activePage > 0 && currentDocument.pages[activePage - 1]
           ? activePage - 1
-          : targetPageIndexes[0]
+          : targetPageIndexes[0]!
       let scrollDelta = 0
 
       for (const pageIndex of targetPageIndexes) {
@@ -2310,14 +2312,14 @@ function PDFViewerInner({
                     size="icon-sm"
                     aria-label="Zoom out"
                     disabled={
-                      controlsDisabled || currentZoomLevel <= ZOOM_OPTIONS[0]
+                      controlsDisabled || currentZoomLevel <= ZOOM_OPTIONS[0]!
                     }
                     onClick={() => {
                       const nextZoom = [...ZOOM_OPTIONS]
                         .reverse()
                         .find((option) => option < currentZoomLevel)
 
-                      zoom?.requestZoom(nextZoom ?? ZOOM_OPTIONS[0])
+                      zoom?.requestZoom(nextZoom ?? ZOOM_OPTIONS[0]!)
                     }}
                   >
                     <HugeiconsIcon
@@ -2353,7 +2355,7 @@ function PDFViewerInner({
                     aria-label="Zoom in"
                     disabled={
                       controlsDisabled ||
-                      currentZoomLevel >= ZOOM_OPTIONS[ZOOM_OPTIONS.length - 1]
+                      currentZoomLevel >= ZOOM_OPTIONS[ZOOM_OPTIONS.length - 1]!
                     }
                     onClick={() => {
                       const nextZoom = ZOOM_OPTIONS.find(
@@ -2361,7 +2363,7 @@ function PDFViewerInner({
                       )
 
                       zoom?.requestZoom(
-                        nextZoom ?? ZOOM_OPTIONS[ZOOM_OPTIONS.length - 1]
+                        nextZoom ?? ZOOM_OPTIONS[ZOOM_OPTIONS.length - 1]!
                       )
                     }}
                   >

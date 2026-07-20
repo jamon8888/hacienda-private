@@ -1,6 +1,13 @@
 import type { Folder, Matter } from "@xberg-io/core";
 
-const BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8787";
+// Data API routes live under /api/* on the server — the bare paths (/matters, /folders/[id], ...)
+// are the app's own static page routes, served by the same origin. The exported UI is always
+// served by the same Node service that answers /api/* (services/mcp-server), so the API origin
+// is whatever origin the page itself was loaded from — hardcoding "localhost" broke the app when
+// reached via 127.0.0.1 or a LAN IP (the browser treats those as cross-origin and CORS-blocks the
+// fetch since the server sends no CORS headers). NEXT_PUBLIC_API_BASE still overrides for `next
+// dev`, where the UI and the Node service run on different ports.
+const BASE = `${process.env.NEXT_PUBLIC_API_BASE ?? (typeof window !== "undefined" ? window.location.origin : "http://localhost:8787")}/api`;
 
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {

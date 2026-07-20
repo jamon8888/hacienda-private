@@ -64,7 +64,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import { ScrollArea, ScrollAreaPrimitive } from "@/components/ui/scroll-area"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Select,
   SelectContent,
@@ -707,7 +707,7 @@ function dateFilterPresetCutoff(preset: string) {
 }
 
 // Custom ranges store two ISO timestamps instead of a relative preset.
-function isCustomDateRangeValue(value: string[]) {
+function isCustomDateRangeValue(value: string[]): value is [string, string] {
   return (
     value.length === 2 &&
     value.every(
@@ -741,14 +741,14 @@ function fileMatchesFilter(file: FileEntry, filter: FileSystemFilter) {
 
   if (Number.isNaN(time)) return false
   if (filter.operator === "in-range" || filter.operator === "not-in-range") {
-    const from = Date.parse(filter.value[0])
-    const to = Date.parse(filter.value[1] ?? filter.value[0])
+    const from = Date.parse(filter.value[0] ?? "")
+    const to = Date.parse(filter.value[1] ?? filter.value[0] ?? "")
     const isInRange = time >= from && time <= to
 
     return filter.operator === "not-in-range" ? !isInRange : isInRange
   }
 
-  const cutoff = dateFilterPresetCutoff(filter.value[0]).getTime()
+  const cutoff = dateFilterPresetCutoff(filter.value[0] ?? "").getTime()
 
   return filter.operator === "before" ? time <= cutoff : time >= cutoff
 }
@@ -1843,7 +1843,7 @@ export function FileSystem({
 
         if (next.length <= GALLERY_STAGE_POOL_SIZE) return next
 
-        let evicted = next[0]
+        let evicted = next[0]!
 
         for (const candidate of next) {
           if (candidate === path) continue
@@ -2378,7 +2378,10 @@ function FileSystemSearchField({
         className="pointer-events-none absolute left-2 size-3.5 text-muted-foreground"
       />
       <input
-        ref={inputRef}
+        // Two @types/react copies with differently-shaped RefObject<T> resolve for this
+        // file's JSX intrinsics vs. this component's own `React.RefObject` import — the
+        // underlying object is identical at runtime either way.
+        ref={inputRef as React.RefObject<HTMLInputElement>}
         type="text"
         role="searchbox"
         aria-label="Search files"
@@ -3177,7 +3180,7 @@ type FileSystemViewProps = {
   selectedPath: string | null
   sort: FileSystemSortState
   /** Expanded tree folders per folder path, surviving view switches. */
-  treeExpansionRef: React.RefObject<Map<string, readonly string[]>>
+  treeExpansionRef: React.MutableRefObject<Map<string, readonly string[]>>
 }
 
 // Resolves a display URL for a file: its own `url`, else via `getFileUrl`.
@@ -3342,6 +3345,7 @@ function useEntryTypeAhead() {
 
       for (let step = 0; step < entries.length; step += 1) {
         const entry = entries[(startIndex + step) % entries.length]
+        if (!entry) continue
 
         if (entry.name.toLowerCase().startsWith(state.buffer)) {
           event.preventDefault()
@@ -3380,7 +3384,9 @@ function moveGridSelection({
   } else if (key === "ArrowLeft" || key === "ArrowRight") {
     nextEntry = entries[currentIndex + (key === "ArrowLeft" ? -1 : 1)]
   } else {
-    const currentElement = itemRefs.get(entries[currentIndex].path)
+    // currentIndex is guaranteed valid here (the currentIndex === -1 branch above already
+    // returned/assigned), so this index access always hits a real entry.
+    const currentElement = itemRefs.get(entries[currentIndex]!.path)
 
     if (!currentElement) return false
 
@@ -3803,7 +3809,7 @@ function FileSystemPierreTree({
   relativePaths: string[]
   searchQuery: string
   sort: FileSystemSortState
-  treeExpansionRef: React.RefObject<Map<string, readonly string[]>>
+  treeExpansionRef: React.MutableRefObject<Map<string, readonly string[]>>
 }) {
   // The tree's comparator receives whole paths, not siblings, so it walks
   // the shared segments and applies the active sort at the first level the
@@ -3855,7 +3861,7 @@ function FileSystemPierreTree({
         if (leftEntry && rightEntry) {
           return compareEntriesBySort(leftEntry, rightEntry, sort)
         }
-        return left.segments[depth] < right.segments[depth] ? -1 : 1
+        return (left.segments[depth] ?? "") < (right.segments[depth] ?? "") ? -1 : 1
       }
       return left.segments.length - right.segments.length
     }
@@ -4460,7 +4466,10 @@ function FileSystemColumnsView(props: FileSystemViewProps) {
           scrollbar hides; the viewport alone only observes its own box. Its
           built-in inline min-width (fit-content) would beat a min-w-full
           class, so the full-width floor is inline too. */}
-      <ScrollAreaPrimitive.Content
+      {/* Radix's scroll-area has no separate "Content" part in this version — a plain div
+          inside the Viewport gives the same measurable inner box for the ResizeObserver
+          below. */}
+      <div
         className="flex h-full w-max"
         style={{ minWidth: "100%" }}
         onKeyDown={handleKeyDown}
@@ -4533,7 +4542,7 @@ function FileSystemColumnsView(props: FileSystemViewProps) {
             </div>
           </ScrollArea>
         ) : null}
-      </ScrollAreaPrimitive.Content>
+      </div>
     </ScrollArea>
   )
 }
@@ -4562,7 +4571,7 @@ const FileSystemColumn = React.memo(function FileSystemColumn({
   isLoading: boolean
   onOpen: (entry: FileSystemEntry) => void
   onSelect: (entry: FileSystemEntry | null) => void
-  rowRefs: React.RefObject<Map<string, HTMLButtonElement>>
+  rowRefs: React.MutableRefObject<Map<string, HTMLButtonElement>>
   selectedChildPath: string | null
   tabStopChildPath: string | null
   trailChildPath: string | null

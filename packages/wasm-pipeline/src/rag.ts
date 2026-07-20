@@ -14,12 +14,12 @@ export interface IndexedChunk {
 }
 
 interface EdgeVecMetadata {
-  doc_id?: string;
-  chunk_index?: number;
-  text?: string;
+  doc_id: string;
+  chunk_index: number;
+  text: string;
   page?: number;
   citation?: string;
-  bbox?: string;
+  bbox?: BoundingBox;
 }
 
 let edgevecReady: Promise<void> | null = null;
@@ -31,8 +31,58 @@ function ensureEdgeVec(): Promise<void> {
   return edgevecReady;
 }
 
-function dbName(matterId: string): string {
-  return `edgevec:${matterId}`;
+// edgevec@0.9.0's own metadata storage (insertWithMetadata / getAllMetadata) breaks its own
+// save(name)/load(name) round-trip: loading a saved index back throws "corrupted data:
+// Deserialization failed: This is a feature that PostCard will never implement" (postcard's
+// Error::WontImplement, from attempting a self-describing/"any" deserialization it doesn't
+// support) whenever any vector carries metadata — confirmed via a minimal repro against the
+// installed package (no fix available; 0.9.0 is the latest published version). Chunk metadata
+// is small and JSON-serializable, so we keep it entirely on the JS side instead, keyed by the
+// same vector id edgevec assigns on insert() — this never touches edgevec's metadata storage.
+//
+// That workaround turned out to be necessary but not sufficient: `save(name)`/`load(name)`
+// throw the exact same "PostCard will never implement" error even with zero metadata calls
+// (confirmed live — a plain insert()-only index still fails to reload). The bug is in the
+// base index (de)serialization itself, not specifically the metadata path, and there is no
+// working replacement in this version (`save_stream()` has no matching "load from chunks"
+// counterpart — it's write-only, meant for exporting bytes to the server mirror). So we never
+// call `save`/`load` at all: persist the raw vectors ourselves (same JS-side approach as
+// metadata) and rebuild the index by replaying `insert()` in id order, which reproduces the
+// same id assignment a fresh EdgeVec instance always starts from.
+function metaKey(matterId: string): string {
+  return `edgevec-meta:${matterId}`;
+}
+
+function vectorKey(matterId: string): string {
+  return `edgevec-vectors:${matterId}`;
+}
+
+function saveMetadata(matterId: string, metaById: Record<number, EdgeVecMetadata>): void {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(metaKey(matterId), JSON.stringify(metaById));
+}
+
+function loadMetadata(matterId: string): Record<number, EdgeVecMetadata> {
+  if (typeof localStorage === "undefined") return {};
+  try {
+    return JSON.parse(localStorage.getItem(metaKey(matterId)) ?? "{}") as Record<number, EdgeVecMetadata>;
+  } catch {
+    return {};
+  }
+}
+
+function saveVectors(matterId: string, vectorsById: Record<number, number[]>): void {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(vectorKey(matterId), JSON.stringify(vectorsById));
+}
+
+function loadVectors(matterId: string): Record<number, number[]> {
+  if (typeof localStorage === "undefined") return {};
+  try {
+    return JSON.parse(localStorage.getItem(vectorKey(matterId)) ?? "{}") as Record<number, number[]>;
+  } catch {
+    return {};
+  }
 }
 
 export async function buildIndex(matterId: string, items: IndexedChunk[]): Promise<EdgeVec> {
@@ -40,24 +90,35 @@ export async function buildIndex(matterId: string, items: IndexedChunk[]): Promi
   const config = new EdgeVecConfig(EMBED_DIM);
   config.metric = "cosine";
   const db = new EdgeVecClass(config);
+  const metaById: Record<number, EdgeVecMetadata> = {};
+  const vectorsById: Record<number, number[]> = {};
   for (const item of items) {
-    const meta: Record<string, string | number> = {
+    const id = db.insert(item.vector);
+    metaById[id] = {
       doc_id: item.docId,
       chunk_index: item.chunkIndex,
       text: item.text,
+      page: item.page,
+      citation: item.citation,
+      bbox: item.bbox,
     };
-    if (item.page !== undefined) meta["page"] = item.page;
-    if (item.citation !== undefined) meta["citation"] = item.citation;
-    if (item.bbox !== undefined) meta["bbox"] = JSON.stringify(item.bbox);
-    db.insertWithMetadata(item.vector, meta);
+    vectorsById[id] = Array.from(item.vector);
   }
-  await db.save(dbName(matterId));
+  saveMetadata(matterId, metaById);
+  saveVectors(matterId, vectorsById);
   return db;
 }
 
 export async function loadIndex(matterId: string): Promise<EdgeVec> {
   await ensureEdgeVec();
-  return EdgeVecClass.load(dbName(matterId));
+  const config = new EdgeVecConfig(EMBED_DIM);
+  config.metric = "cosine";
+  const db = new EdgeVecClass(config);
+  const vectorsById = loadVectors(matterId);
+  for (const id of Object.keys(vectorsById).map(Number).sort((a, b) => a - b)) {
+    db.insert(new Float32Array(vectorsById[id] ?? []));
+  }
+  return db;
 }
 
 export async function retrieve(
@@ -66,27 +127,20 @@ export async function retrieve(
   topK: number,
 ): Promise<RetrievedChunk[]> {
   const db = await loadIndex(matterId);
+  const metaById = loadMetadata(matterId);
   const q = queryVec instanceof Float32Array ? queryVec : new Float32Array(queryVec);
   const raw = db.search(q, topK);
   const hits = raw as unknown as Array<{ id: number; score: number }>;
   const out: RetrievedChunk[] = [];
   for (const hit of hits) {
-    const m = db.getAllMetadata(hit.id) as unknown as EdgeVecMetadata | undefined;
+    const m = metaById[hit.id];
     if (!m) continue;
-    let bbox: BoundingBox | undefined;
-    if (m.bbox) {
-      try {
-        bbox = JSON.parse(m.bbox) as BoundingBox;
-      } catch {
-        bbox = undefined;
-      }
-    }
     out.push({
-      doc_id: m.doc_id ?? "",
-      chunk_index: m.chunk_index ?? 0,
-      text: m.text ?? "",
+      doc_id: m.doc_id,
+      chunk_index: m.chunk_index,
+      text: m.text,
       page: m.page,
-      bbox,
+      bbox: m.bbox,
       score: hit.score,
       citation: m.citation ?? "",
     });
