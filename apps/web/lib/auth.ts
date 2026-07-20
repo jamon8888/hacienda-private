@@ -17,6 +17,17 @@ function randomToken(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+// The server authorizes exactly one session token per process (see
+// services/mcp-server/src/auth.ts authenticateHttp — a strict Bearer comparison against a single
+// fixed value) and injects it into every page it serves as `window.__XBERG_TOKEN__` (static.ts
+// injectToken). A client-generated random token can never match it — every authenticated API
+// call would 401 — so the injected token must be used whenever it's present, not just on a
+// fresh visit to "/".
+function injectedToken(): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  return (window as unknown as { __XBERG_TOKEN__?: string }).__XBERG_TOKEN__;
+}
+
 export function useAuth() {
   const router = useRouter();
   const [auth, setAuth] = useState<LocalAuth | null>(null);
@@ -39,14 +50,14 @@ export function useAuth() {
       setAuth(parsed);
       return parsed;
     }
-    const created: LocalAuth = { token: randomToken(), scopes: ["read", "ingest", "redact"] };
+    const created: LocalAuth = { token: injectedToken() ?? randomToken(), scopes: ["read", "ingest", "redact"] };
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(created));
     setAuth(created);
     return created;
   };
 
   const login = (scopes: string[] = ["read", "ingest", "redact"]): LocalAuth => {
-    const created: LocalAuth = { token: randomToken(), scopes };
+    const created: LocalAuth = { token: injectedToken() ?? randomToken(), scopes };
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(created));
     setAuth(created);
     return created;

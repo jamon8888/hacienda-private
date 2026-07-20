@@ -10,6 +10,18 @@ import { useAuth } from "./auth";
 describe("local auth", () => {
   beforeEach(() => {
     sessionStorage.clear();
+    delete (window as unknown as { __XBERG_TOKEN__?: string }).__XBERG_TOKEN__;
+  });
+
+  it("ensureAuth prefers the server-injected token over generating one", () => {
+    // The server authorizes exactly one Bearer token per process and injects it as
+    // window.__XBERG_TOKEN__ (see services/mcp-server/src/static.ts injectToken) — a
+    // self-generated random token could never match it, so every authenticated API call would
+    // 401 for a client that ignores this.
+    (window as unknown as { __XBERG_TOKEN__?: string }).__XBERG_TOKEN__ = "server-issued-token";
+    const { result } = renderHook(() => useAuth());
+    const a = result.current.ensureAuth();
+    expect(a.token).toBe("server-issued-token");
   });
 
   it("ensureAuth creates and persists a token", () => {

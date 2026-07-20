@@ -133,6 +133,16 @@ function serveFile(res: ServerResponse, filePath: string): void {
 	res.end(readFileSync(filePath));
 }
 
+function serveHtmlWithToken(res: ServerResponse, filePath: string, token: string, status = 200): void {
+	const html = injectToken(readFileSync(filePath, "utf8"), token);
+	res.writeHead(status, {
+		"content-type": "text/html; charset=utf-8",
+		"cache-control": "no-store",
+		...ISOLATION_HEADERS,
+	});
+	res.end(html);
+}
+
 function serveStaticDir(res: ServerResponse, rootDir: string, relPath: string): void {
 	const safe = normalize(relPath).replace(/^(\.\.[/\\])+/, "");
 	const filePath = join(rootDir, safe);
@@ -173,20 +183,17 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
 	// happens further down, scoped to the routes that actually need it.
 	if (pathname === "/" && method === "GET") {
 		const uiDir = resolveUiDir();
-		let html: string;
-		if (uiDir) {
-			html = readFileSync(join(uiDir, "index.html"), "utf8");
+		const indexPath = uiDir ? join(uiDir, "index.html") : null;
+		if (indexPath && existsSync(indexPath)) {
+			serveHtmlWithToken(res, indexPath, auth.token);
 		} else {
-			html = PLACEHOLDER_HTML;
+			res.writeHead(200, {
+				"content-type": "text/html; charset=utf-8",
+				"cache-control": "no-store",
+				...ISOLATION_HEADERS,
+			});
+			res.end(injectToken(PLACEHOLDER_HTML, auth.token));
 		}
-		// Inject session token so same-origin UI can read it
-		html = injectToken(html, auth.token);
-		res.writeHead(200, {
-			"content-type": "text/html; charset=utf-8",
-			"cache-control": "no-store",
-			...ISOLATION_HEADERS,
-		});
-		res.end(html);
 		return;
 	}
 
@@ -215,6 +222,37 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
 	if (pathname.startsWith("/models/") && method === "GET") {
 		await handleModels(ctx, res, pathname.slice("/models/".length));
 		return;
+	}
+
+	// SPA fallback: also public, same reasoning as "/" above — the static export only ever
+	// produces a page per *route*, not per dynamic id (`app/documents/[id]/page.tsx`'s
+	// generateStaticParams emits a single `documents/_.html` shell that reads the real id
+	// client-side). Without this, a direct navigation or a full-page reload of /documents/:id,
+	// /folders/:id, /matters/:id, /browse, /search, or /onboarding 404'd — even though those
+	// pages work fine as client-side (Link/router.push) transitions from within an
+	// already-loaded page. Gating the shell itself behind auth would defeat the fix: a fresh
+	// tab hitting a deep link has no token yet either (data still comes from the authenticated
+	// /api/* calls the shell's client JS makes once it loads).
+	if (method === "GET" && !pathname.startsWith("/api/")) {
+		const uiDir = resolveUiDir();
+		if (uiDir) {
+			const segments = pathname.split("/").filter(Boolean);
+			const candidate =
+				segments.length === 2
+					? join(uiDir, segments[0]!, "_.html")
+					: segments.length === 1
+						? join(uiDir, `${segments[0]}.html`)
+						: null;
+			if (candidate && existsSync(candidate)) {
+				serveHtmlWithToken(res, candidate, auth.token);
+				return;
+			}
+			const notFoundPage = join(uiDir, "404.html");
+			if (existsSync(notFoundPage)) {
+				serveHtmlWithToken(res, notFoundPage, auth.token, 404);
+				return;
+			}
+		}
 	}
 
 	// Every remaining route is protected: derive the per-request Principal now (throws
