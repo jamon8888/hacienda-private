@@ -2,7 +2,7 @@
 
 **Status:** Approved (pending user review of this document)
 **Depends on / extends:** `docs/superpowers/specs/2026-07-15-document-intelligence-app-design.md`, `docs/superpowers/specs/2026-07-18-mcp-folder-ingest-design.md`
-**Investigation basis:** performance trace of `packages/wasm-pipeline/src/*` + `services/mcp-server/src/*` + `crates/xberg/src/core`, cross-checked against installed `onnxruntime-web@1.26.0`, `gliner@0.0.19`, `edgevec@0.9.0`, and current Turso / sqlite-vec / Transformers.js docs.
+**Investigation basis:** performance trace of `packages/wasm-pipeline/src/*` + `services/mcp-server/src/*` + `crates/xberg/src/core`, cross-checked against installed `onnxruntime-web@1.26.0`, `gliner@0.0.19`, `edgevec@0.9.0`, and the latest Turso docs (native vector search `F32_BLOB`/`libsql_vector_idx`/`vector_top_k`, Tantivy FTS requiring `experimental: ["index_method"]`, `fts_score`/`fts_highlight`, RRF hybrid pattern) and Transformers.js WebGPU/wasm guides. Xberg config flags (`enable_quality_processing`, `cache_namespace`, `cache_ttl_secs`) verified against `crates/xberg/src/core/config/extraction/core.rs`.
 
 ## Problem
 
@@ -122,6 +122,9 @@ This is verified in the spike.
 **Wiring:**
 - Node: `@turbodatabase/database` opening `dataDir/app.db`. Optional native `encryption: { cipher: "aegis256", hexkey }`.
 - Browser: `@turbodatabase/database` wasm build against OPFS.
+- **FTS requires the experimental `index_method` flag** on the connection (latest Turso docs):
+  `connect(path, { experimental: ["index_method"], encryption?: {...} })`. This MUST be set or
+  `CREATE INDEX ... USING fts` silently fails. The wasm build also needs this — verify in the B-gate spike.
 - `SearchStore.open(matterId)` returns a connection scoped so all queries auto-filter `matter_id` (defense for GDPR `forget`).
 - **`OPTIMIZE INDEX chunks_fts` cadence:** run **once per folder ingest completion** (after all chunks for a folder are inserted and committed), NOT per batch. Re-running Tantivy optimize after every small batch is expensive and can block concurrent queries. For the `ingestFolder` flow this means one `OPTIMIZE` at the end of `PersistStage`. A background/idle re-optimize may be added later for steady-state writes.
 
@@ -140,7 +143,7 @@ Runs vector + FTS in parallel, fuses with RRF (k=60), returns merged top-K with 
 - `chunkerType` configurable: `markdown` for heading-aware RAG, `text` fast-path on constrained devices via `scenario`.
 - Gate OCR: `withTesseractOcr` only when input lacks a text layer (detect empty `doc.content`, retry with OCR) instead of always-on.
 - Read `result.content` / `result.chunks` once; never call `.bytes()` after `fromBytes`; prefer `extract_batch` for multi-doc.
-- JS-side `Map<contentHash, result>` cache since wasm `extract_bytes` bypasses the Rust cache.
+- JS-side `Map<contentHash, result>` cache since wasm `extract_bytes` bypasses the Rust cache. (Alternative: set the Rust config's `cache_namespace` + `cache_ttl_secs` — `core.rs:283-291` — to leverage the native cache instead of a JS map; evaluate which is simpler during implementation.)
 
 **EmbedStage (e5 ORT):**
 - Hoist `import("onnxruntime-web")` + session to module scope (cache promise).
