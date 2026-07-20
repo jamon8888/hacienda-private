@@ -153,7 +153,7 @@ chmod +x xberg-mcp-darwin   # or xberg-mcp-linux
 .\xberg-mcp-windows.exe serve
 ```
 
-`serve` opens the bundled UI at **http://localhost:8787**. The browser runs the whole
+`serve` opens the bundled UI at **<http://localhost:8787**>. The browser runs the whole
 extraction → embedding → PII pipeline on-device via the `@xberg-io/xberg-wasm` engine the
 binary already vendors and serves — nothing extra to install for that part.
 

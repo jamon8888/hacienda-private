@@ -90,11 +90,11 @@ func determinePaths() (string, string, string, error) {
 
 func libFilename(libName, goos string) string {
 	switch goos {
-	case "windows":
+		case "windows":
 		return libName + ".dll"
-	case "darwin":
+		case "darwin":
 		return "lib" + libName + ".dylib"
-	default:
+		default:
 		return "lib" + libName + ".so"
 	}
 }
@@ -113,9 +113,9 @@ func downloadAndExtractLibrary(cacheDir string) error {
 	// but alef's packager emits tarballs with its own arch names: x86_64, aarch64.
 	archName := goarch
 	switch goarch {
-	case "amd64":
+		case "amd64":
 		archName = "x86_64"
-	case "arm64":
+		case "arm64":
 		// macOS arm64 stays "arm64" (alef go_java_platform special-cases it);
 		// all other platforms use "aarch64".
 		if goos != "darwin" {
@@ -175,7 +175,7 @@ func extractTarGz(src io.Reader, dstDir string) error {
 		targetPath := filepath.Join(dstDir, filepath.Base(header.Name))
 
 		switch header.Typeflag {
-		case tar.TypeReg:
+			case tar.TypeReg:
 			f, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode))
 			if err != nil {
 				return err
@@ -186,7 +186,7 @@ func extractTarGz(src io.Reader, dstDir string) error {
 			}
 			f.Close()
 
-		case tar.TypeDir:
+			case tar.TypeDir:
 			if err := os.MkdirAll(targetPath, os.FileMode(header.Mode)); err != nil {
 				return err
 			}

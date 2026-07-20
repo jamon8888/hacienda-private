@@ -1,11 +1,11 @@
 export { initWasm, extractDocument, getWasm, firstDocument, extractText } from "./runtime";
 export type {
-	WasmExtractionConfig,
-	WasmExtractionResult,
-	WasmExtractedDocument,
-	WasmChunk,
-	WasmChunkingConfig,
-	WasmOcrConfig,
+  WasmExtractionConfig,
+  WasmExtractionResult,
+  WasmExtractedDocument,
+  WasmChunk,
+  WasmChunkingConfig,
+  WasmOcrConfig,
 } from "./runtime";
 
 export * from "./ocr";

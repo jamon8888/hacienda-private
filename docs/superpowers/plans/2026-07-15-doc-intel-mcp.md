@@ -12,7 +12,7 @@ summary: >
   (Plan 1). Tools are gated by consent + AuthScopes (read|ingest|redact|admin) + matter scope.
 ---
 
-# Plan 4 — services/mcp-server MCP tools (Node.js)
+## Plan 4 — services/mcp-server MCP tools (Node.js)
 
 **Depends on:** Plan 1 (`services/mcp-server` store, consent store, AES-GCM key vault, EdgeVec
 mirror loader, `/rag/mirror` endpoint, shared contract types). Plan 4 compiles against those
@@ -33,7 +33,7 @@ added here.
 
 ---
 
-## Shared contracts (Plan 1 — imported, not redefined here)
+### Shared contracts (Plan 1 — imported, not redefined here)
 
 Defined in `packages/core/src/types.ts` (Plan 1) and reused verbatim:
 
@@ -60,7 +60,7 @@ export interface RetrievedChunk {
 
 ---
 
-## Task 1 — `mcp` subcommand + MCP server bootstrap
+### Task 1 — `mcp` subcommand + MCP server bootstrap
 
 - [ ] **Step 1:** `services/mcp-server/package.json` — `@modelcontextprotocol/sdk` already in Plan 1
       deps. Feature-gate the optional HTTP/SSE transport behind a flag so the default stdio build
@@ -106,7 +106,7 @@ git commit -m "feat(mcp): sdk server bootstrap + stdio/http transports"
 
 ---
 
-## Task 2 — Scopes + consent + matter-scope gating primitives
+### Task 2 — Scopes + consent + matter-scope gating primitives
 
 - [ ] **Step 1:** `services/mcp-server/src/mcp/scopes.ts` — verify the launcher's token
       (`AuthScopes` from Plan 1's auth) and matter scope before each tool. Deny-by-default.
@@ -151,7 +151,7 @@ git commit -m "feat(mcp): scopes + consent + matter-scope gating + key vault dec
 
 ---
 
-## Task 3 — Lawyer tools (delegate to mirror + metadata, never reimplement)
+### Task 3 — Lawyer tools (delegate to mirror + metadata, never reimplement)
 
 - [ ] **Step 1:** `services/mcp-server/src/mcp/tools.ts` — register the five tools via the SDK
       `tool` registration. Each tool's body: authorize → (consent if applicable) → read the loaded
@@ -238,7 +238,7 @@ git commit -m "feat(mcp): rag_query/list_pii/rehydrate_chunk/ingest_folder/redac
 
 ---
 
-## Task 4 — Claude Desktop config + verification harness
+### Task 4 — Claude Desktop config + verification harness
 
 - [ ] **Step 1:** Document the Claude Desktop `claude_desktop_config.json` snippet (README / docs):
 
@@ -264,7 +264,8 @@ git add docs/ ; git commit -m "docs(mcp): Claude Desktop config + inspector note
 
 ---
 
-## Exit criteria
+### Exit criteria
+
 - `node dist/index.js mcp` launches over stdio; `node dist/index.js mcp --http` serves localhost HTTP/SSE.
 - Five tools registered: `rag_query`, `list_pii`, `rehydrate_chunk`, `ingest_folder`, `redact`.
 - Every tool delegates to the browser-mirrored EdgeVec index + light metadata/consent store; no
@@ -274,11 +275,13 @@ git add docs/ ; git commit -m "docs(mcp): Claude Desktop config + inspector note
 - `rag_query` against a seeded mirror returns cited `RetrievedChunk[]`; `list_pii` returns
   `PiiEntity[]`; `rehydrate_chunk` is blocked without consent in tests.
 
-## Depends on
+### Depends on
+
 Plan 1 (`services/mcp-server` store, consent store, AES-GCM key vault, EdgeVec mirror loader,
 `/rag/mirror` endpoint, shared contract types) and the `@modelcontextprotocol/sdk` npm package.
 
-## Risks / Non-goals
+### Risks / Non-goals
+
 - **Do NOT reimplement** extract, OCR, NER, embeddings, or RAG in Node. Those run in the browser;
   the Node MCP layer only orchestrates over the mirrored EdgeVec index and gates access.
 - **Non-goal: remote MCP.** Only local stdio + localhost HTTP/SSE for the inspector. No public

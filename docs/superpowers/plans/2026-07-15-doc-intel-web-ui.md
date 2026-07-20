@@ -16,7 +16,7 @@ summary: >
   only as `@xberg-io/xberg-wasm` (plus browser-native runtimes); never reimplements extraction.
 ---
 
-# Plan 3 — apps/web (Next.js UI)
+## Plan 3 — apps/web (Next.js UI)
 
 **Depends on:** Plan 1 (API contracts, auth, localhost:8787, `/rag/mirror`), Plan 2
 (`packages/wasm-pipeline` — full browser engine: extract/OCR/chunk + e5 + GLiNER + EdgeVec RAG +
@@ -35,7 +35,7 @@ in-browser redaction, and runs a RAG query that returns cited chunks with page/b
 
 ---
 
-## Context
+### Context
 
 The UI is a **thin client** of the browser engine (`packages/wasm-pipeline`):
 
@@ -57,9 +57,9 @@ dir) → matters list → matter folders → folder documents → document viewe
 
 ---
 
-## Approach / Tasks
+### Approach / Tasks
 
-### Task 1 — Scaffold app + vendored extend-hq/ui
+#### Task 1 — Scaffold app + vendored extend-hq/ui
 
 - [ ] **Step 1:** `apps/web/package.json`. Name `@xberg-io/web` (`web` filter for `pnpm --filter web`).
   Dependencies: `next@14.2.5`, `react@18.3.1`, `react-dom@18.3.1`, `packages/core` + `packages/wasm-pipeline`
@@ -76,7 +76,7 @@ dir) → matters list → matter folders → folder documents → document viewe
 - [ ] **Step 5:** `apps/web/vitest.config.ts` + `apps/web/vitest.setup.ts` (jsdom + RTL + globals).
 - [ ] **Step 6:** `pnpm install` at root; commit scaffold.
 
-### Task 2 — API client + auth token
+#### Task 2 — API client + auth token
 
 - [ ] **Step 1:** `apps/web/lib/api.ts` — typed client against `http://localhost:8787` using `packages/core`
   types. Functions: `getToken()`, `obtainAuth()` (calls `GET /auth`, stores Bearer in localStorage),
@@ -88,7 +88,7 @@ dir) → matters list → matter folders → folder documents → document viewe
 - [ ] **Step 3:** `apps/web/lib/api.test.ts` — mock `fetch`, assert Bearer header + typed parse.
 - [ ] **Step 4:** Commit.
 
-### Task 3 — Onboarding page
+#### Task 3 — Onboarding page
 
 - [ ] **Step 1:** `apps/web/app/onboarding/page.tsx` — consent screen + confirm local data directory;
   calls `GET /auth` to obtain scoped token and marks `localStorage` `xberg.onboarded`. Uses vendored
@@ -97,7 +97,7 @@ dir) → matters list → matter folders → folder documents → document viewe
 - [ ] **Step 3:** `apps/web/app/onboarding/page.test.tsx` — assert token obtained + `onboarded` flag set.
 - [ ] **Step 4:** Commit.
 
-### Task 4 — Matters + Folders (folder-centric flow)
+#### Task 4 — Matters + Folders (folder-centric flow)
 
 - [ ] **Step 1:** `apps/web/app/matters/page.tsx` — list matters (`GET /matters`), create Matter
   (`POST /matters`, `Matter{id,name}`). Vendored `card` + `input` + `button`.
@@ -110,13 +110,13 @@ dir) → matters list → matter folders → folder documents → document viewe
       index + curtain redaction) and pushes the EdgeVec mirror to the Node service.
    2. Render per-file progress via vendored `progress`.
 - [ ] **Step 4:** `apps/web/app/folders/[id]/page.test.tsx` — mock `packages/wasm-pipeline` `extractDocument`
-  + `fetch`; assert folder process → ingest POST fired.
+  - `fetch`; assert folder process → ingest POST fired.
 - [ ] **Step 5:** Commit.
 
-### Task 5 — Document viewer + PII panel + redact
+#### Task 5 — Document viewer + PII panel + redact
 
 - [ ] **Step 1:** `apps/web/app/documents/[id]/page.tsx` — extracted text viewer (from ingest result)
-  + PII panel rendering `PiiEntity[]` (`{kind,start,end,text,ciphertext?}`) from the browser engine.
+  - PII panel rendering `PiiEntity[]` (`{kind,start,end,text,ciphertext?}`) from the browser engine.
 - [ ] **Step 2:** `apps/web/components/PiiPanel.tsx` — list entities with `kind` + masked text; a
   "Redact" action calls `packages/wasm-pipeline` `redactDocument` (curtain reversible tokens;
   originals encrypted into the browser AES-GCM key vault). A mirrored redaction marker is pushed to
@@ -124,7 +124,7 @@ dir) → matters list → matter folders → folder documents → document viewe
 - [ ] **Step 3:** `apps/web/components/PiiPanel.test.tsx` — assert redact call carries entity ids + updates state.
 - [ ] **Step 4:** Commit.
 
-### Task 6 — RAG search with citations
+#### Task 6 — RAG search with citations
 
 - [ ] **Step 1:** `apps/web/app/search/page.tsx` — lawyer query box → calls `packages/wasm-pipeline`
   `queryRag` (in-browser EdgeVec hybrid retrieval); renders `RetrievedChunk[]` with `text`, `score`,
@@ -135,7 +135,7 @@ dir) → matters list → matter folders → folder documents → document viewe
 - [ ] **Step 3:** `apps/web/app/search/page.test.tsx` — mock `queryRag`, assert chunks + citations rendered.
 - [ ] **Step 4:** Commit.
 
-### Task 7 — Build + full test run
+#### Task 7 — Build + full test run
 
 - [ ] **Step 1:** `pnpm --filter web build` (Next production build) — must succeed.
 - [ ] **Step 2:** `pnpm --filter web exec tsc --noEmit` — strict typecheck clean.
@@ -144,14 +144,14 @@ dir) → matters list → matter folders → folder documents → document viewe
 
 ---
 
-## Depends on
+### Depends on
 
 - Plan 1 — API contracts, auth (scoped token, localhost:8787), MCP tools
   (`rag_query`, `list_pii`, `rehydrate_chunk`, `ingest_folder`, `redact`).
 - Plan 2 — `packages/wasm-pipeline` (thin `@xberg-io/xberg-wasm` wrapper: `extractDocument` extract+OCR+chunk).
 - `packages/core` — shared TS types: `AuthScopes`, `Matter`, `Folder`, `PiiEntity`, `RetrievedChunk`.
 
-## Verification
+### Verification
 
 - `pnpm --filter web dev` (pointed at a running `services/mcp-server` on localhost:8787).
 - Manual flow: create Matter → add Folder → drag/drop docs → "Process folder" → see extracted
@@ -159,7 +159,7 @@ dir) → matters list → matter folders → folder documents → document viewe
   page/bbox highlights.
 - `pnpm --filter web build` + `pnpm --filter web exec tsc --noEmit` both clean.
 
-## Risks / Non-goals
+### Risks / Non-goals
 
 - **No extraction/engine logic in the UI.** The browser only calls `packages/wasm-pipeline`, which
   itself consumes `@xberg-io/xberg-wasm` + browser-native runtimes (ORT-Web, GLiNER.js, EdgeVec, curtain).
@@ -169,7 +169,7 @@ dir) → matters list → matter folders → folder documents → document viewe
 - Risk: WASM delivery needs COOP/COEP headers (wasm-pipeline sets them; verify dev/prod match).
 - Risk: `extend-hq/ui` vendored components may need light TS strictness fixes after copy.
 
-## Exit criteria
+### Exit criteria
 
 - `pnpm --filter web build` and `tsc --noEmit` clean; unit tests green.
 - Folder-centric lawyer flow works end-to-end against the local Node service: onboarding → Matter →

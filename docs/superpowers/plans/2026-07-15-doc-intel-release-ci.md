@@ -112,9 +112,11 @@ single root `package.json` `version` (mirrored by `apps/web/package.json` and
 
 - Document that the shipped service is the MCP server: `node dist/index.js mcp` (or the wrapped
   `xberg-mcp mcp`). Provide a copy-paste `claude_desktop_config.json`:
+
   ```json
   { "mcpServers": { "xberg": { "command": "xberg-mcp", "args": ["mcp"] } } }
   ```
+
 - Note: because there is no Rust and no system ORT, the MCP entry works on a clean machine with only
   the wrapped binary (or Node) on PATH.
 
@@ -139,19 +141,21 @@ single root `package.json` `version` (mirrored by `apps/web/package.json` and
 - **Models auto-download**: first run fetches pinned models, SHA256-verified; offline asset boots
   with zero network.
 - **Signed artefacts pass OS gates**: Windows SmartScreen (Authenticode); macOS Gatekeeper (notarized
-  + stapled); Linux GPG signatures verify.
+  - stapled); Linux GPG signatures verify.
 - **One-liner installer** resolves correct asset per OS/arch and installs to PATH; `brew install
   xberg-io/tap/xberg-mcp`, `winget install xberg-io.XbergMcp`, `scoop install xberg-mcp` succeed.
 
 ## Risks / Non-goals
 
 **Non-goals**
+
 - Requiring end users to build from source (no `cargo install`, no `pnpm build` of the engine).
 - Shipping a system-ORT-dependent component. ORT-Web runs inside the browser; the Node service has no
   ORT.
 - Per-OS WASM builds (`@xberg-io/xberg-wasm` is one portable npm package).
 
 **Risks & mitigations**
+
 - **Signing cert management** — store Authenticode + Apple certs in GitHub encrypted secrets; rotate
   via runbook; never log private keys.
 - **macOS notarization latency** — run notarization as a parallel post-build step, poll with timeout.

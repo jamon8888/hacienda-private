@@ -324,37 +324,37 @@ func UnmarshalImageOutputFormat(data []byte) (ImageOutputFormat, error) {
 	}
 
 	switch wire.Type {
-	case "native":
+		case "native":
 		var v ImageOutputFormatNative
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "png":
+		case "png":
 		var v ImageOutputFormatPng
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "jpeg":
+		case "jpeg":
 		var v ImageOutputFormatJpeg
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "webp":
+		case "webp":
 		var v ImageOutputFormatWebp
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "heif":
+		case "heif":
 		var v ImageOutputFormatHeif
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "svg":
+		case "svg":
 		var v ImageOutputFormatSvg
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
@@ -532,19 +532,19 @@ func UnmarshalLateInteractionModelType(data []byte) (LateInteractionModelType, e
 	}
 
 	switch wire.Type {
-	case "preset":
+		case "preset":
 		var v LateInteractionModelTypePreset
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "custom":
+		case "custom":
 		var v LateInteractionModelTypeCustom
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "plugin":
+		case "plugin":
 		var v LateInteractionModelTypePlugin
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
@@ -732,19 +732,19 @@ func UnmarshalVlmFallbackPolicy(data []byte) (VlmFallbackPolicy, error) {
 	}
 
 	switch wire.Mode {
-	case "disabled":
+		case "disabled":
 		var v VlmFallbackPolicyDisabled
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "on_low_quality":
+		case "on_low_quality":
 		var v VlmFallbackPolicyOnLowQuality
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "always":
+		case "always":
 		var v VlmFallbackPolicyAlways
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
@@ -829,13 +829,13 @@ func UnmarshalOcrStrategy(data []byte) (OcrStrategy, error) {
 	}
 
 	switch wire.Mode {
-	case "auto":
+		case "auto":
 		var v OcrStrategyAuto
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "scanned_pages":
+		case "scanned_pages":
 		var v OcrStrategyScannedPages
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
@@ -940,13 +940,13 @@ func UnmarshalChunkSizing(data []byte) (ChunkSizing, error) {
 	}
 
 	switch wire.Type {
-	case "characters":
+		case "characters":
 		var v ChunkSizingCharacters
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "tokenizer":
+		case "tokenizer":
 		var v ChunkSizingTokenizer
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
@@ -1075,25 +1075,25 @@ func UnmarshalEmbeddingModelType(data []byte) (EmbeddingModelType, error) {
 	}
 
 	switch wire.Type {
-	case "preset":
+		case "preset":
 		var v EmbeddingModelTypePreset
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "custom":
+		case "custom":
 		var v EmbeddingModelTypeCustom
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "llm":
+		case "llm":
 		var v EmbeddingModelTypeLlm
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "plugin":
+		case "plugin":
 		var v EmbeddingModelTypePlugin
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
@@ -1254,25 +1254,25 @@ func UnmarshalRerankerModelType(data []byte) (RerankerModelType, error) {
 	}
 
 	switch wire.Type {
-	case "preset":
+		case "preset":
 		var v RerankerModelTypePreset
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "custom":
+		case "custom":
 		var v RerankerModelTypeCustom
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "llm":
+		case "llm":
 		var v RerankerModelTypeLlm
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "plugin":
+		case "plugin":
 		var v RerankerModelTypePlugin
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
@@ -1372,19 +1372,19 @@ func UnmarshalSparseEmbeddingModelType(data []byte) (SparseEmbeddingModelType, e
 	}
 
 	switch wire.Type {
-	case "preset":
+		case "preset":
 		var v SparseEmbeddingModelTypePreset
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "custom":
+		case "custom":
 		var v SparseEmbeddingModelTypeCustom
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "plugin":
+		case "plugin":
 		var v SparseEmbeddingModelTypePlugin
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
@@ -2067,121 +2067,121 @@ func UnmarshalNodeContent(data []byte) (NodeContent, error) {
 	}
 
 	switch wire.NodeType {
-	case "title":
+		case "title":
 		var v NodeContentTitle
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "heading":
+		case "heading":
 		var v NodeContentHeading
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "paragraph":
+		case "paragraph":
 		var v NodeContentParagraph
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "list":
+		case "list":
 		var v NodeContentList
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "list_item":
+		case "list_item":
 		var v NodeContentListItem
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "table":
+		case "table":
 		var v NodeContentTable
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "image":
+		case "image":
 		var v NodeContentImage
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "code":
+		case "code":
 		var v NodeContentCode
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "quote":
+		case "quote":
 		var v NodeContentQuote
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "formula":
+		case "formula":
 		var v NodeContentFormula
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "footnote":
+		case "footnote":
 		var v NodeContentFootnote
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "group":
+		case "group":
 		var v NodeContentGroup
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "page_break":
+		case "page_break":
 		var v NodeContentPageBreak
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "slide":
+		case "slide":
 		var v NodeContentSlide
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "definition_list":
+		case "definition_list":
 		var v NodeContentDefinitionList
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "definition_item":
+		case "definition_item":
 		var v NodeContentDefinitionItem
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "citation":
+		case "citation":
 		var v NodeContentCitation
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "admonition":
+		case "admonition":
 		var v NodeContentAdmonition
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "raw_block":
+		case "raw_block":
 		var v NodeContentRawBlock
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "metadata_block":
+		case "metadata_block":
 		var v NodeContentMetadataBlock
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
@@ -2413,73 +2413,73 @@ func UnmarshalAnnotationKind(data []byte) (AnnotationKind, error) {
 	}
 
 	switch wire.AnnotationType {
-	case "bold":
+		case "bold":
 		var v AnnotationKindBold
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "italic":
+		case "italic":
 		var v AnnotationKindItalic
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "underline":
+		case "underline":
 		var v AnnotationKindUnderline
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "strikethrough":
+		case "strikethrough":
 		var v AnnotationKindStrikethrough
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "code":
+		case "code":
 		var v AnnotationKindCode
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "subscript":
+		case "subscript":
 		var v AnnotationKindSubscript
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "superscript":
+		case "superscript":
 		var v AnnotationKindSuperscript
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "link":
+		case "link":
 		var v AnnotationKindLink
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "highlight":
+		case "highlight":
 		var v AnnotationKindHighlight
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "color":
+		case "color":
 		var v AnnotationKindColor
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "font_size":
+		case "font_size":
 		var v AnnotationKindFontSize
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "custom":
+		case "custom":
 		var v AnnotationKindCustom
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
@@ -2720,7 +2720,7 @@ type FormatMetadata struct {
 // MarshalJSON encodes the tagged union with the discriminator tag.
 func (t FormatMetadata) MarshalJSON() ([]byte, error) {
 	switch t.FormatType {
-	case "pdf":
+		case "pdf":
 		if t.Pdf != nil {
 			data, err := json.Marshal(t.Pdf)
 			if err != nil {
@@ -2733,7 +2733,7 @@ func (t FormatMetadata) MarshalJSON() ([]byte, error) {
 			m["format_type"] = []byte(`"pdf"`)
 			return json.Marshal(m)
 		}
-	case "docx":
+		case "docx":
 		if t.Docx != nil {
 			data, err := json.Marshal(t.Docx)
 			if err != nil {
@@ -2746,7 +2746,7 @@ func (t FormatMetadata) MarshalJSON() ([]byte, error) {
 			m["format_type"] = []byte(`"docx"`)
 			return json.Marshal(m)
 		}
-	case "excel":
+		case "excel":
 		if t.Excel != nil {
 			data, err := json.Marshal(t.Excel)
 			if err != nil {
@@ -2759,7 +2759,7 @@ func (t FormatMetadata) MarshalJSON() ([]byte, error) {
 			m["format_type"] = []byte(`"excel"`)
 			return json.Marshal(m)
 		}
-	case "email":
+		case "email":
 		if t.Email != nil {
 			data, err := json.Marshal(t.Email)
 			if err != nil {
@@ -2772,7 +2772,7 @@ func (t FormatMetadata) MarshalJSON() ([]byte, error) {
 			m["format_type"] = []byte(`"email"`)
 			return json.Marshal(m)
 		}
-	case "pptx":
+		case "pptx":
 		if t.Pptx != nil {
 			data, err := json.Marshal(t.Pptx)
 			if err != nil {
@@ -2785,7 +2785,7 @@ func (t FormatMetadata) MarshalJSON() ([]byte, error) {
 			m["format_type"] = []byte(`"pptx"`)
 			return json.Marshal(m)
 		}
-	case "archive":
+		case "archive":
 		if t.Archive != nil {
 			data, err := json.Marshal(t.Archive)
 			if err != nil {
@@ -2798,7 +2798,7 @@ func (t FormatMetadata) MarshalJSON() ([]byte, error) {
 			m["format_type"] = []byte(`"archive"`)
 			return json.Marshal(m)
 		}
-	case "image":
+		case "image":
 		if t.Image != nil {
 			data, err := json.Marshal(t.Image)
 			if err != nil {
@@ -2811,7 +2811,7 @@ func (t FormatMetadata) MarshalJSON() ([]byte, error) {
 			m["format_type"] = []byte(`"image"`)
 			return json.Marshal(m)
 		}
-	case "xml":
+		case "xml":
 		if t.XML != nil {
 			data, err := json.Marshal(t.XML)
 			if err != nil {
@@ -2824,7 +2824,7 @@ func (t FormatMetadata) MarshalJSON() ([]byte, error) {
 			m["format_type"] = []byte(`"xml"`)
 			return json.Marshal(m)
 		}
-	case "text":
+		case "text":
 		if t.Text != nil {
 			data, err := json.Marshal(t.Text)
 			if err != nil {
@@ -2837,7 +2837,7 @@ func (t FormatMetadata) MarshalJSON() ([]byte, error) {
 			m["format_type"] = []byte(`"text"`)
 			return json.Marshal(m)
 		}
-	case "html":
+		case "html":
 		if t.HTML != nil {
 			data, err := json.Marshal(t.HTML)
 			if err != nil {
@@ -2850,7 +2850,7 @@ func (t FormatMetadata) MarshalJSON() ([]byte, error) {
 			m["format_type"] = []byte(`"html"`)
 			return json.Marshal(m)
 		}
-	case "ocr":
+		case "ocr":
 		if t.Ocr != nil {
 			data, err := json.Marshal(t.Ocr)
 			if err != nil {
@@ -2863,7 +2863,7 @@ func (t FormatMetadata) MarshalJSON() ([]byte, error) {
 			m["format_type"] = []byte(`"ocr"`)
 			return json.Marshal(m)
 		}
-	case "csv":
+		case "csv":
 		if t.Csv != nil {
 			data, err := json.Marshal(t.Csv)
 			if err != nil {
@@ -2876,7 +2876,7 @@ func (t FormatMetadata) MarshalJSON() ([]byte, error) {
 			m["format_type"] = []byte(`"csv"`)
 			return json.Marshal(m)
 		}
-	case "bibtex":
+		case "bibtex":
 		if t.Bibtex != nil {
 			data, err := json.Marshal(t.Bibtex)
 			if err != nil {
@@ -2889,7 +2889,7 @@ func (t FormatMetadata) MarshalJSON() ([]byte, error) {
 			m["format_type"] = []byte(`"bibtex"`)
 			return json.Marshal(m)
 		}
-	case "citation":
+		case "citation":
 		if t.Citation != nil {
 			data, err := json.Marshal(t.Citation)
 			if err != nil {
@@ -2902,7 +2902,7 @@ func (t FormatMetadata) MarshalJSON() ([]byte, error) {
 			m["format_type"] = []byte(`"citation"`)
 			return json.Marshal(m)
 		}
-	case "fiction_book":
+		case "fiction_book":
 		if t.FictionBook != nil {
 			data, err := json.Marshal(t.FictionBook)
 			if err != nil {
@@ -2915,7 +2915,7 @@ func (t FormatMetadata) MarshalJSON() ([]byte, error) {
 			m["format_type"] = []byte(`"fiction_book"`)
 			return json.Marshal(m)
 		}
-	case "dbf":
+		case "dbf":
 		if t.Dbf != nil {
 			data, err := json.Marshal(t.Dbf)
 			if err != nil {
@@ -2928,7 +2928,7 @@ func (t FormatMetadata) MarshalJSON() ([]byte, error) {
 			m["format_type"] = []byte(`"dbf"`)
 			return json.Marshal(m)
 		}
-	case "jats":
+		case "jats":
 		if t.Jats != nil {
 			data, err := json.Marshal(t.Jats)
 			if err != nil {
@@ -2941,7 +2941,7 @@ func (t FormatMetadata) MarshalJSON() ([]byte, error) {
 			m["format_type"] = []byte(`"jats"`)
 			return json.Marshal(m)
 		}
-	case "epub":
+		case "epub":
 		if t.Epub != nil {
 			data, err := json.Marshal(t.Epub)
 			if err != nil {
@@ -2954,7 +2954,7 @@ func (t FormatMetadata) MarshalJSON() ([]byte, error) {
 			m["format_type"] = []byte(`"epub"`)
 			return json.Marshal(m)
 		}
-	case "pst":
+		case "pst":
 		if t.Pst != nil {
 			data, err := json.Marshal(t.Pst)
 			if err != nil {
@@ -2967,7 +2967,7 @@ func (t FormatMetadata) MarshalJSON() ([]byte, error) {
 			m["format_type"] = []byte(`"pst"`)
 			return json.Marshal(m)
 		}
-	case "audio":
+		case "audio":
 		if t.Audio != nil {
 			data, err := json.Marshal(t.Audio)
 			if err != nil {
@@ -2980,7 +2980,7 @@ func (t FormatMetadata) MarshalJSON() ([]byte, error) {
 			m["format_type"] = []byte(`"audio"`)
 			return json.Marshal(m)
 		}
-	case "code":
+		case "code":
 		if t.Code != nil {
 			data, err := json.Marshal(t.Code)
 			if err != nil {
@@ -3011,67 +3011,67 @@ func (t *FormatMetadata) UnmarshalJSON(data []byte) error {
 	t.FormatType = probe.FormatType
 
 	switch probe.FormatType {
-	case "pdf":
+		case "pdf":
 		t.Pdf = &PdfMetadata{}
 		return json.Unmarshal(data, t.Pdf)
-	case "docx":
+		case "docx":
 		t.Docx = &DocxMetadata{}
 		return json.Unmarshal(data, t.Docx)
-	case "excel":
+		case "excel":
 		t.Excel = &ExcelMetadata{}
 		return json.Unmarshal(data, t.Excel)
-	case "email":
+		case "email":
 		t.Email = &EmailMetadata{}
 		return json.Unmarshal(data, t.Email)
-	case "pptx":
+		case "pptx":
 		t.Pptx = &PptxMetadata{}
 		return json.Unmarshal(data, t.Pptx)
-	case "archive":
+		case "archive":
 		t.Archive = &ArchiveMetadata{}
 		return json.Unmarshal(data, t.Archive)
-	case "image":
+		case "image":
 		t.Image = &ImageMetadata{}
 		return json.Unmarshal(data, t.Image)
-	case "xml":
+		case "xml":
 		t.XML = &XMLMetadata{}
 		return json.Unmarshal(data, t.XML)
-	case "text":
+		case "text":
 		t.Text = &TextMetadata{}
 		return json.Unmarshal(data, t.Text)
-	case "html":
+		case "html":
 		t.HTML = &HTMLMetadata{}
 		return json.Unmarshal(data, t.HTML)
-	case "ocr":
+		case "ocr":
 		t.Ocr = &OcrMetadata{}
 		return json.Unmarshal(data, t.Ocr)
-	case "csv":
+		case "csv":
 		t.Csv = &CsvMetadata{}
 		return json.Unmarshal(data, t.Csv)
-	case "bibtex":
+		case "bibtex":
 		t.Bibtex = &BibtexMetadata{}
 		return json.Unmarshal(data, t.Bibtex)
-	case "citation":
+		case "citation":
 		t.Citation = &CitationMetadata{}
 		return json.Unmarshal(data, t.Citation)
-	case "fiction_book":
+		case "fiction_book":
 		t.FictionBook = &FictionBookMetadata{}
 		return json.Unmarshal(data, t.FictionBook)
-	case "dbf":
+		case "dbf":
 		t.Dbf = &DbfMetadata{}
 		return json.Unmarshal(data, t.Dbf)
-	case "jats":
+		case "jats":
 		t.Jats = &JatsMetadata{}
 		return json.Unmarshal(data, t.Jats)
-	case "epub":
+		case "epub":
 		t.Epub = &EpubMetadata{}
 		return json.Unmarshal(data, t.Epub)
-	case "pst":
+		case "pst":
 		t.Pst = &PstMetadata{}
 		return json.Unmarshal(data, t.Pst)
-	case "audio":
+		case "audio":
 		t.Audio = &AudioMetadata{}
 		return json.Unmarshal(data, t.Audio)
-	case "code":
+		case "code":
 		t.Code = &CodeMetadata{}
 		return json.Unmarshal(data, t.Code)
 	}
@@ -3208,13 +3208,13 @@ func UnmarshalOcrBoundingGeometry(data []byte) (OcrBoundingGeometry, error) {
 	}
 
 	switch wire.Type {
-	case "rectangle":
+		case "rectangle":
 		var v OcrBoundingGeometryRectangle
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "quadrilateral":
+		case "quadrilateral":
 		var v OcrBoundingGeometryQuadrilateral
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
@@ -3442,31 +3442,31 @@ func UnmarshalRevisionAnchor(data []byte) (RevisionAnchor, error) {
 	}
 
 	switch wire.Type {
-	case "paragraph":
+		case "paragraph":
 		var v RevisionAnchorParagraph
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "table_cell":
+		case "table_cell":
 		var v RevisionAnchorTableCell
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "page":
+		case "page":
 		var v RevisionAnchorPage
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "slide":
+		case "slide":
 		var v RevisionAnchorSlide
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "sheet":
+		case "sheet":
 		var v RevisionAnchorSheet
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
@@ -3703,37 +3703,37 @@ func UnmarshalNoChunkingReason(data []byte) (NoChunkingReason, error) {
 	}
 
 	switch wire.Type {
-	case "SmallFile":
+		case "SmallFile":
 		var v NoChunkingReasonSmallFile
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "FewPages":
+		case "FewPages":
 		var v NoChunkingReasonFewPages
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "TextLayerDetected":
+		case "TextLayerDetected":
 		var v NoChunkingReasonTextLayerDetected
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "FormatNotChunkable":
+		case "FormatNotChunkable":
 		var v NoChunkingReasonFormatNotChunkable
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "ChunkingDisabled":
+		case "ChunkingDisabled":
 		var v NoChunkingReasonChunkingDisabled
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "FastTextExtraction":
+		case "FastTextExtraction":
 		var v NoChunkingReasonFastTextExtraction
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
@@ -3853,25 +3853,25 @@ func UnmarshalChunkingReason(data []byte) (ChunkingReason, error) {
 	}
 
 	switch wire.Type {
-	case "LargeFile":
+		case "LargeFile":
 		var v ChunkingReasonLargeFile
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "ManyPages":
+		case "ManyPages":
 		var v ChunkingReasonManyPages
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "OcrRequired":
+		case "OcrRequired":
 		var v ChunkingReasonOcrRequired
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "LargeAndManyPages":
+		case "LargeAndManyPages":
 		var v ChunkingReasonLargeAndManyPages
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
@@ -4156,19 +4156,19 @@ func UnmarshalAuthConfig(data []byte) (AuthConfig, error) {
 	}
 
 	switch wire.Type {
-	case "basic":
+		case "basic":
 		var v AuthConfigBasic
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "bearer":
+		case "bearer":
 		var v AuthConfigBearer
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
-	case "header":
+		case "header":
 		var v AuthConfigHeader
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err

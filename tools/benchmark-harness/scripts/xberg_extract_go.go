@@ -65,11 +65,11 @@ func main() {
 
 	for _, arg := range os.Args[1:] {
 		switch arg {
-		case "--ocr":
+			case "--ocr":
 			ocrEnabled = true
-		case "--no-ocr":
+			case "--no-ocr":
 			ocrEnabled = false
-		default:
+			default:
 			args = append(args, arg)
 		}
 	}
@@ -86,10 +86,10 @@ func main() {
 	debug("Mode: %s, OCR enabled: %v, Files: %v", mode, ocrEnabled, files)
 
 	switch mode {
-	case "server":
+		case "server":
 		debug("Starting server mode")
 		runServer(ocrEnabled)
-	case "sync":
+		case "sync":
 		if len(files) != 1 {
 			fatal(fmt.Errorf("sync mode requires exactly one file"))
 		}
@@ -100,7 +100,7 @@ func main() {
 		}
 		debug("Sync extraction completed successfully")
 		mustEncode(result)
-	case "batch":
+		case "batch":
 		if len(files) == 0 {
 			fatal(fmt.Errorf("batch mode requires at least one file"))
 		}
@@ -111,7 +111,7 @@ func main() {
 		}
 		debug("Batch extraction completed successfully")
 		mustEncode(results)
-	default:
+		default:
 		fatal(fmt.Errorf("unknown mode %q", mode))
 	}
 }
