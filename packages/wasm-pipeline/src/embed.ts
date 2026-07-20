@@ -33,6 +33,14 @@ let cachedSig: string | null = null;
 let sessionPromise: Promise<OrtSessionHandle> | null = null;
 let tokenizerPromise: Promise<CallableTokenizer> | null = null;
 let warnedDefaultScenario = false;
+let ortModPromise: Promise<typeof import("onnxruntime-web")> | null = null;
+
+function getOrt(): Promise<typeof import("onnxruntime-web")> {
+	if (!ortModPromise) {
+		ortModPromise = import("onnxruntime-web");
+	}
+	return ortModPromise;
+}
 
 interface OrtSessionHandle {
 	run: (feeds: Record<string, OrtTensor>) => Promise<Record<string, OrtTensor>>;
@@ -52,7 +60,7 @@ async function getSession(scenario: ModelScenario = DEFAULT_SCENARIO): Promise<O
 	if (!sessionPromise || sig !== cachedSig) {
 		cachedSig = sig;
 		sessionPromise = (async () => {
-			const ort = await import("onnxruntime-web");
+			const ort = await getOrt();
 			ort.env.wasm.numThreads = scenario.numThreads;
 			const resp = await fetch(e5ModelUrl(scenario.modelVariant, scenario.quant));
 			const buf = await resp.arrayBuffer();
@@ -115,7 +123,7 @@ async function embedOne(
 	const attn = enc.attention_mask;
 	const seqLen = inputIds.length;
 
-	const ort = await import("onnxruntime-web");
+	const ort = await getOrt();
 	const ids = BigInt64Array.from(inputIds.map((x: number) => BigInt(x)));
 	const mask = BigInt64Array.from(attn.map((x: number) => BigInt(x)));
 	const types = new BigInt64Array(seqLen);
