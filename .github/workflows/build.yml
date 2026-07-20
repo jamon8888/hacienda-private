@@ -82,6 +82,7 @@ jobs:
           path: services/mcp-server
 
       - name: Install dependencies
+        shell: bash
         run: |
           if [ -f pnpm-lock.yaml ]; then
             pnpm install --frozen-lockfile
