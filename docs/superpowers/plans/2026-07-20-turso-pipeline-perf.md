@@ -6,7 +6,7 @@
 
 **Architecture:** Stage-isolated pipeline behind a single `SearchStore` abstraction. A shared Turso SQL schema (`chunks` + vector index + FTS index + metadata tables) serves both the browser (wasm/OPFS) and the Node MCP server. Query runs vector + FTS legs in parallel, fused with Reciprocal Rank Fusion. Big-bang cutover happens only after the wasm spike + soak pass.
 
-**Tech Stack:** `@turbodatabase/database` (Turso, native vector + Tantivy FTS, `experimental: ["index_method"]` for FTS), `onnxruntime-web@1.26.0` (threaded wasm / WebGPU), `gliner@0.0.19` (batched inference), `xberg-wasm` (extraction), vitest (wasm-pipeline tests), criterion (benchmark-harness).
+**Tech Stack:** `@libsql/client` (Turso, native vector + Tantivy FTS, `experimental: ["index_method"]` for FTS), `onnxruntime-web@1.26.0` (threaded wasm / WebGPU), `gliner@0.0.19` (batched inference), `xberg-wasm` (extraction), vitest (wasm-pipeline tests), criterion (benchmark-harness).
 
 **Spec:** `docs/superpowers/specs/2026-07-20-turso-pipeline-perf-design.md`
 
@@ -47,7 +47,7 @@ This is the **hard precondition** (spec Section 5). No cutover until green.
 
 - [ ] **Step 1: Write the spike test that asserts each required capability**
 ```ts
-import { connect } from "@turbodatabase/database";
+import { connect } from "@libsql/client";
 
 describe("B-gate: turso wasm capabilities", () => {
   it("creates vector index + vector_top_k", async () => {
@@ -79,7 +79,7 @@ Run: `cd packages/wasm-pipeline && pnpm vitest run src/search/spike.test.ts`
 Expected: Both tests PASS in the wasm/OPFS build. If they FAIL, **stop** — document the missing feature and fall back to Node-big-bang + browser-EdgeVec (spec escape hatch). Do NOT proceed to Tasks 1–8.
 
 - [ ] **Step 3: Record bundle-size measurement**
-Run the wasm build and measure total size of `@turbodatabase/database` + Tantivy + vector.
+Run the wasm build and measure total size of `@libsql/client` + Tantivy + vector.
 Expected: < 50MB (jsDelivr limit, spec EX-7). If over, investigate tree-shaking or defer FTS in wasm.
 
 - [ ] **Step 4: Commit the spike (as a non-cutover probe, old code untouched)**
@@ -197,7 +197,7 @@ Run: `pnpm vitest run src/search/turso.test.ts` → FAIL (`TursoSearchStore` not
 - [ ] **Step 3: Implement `turso.ts`**
 Key points from spec: `connect(path, { experimental: ["index_method"], encryption? })`; vector param as BLOB bytes wrapped in `vector32(?)`; parallel vector + FTS legs; RRF fuse (k=60); capability probe on `open`.
 ```ts
-import { connect, type Database } from "@turbodatabase/database";
+import { connect, type Database } from "@libsql/client";
 import { SCHEMA } from "./schema";
 import { rrfFuse } from "./hybrid";
 import type { RetrievedChunk } from "@xberg-io/core";
@@ -237,7 +237,7 @@ export class TursoSearchStore implements SearchStore {
     });
     tx(items);
     // FTS (Tantivy) is only visible after COMMIT; the transaction must finish before
-    // OPTIMIZE INDEX and before any query. `tx(items)` commits on return in @turbodatabase/database.
+    // OPTIMIZE INDEX and before any query. `tx(items)` commits on return in @libsql/client.
     await this.db.exec("OPTIMIZE INDEX chunks_fts"); // once per ingest (Task 5 refines cadence)
   }
 
@@ -467,7 +467,7 @@ it("mirror accepts versioned turso payload and reopens", async () => {
 ```
 
 - [ ] **Step 2: Implement**
-- `store.ts`: `MetadataStore` wraps a `@turbodatabase/database` connection; run existing `SCHEMA` (matters/folders/consent/ingests/redactions/audit_log) + `search/schema.ts`. Preserve all method signatures used by `index.ts`.
+- `store.ts`: `MetadataStore` wraps a `@libsql/client` connection; run existing `SCHEMA` (matters/folders/consent/ingests/redactions/audit_log) + `search/schema.ts`. Preserve all method signatures used by `index.ts`.
 - `mirror.ts`: `saveMirror` accepts `{ format, schemaVersion, db }`; `open` rejects `schemaVersion !== 1`.
 - `index.ts:249`: read body as the versioned payload; pass to `mirror.saveMirror`.
 

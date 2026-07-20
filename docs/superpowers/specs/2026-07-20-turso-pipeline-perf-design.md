@@ -33,7 +33,7 @@ on-device document-intelligence app slower than necessary and, in one case, stru
 
 - Redesign the full pipeline (extract → embed → NER → redact → persist → query) as isolated,
   independently-testable stages behind a single `SearchStore` abstraction.
-- Replace both stores with **Turso** (`@turbodatabase/database`): native vector search
+- Replace both stores with **Turso** (`@libsql/client`): native vector search
   (`F32_BLOB` + `libsql_vector_idx` + `vector_top_k`) plus **Tantivy-powered FTS**
   (`USING fts` + `fts_score` + `fts_highlight`) in one embedded, offline, encrypted, wasm-compatible
   engine.
@@ -86,7 +86,7 @@ replaces both `rag.ts` (EdgeVec + localStorage) and `store.ts` (better-sqlite3).
 - `packages/wasm-pipeline/src/search/hybrid.ts` — RRF fusion (vector + fts result merge).
 - `rag.ts` deleted; `store.ts` (Node metadata) merged into the same Turso DB behind a preserved `MetadataStore` API.
 
-**Boundaries:** `SearchStore` depends only on `@turbodatabase/database` + `IndexedChunk`/`RetrievedChunk` types. Stages don't know about storage. Query doesn't know embedding internals. Each unit unit-testable with a fake `SearchStore`.
+**Boundaries:** `SearchStore` depends only on `@libsql/client` + `IndexedChunk`/`RetrievedChunk` types. Stages don't know about storage. Query doesn't know embedding internals. Each unit unit-testable with a fake `SearchStore`.
 
 ## Storage schema & Turso wiring (Section 2)
 
@@ -112,7 +112,7 @@ CREATE INDEX chunks_fts ON chunks USING fts (text) WITH (weights='text=1.0');
 -- moved into the SAME Turso DB, schema unchanged from store.ts.
 ```
 
-**Vector binding:** the query vector is an `e5` `Float32Array`. `@turbodatabase/database` does not
+**Vector binding:** the query vector is an `e5` `Float32Array`. `@libsql/client` does not
 auto-convert a `Float32Array` param into an `F32_BLOB` — the binding must pass the raw little-endian
 bytes (e.g. `Buffer.from(float32array.buffer)`) and wrap with `vector32(?)` in SQL, OR serialize to
 the `[0.1,0.2,...]` literal. The `turso.ts` implementation MUST use the explicit BLOB form
@@ -120,8 +120,8 @@ the `[0.1,0.2,...]` literal. The `turso.ts` implementation MUST use the explicit
 This is verified in the spike.
 
 **Wiring:**
-- Node: `@turbodatabase/database` opening `dataDir/app.db`. Optional native `encryption: { cipher: "aegis256", hexkey }`.
-- Browser: `@turbodatabase/database` wasm build against OPFS.
+- Node: `@libsql/client` opening `dataDir/app.db`. Optional native `encryption: { cipher: "aegis256", hexkey }`.
+- Browser: `@libsql/client` wasm build against OPFS.
 - **FTS requires the experimental `index_method` flag** on the connection (latest Turso docs):
   `connect(path, { experimental: ["index_method"], encryption?: {...} })`. This MUST be set or
   `CREATE INDEX ... USING fts` silently fails. The wasm build also needs this — verify in the B-gate spike.
@@ -198,7 +198,7 @@ confirm in the **browser wasm** build: `libsql_vector_idx` + `vector_top_k` + `U
 Until green, old code stays (no big-bang). The runtime capability probe is safety net for partial builds.
 
 **Migration steps (big-bang, after gate green):**
-1. Add `@turbodatabase/database` dep; write `search/schema.sql` + `search/turso.ts` + `search/store.ts` + `search/hybrid.ts`.
+1. Add `@libsql/client` dep; write `search/schema.sql` + `search/turso.ts` + `search/store.ts` + `search/hybrid.ts`.
 2. Repoint `ingest.ts` PersistStage → `SearchStore.ingest`; `query.ts` → `SearchStore.query`.
 3. Merge `store.ts` metadata tables into the Turso DB; `MetadataStore` becomes a thin wrapper (API preserved for `index.ts` routes).
 4. Change `/api/rag/mirror` contract: browser ships serialized Turso DB, Node `MirrorStore` reopens it (versioned payload).
@@ -238,6 +238,6 @@ Budgets are acceptance criteria — harness fails CI on regression.
 - Compat: old `MetadataStore` API routes in `index.ts` still pass (wrapper preserved).
 
 **Open items (resolve during implementation):**
-- Exact Turso package: `@turbodatabase/database` vs `@libsql/client` for Node (recommend `@turbodatabase/database` for native vector + encryption).
+- Exact Turso package: `@libsql/client` vs `@libsql/client` for Node (recommend `@libsql/client` for native vector + encryption).
 - **DB-per-matter vs single-DB-with-matter_id — RESOLVED: single DB, `matter_id` filter.** This keeps the mirror payload simple (one app DB backup), makes `SearchStore.open(matterId)` a scoped connection over the shared DB, and aligns tenant isolation with the `WHERE matter_id = ?` filter already in every query. The vector + FTS indexes are partial (`WHERE matter_id IS NOT NULL`) so graph/segment size stays bounded per matter.
 - Whether to encrypt the browser DB at rest (privacy win, small perf cost).
