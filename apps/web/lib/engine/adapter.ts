@@ -125,8 +125,8 @@ export async function ingestFolder(file: File, ctx: IngestContext): Promise<Inge
   }
   emit(ctx, name, name, "pii", 0.8);
 
-  const db = await buildIndex(ctx.matter.id, items);
-  const indexBytes = await serializeIndex(db);
+  await buildIndex(ctx.matter.id, items);
+  const indexBytes = await serializeIndex(ctx.matter.id);
   const sealed = await sealVault(allEntries, ctx.passphrase);
   const payload = new TextEncoder().encode(
     JSON.stringify({

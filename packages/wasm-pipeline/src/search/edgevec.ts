@@ -278,6 +278,21 @@ export class EdgeVecSearchStore implements SearchStore {
     this.matterId = null;
   }
 
+  /**
+   * Escape hatch for callers that need the raw EdgeVec instance directly --
+   * e.g. rag.ts's serializeIndex(), which calls db.save_stream() to build the
+   * /api/rag/mirror payload. Not part of the SearchStore interface (Node's
+   * mirror-side implementation has no equivalent), so this is
+   * EdgeVecSearchStore-specific.
+   */
+  getRawDb(): EdgeVec | null {
+    return this.db;
+  }
+
+  getOpenMatterId(): string | null {
+    return this.matterId;
+  }
+
   private requireDb(op: string): EdgeVec {
     if (!this.db) throw new Error(`EdgeVecSearchStore.${op} called before open()`);
     return this.db;

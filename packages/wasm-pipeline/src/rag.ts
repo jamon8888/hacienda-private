@@ -1,100 +1,74 @@
-import type { RetrievedChunk, BoundingBox } from "@xberg-io/core";
-import type { EdgeVec } from "edgevec";
-import init, { EdgeVec as EdgeVecClass, EdgeVecConfig } from "edgevec";
-import { EMBED_DIM } from "./constants";
+import type { RetrievedChunk } from "@xberg-io/core";
+import { EdgeVecSearchStore } from "./search/edgevec";
+import type { IndexedChunk } from "./search/store";
 
-export interface IndexedChunk {
-  docId: string;
-  chunkIndex: number;
-  text: string;
-  page?: number;
-  citation?: string;
-  bbox?: BoundingBox;
-  vector: Float32Array;
+export type { IndexedChunk } from "./search/store";
+
+// A single shared EdgeVecSearchStore for the browser tab session. EdgeVec's
+// own save()/load() are broken in 0.9.0 (see search/spike.test.ts), so
+// persistence goes through search/persist.ts's binary IndexedDB blob instead;
+// the in-memory index is rebuilt from that blob once per matter switch, never
+// per query -- that per-query rebuild was the dominant latency in the prior
+// design.
+let sharedStore: EdgeVecSearchStore | null = null;
+let openMatterId: string | null = null;
+
+function getStore(): EdgeVecSearchStore {
+  if (!sharedStore) sharedStore = new EdgeVecSearchStore();
+  return sharedStore;
 }
 
-interface EdgeVecMetadata {
-  doc_id?: string;
-  chunk_index?: number;
-  text?: string;
-  page?: number;
-  citation?: string;
-  bbox?: string;
-}
-
-let edgevecReady: Promise<void> | null = null;
-
-function ensureEdgeVec(): Promise<void> {
-  if (!edgevecReady) {
-    edgevecReady = init().then(() => undefined);
+async function ensureOpenForIngest(matterId: string): Promise<EdgeVecSearchStore> {
+  const store = getStore();
+  if (openMatterId !== matterId) {
+    await store.open(matterId);
+    openMatterId = matterId;
   }
-  return edgevecReady;
+  return store;
 }
 
-function dbName(matterId: string): string {
-  return `edgevec:${matterId}`;
-}
-
-export async function buildIndex(matterId: string, items: IndexedChunk[]): Promise<EdgeVec> {
-  await ensureEdgeVec();
-  const config = new EdgeVecConfig(EMBED_DIM);
-  config.metric = "cosine";
-  const db = new EdgeVecClass(config);
-  for (const item of items) {
-    const meta: Record<string, string | number> = {
-      doc_id: item.docId,
-      chunk_index: item.chunkIndex,
-      text: item.text,
-    };
-    if (item.page !== undefined) meta["page"] = item.page;
-    if (item.citation !== undefined) meta["citation"] = item.citation;
-    if (item.bbox !== undefined) meta["bbox"] = JSON.stringify(item.bbox);
-    db.insertWithMetadata(item.vector, meta);
+async function ensureOpenForQuery(matterId: string): Promise<EdgeVecSearchStore> {
+  const store = getStore();
+  if (openMatterId !== matterId) {
+    const loaded = await store.load(matterId);
+    if (!loaded) await store.open(matterId);
+    openMatterId = matterId;
   }
-  await db.save(dbName(matterId));
-  return db;
+  return store;
 }
 
-export async function loadIndex(matterId: string): Promise<EdgeVec> {
-  await ensureEdgeVec();
-  return EdgeVecClass.load(dbName(matterId));
+export async function buildIndex(matterId: string, items: IndexedChunk[]): Promise<void> {
+  const store = await ensureOpenForIngest(matterId);
+  await store.ingest(items);
+  await store.persist(matterId);
 }
 
 export async function retrieve(
   matterId: string,
   queryVec: number[] | Float32Array,
   topK: number,
+  keyword = "",
 ): Promise<RetrievedChunk[]> {
-  const db = await loadIndex(matterId);
-  const q = queryVec instanceof Float32Array ? queryVec : new Float32Array(queryVec);
-  const raw = db.search(q, topK);
-  const hits = raw as unknown as Array<{ id: number; score: number }>;
-  const out: RetrievedChunk[] = [];
-  for (const hit of hits) {
-    const m = db.getAllMetadata(hit.id) as unknown as EdgeVecMetadata | undefined;
-    if (!m) continue;
-    let bbox: BoundingBox | undefined;
-    if (m.bbox) {
-      try {
-        bbox = JSON.parse(m.bbox) as BoundingBox;
-      } catch {
-        bbox = undefined;
-      }
-    }
-    out.push({
-      doc_id: m.doc_id ?? "",
-      chunk_index: m.chunk_index ?? 0,
-      text: m.text ?? "",
-      page: m.page,
-      bbox,
-      score: hit.score,
-      citation: m.citation ?? "",
-    });
-  }
-  return out;
+  const store = await ensureOpenForQuery(matterId);
+  const vec = queryVec instanceof Float32Array ? queryVec : new Float32Array(queryVec);
+  return store.query(matterId, { vector: vec, keyword, topK });
 }
 
-export async function serializeIndex(db: EdgeVec): Promise<Uint8Array> {
+/**
+ * Exports the currently-open matter's EdgeVec index as save_stream() bytes,
+ * for the /api/rag/mirror upload. Only valid immediately after buildIndex()
+ * for the same matterId -- unaffected by EdgeVec's broken load(): save_stream
+ * is a write-only export the Node MirrorStore reopens independently
+ * (Task 8), not something this process ever tries to load back.
+ */
+export async function serializeIndex(matterId: string): Promise<Uint8Array> {
+  const store = getStore();
+  if (store.getOpenMatterId() !== matterId) {
+    throw new Error(`rag.ts: serializeIndex called for matter ${matterId}, but the open matter is ${store.getOpenMatterId()}`);
+  }
+  const db = store.getRawDb();
+  if (!db) throw new Error(`rag.ts: serializeIndex called for matter ${matterId} but no EdgeVec index is open`);
+
   const iter = db.save_stream();
   const parts: Uint8Array[] = [];
   let chunk = iter.next_chunk();

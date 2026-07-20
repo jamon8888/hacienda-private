@@ -13,6 +13,8 @@ export * from "./chunk";
 export * from "./embed";
 export * from "./ner";
 export * from "./rag";
+export type { SearchStore, IndexedChunkMap, QueryArgs } from "./search/store";
+export { EdgeVecSearchStore } from "./search/edgevec";
 export * from "./redact";
 export * from "./mirror";
 export * from "./ingest";
