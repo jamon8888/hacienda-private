@@ -56,6 +56,10 @@ export interface IngestResult {
 export interface IngestContext {
   matter: Matter;
   folder: Folder;
+  // The server-assigned Document id (from createDocument), used to key mirror chunks/pii spans
+  // and citations so RAG results and PII-review deep-links route to the right document. Falls
+  // back to folder.id when omitted, for callers that haven't registered a Document row yet.
+  docId?: string;
   scopeToken: string;
   passphrase: string;
   onProgress?: (p: IngestProgress) => void;
@@ -106,6 +110,7 @@ export async function ingestFolder(file: File, ctx: IngestContext): Promise<Inge
   );
   emit(ctx, name, name, "embed", 0.6);
 
+  const docId = ctx.docId ?? ctx.folder.id;
   const items: IndexedChunk[] = [];
   const allEntries: RedactionEntry[] = [];
   for (const [i, c] of chunks.entries()) {
@@ -115,11 +120,11 @@ export async function ingestFolder(file: File, ctx: IngestContext): Promise<Inge
     const { redacted, entries } = buildRedaction(c.content, pii, `C${i}`);
     for (const e of entries) allEntries.push(e);
     items.push({
-      docId: ctx.folder.id,
+      docId,
       chunkIndex: c.metadata.chunkIndex,
       text: redacted,
       page: chunkPage(c),
-      citation: chunkCitation(ctx.folder.id, c),
+      citation: chunkCitation(docId, c),
       bbox: chunkBoundingBox(doc, c),
       vector: v,
     });

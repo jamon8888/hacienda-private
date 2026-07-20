@@ -12,6 +12,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 		<html lang="en">
 			<body>
 				<AppShell>{children}</AppShell>
+				{/* Glide Data Grid (csv-viewer, bounding-box-citations) renders cell-editor overlays here. */}
+				<div id="portal" />
 			</body>
 		</html>
 	);

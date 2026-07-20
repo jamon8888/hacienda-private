@@ -121,6 +121,13 @@ export async function updateDocumentStatus(
 	return json<Document>(res);
 }
 
+export async function getDocument(token: string, documentId: string): Promise<Document> {
+	const res = await fetch(`${API}/documents/${encodeURIComponent(documentId)}`, {
+		headers: { authorization: `Bearer ${token}` },
+	});
+	return json<Document>(res);
+}
+
 export async function getDocumentPii(token: string, documentId: string): Promise<DocumentPiiEntity[]> {
 	const res = await fetch(`${API}/documents/${encodeURIComponent(documentId)}/pii`, {
 		headers: { authorization: `Bearer ${token}` },

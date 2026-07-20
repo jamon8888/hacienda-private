@@ -2238,6 +2238,7 @@ export function HumanReviewPanel({
   className,
   onFieldFocus,
   onLocationHover,
+  onExpectedChange,
   resolveArrayItemMetadataPath,
   resolveLocation,
   showExpected = true,
@@ -2248,6 +2249,9 @@ export function HumanReviewPanel({
   className?: string
   onFieldFocus?: (field: ReviewField) => void
   onLocationHover?: (location?: ReviewLocation) => void
+  // Fires whenever the reviewer edits a field's expected value — the panel otherwise holds all
+  // review state internally with no way for a parent to read it back out for saving.
+  onExpectedChange?: (expected: JsonObject) => void
   resolveArrayItemMetadataPath?: (
     metadataPath: string,
     rowIndex: number,
@@ -2273,6 +2277,11 @@ export function HumanReviewPanel({
   React.useEffect(() => {
     setExpected(initialExpectedValues)
   }, [initialExpectedValues])
+
+  React.useEffect(() => {
+    onExpectedChange?.(expected)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expected])
 
   const updateValue = React.useCallback((key: string, value: JsonValue) => {
     setExpected((current) =>

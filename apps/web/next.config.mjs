@@ -15,10 +15,12 @@
  *   alias below.
  */
 
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -44,6 +46,17 @@ const nextConfig = {
       "onnxruntime-node": resolve(__dirname, "onnxruntime-node-stub.mjs"),
       crypto: false,
     };
+
+    // @hugeicons/core-free-icons' CJS build (dist/cjs/index.js) compiles down to a near-empty
+    // module in the Next.js server bundle (every named icon resolves to undefined there, only
+    // in SSR/static-export prerendering — the client bundle is unaffected), crashing every page
+    // that renders a HugeiconsIcon. Its ESM build (dist/esm/index.js) is unaffected. Alias
+    // straight to the ESM entry so both client and server bundles use the working build,
+    // bypassing whatever export-condition resolution picks the broken one server-side.
+    config.resolve.alias["@hugeicons/core-free-icons"] = resolve(
+      dirname(require.resolve("@hugeicons/core-free-icons/package.json")),
+      "dist/esm/index.js",
+    );
 
     // onnxruntime-web (and gliner's copy) resolve to their *node* entry via the
     // `exports` map when webpack applies the `node` condition, which pulls a native

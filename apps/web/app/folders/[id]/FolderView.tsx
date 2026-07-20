@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileDropzone } from "@/components/ui/file-dropzone";
 import { useAuth } from "@/lib/auth";
 import { getFolders, getFolderDocuments, createDocument, updateDocumentStatus } from "@/lib/api";
+import { saveOriginalFile } from "@/lib/file-store";
 
 interface FolderViewProps {
 	id: string;
@@ -93,12 +94,14 @@ export default function FolderView({ id: folderId }: FolderViewProps) {
 						const result = await ingestFolder(file, {
 							matter,
 							folder,
+							docId,
 							scopeToken: auth.token,
 							passphrase: auth.passphrase as string,
 							onProgress: (p) =>
 								setUploads((prev) => ({ ...prev, [file.name]: { name: file.name, stage: p.stage, progress: p.progress } })),
 						});
 
+						await saveOriginalFile(docId, file, result.pii, result.mirror);
 						await updateDocumentStatus(auth.token, docId, {
 							status: "done",
 							pages: result.pages,

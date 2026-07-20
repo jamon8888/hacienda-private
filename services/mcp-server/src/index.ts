@@ -347,9 +347,18 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
 		return;
 	}
 
+	const docStatusMatch = pathname.match(/^\/api\/documents\/([^/]+)$/);
+	if (docStatusMatch && method === "GET") {
+		authorize(principal.scopes, "read");
+		const documentId = decodeURIComponent(docStatusMatch[1] ?? "");
+		const doc = ctx.store.getDocument(documentId);
+		if (!doc) throw new AppError("not_found", `document ${documentId} not found`);
+		sendJson(res, 200, doc);
+		return;
+	}
+
 	// Client-side ingestion is synchronous from the browser's perspective, but the folder-view
 	// poll loop needs a status transition to reflect completion (or failure) without a reload.
-	const docStatusMatch = pathname.match(/^\/api\/documents\/([^/]+)$/);
 	if (docStatusMatch && method === "PATCH") {
 		authorize(principal.scopes, "ingest");
 		const documentId = decodeURIComponent(docStatusMatch[1] ?? "");
