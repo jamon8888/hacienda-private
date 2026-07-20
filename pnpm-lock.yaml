@@ -326,6 +326,9 @@ importers:
 
   services/mcp-server:
     dependencies:
+      '@embedpdf/pdfium':
+        specifier: ^2.14.4
+        version: 2.14.4
       '@modelcontextprotocol/sdk':
         specifier: ^1.0.0
         version: 1.29.0(zod@3.25.76)

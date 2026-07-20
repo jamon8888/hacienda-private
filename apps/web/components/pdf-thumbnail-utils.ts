@@ -1,7 +1,8 @@
 import type { PdfDocumentObject, PdfEngine } from "@embedpdf/models";
 
-const PDFIUM_VERSION = "2.14.4";
-const PDFIUM_WASM_URL = `https://cdn.jsdelivr.net/npm/@embedpdf/pdfium@${PDFIUM_VERSION}/dist/pdfium.wasm`;
+// Served locally by the MCP server's /vendor/embedpdf/ route (see services/mcp-server/src/static.ts)
+// to avoid a jsdelivr CDN egress on every PDF view.
+const PDFIUM_WASM_URL = `/vendor/embedpdf/dist/pdfium.wasm`;
 
 let sharedEnginePromise: Promise<PdfEngine> | null = null;
 const pdfDocumentCache = new Map<string, Promise<PdfDocumentObject>>();

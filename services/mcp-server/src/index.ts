@@ -11,7 +11,7 @@ import { MetadataStore, openStore } from "./store.js";
 import { ModelCache } from "./models.js";
 import { MirrorStore } from "./mirror.js";
 import { KeyVault } from "./vault.js";
-import { PLACEHOLDER_HTML, resolveUiDir, resolveWasmPackageDir, injectToken } from "./static.js";
+import { PLACEHOLDER_HTML, resolveUiDir, resolveWasmPackageDir, resolveEmbedPdfiumDir, injectToken } from "./static.js";
 import { runMcp } from "./mcp/mod.js";
 import type { IngestDeps } from "@xberg-io/node-pipeline";
 import { DEFAULT_GLINER_MODEL, RUST_ALIGNED_PII_TYPES, detectPii, embedText } from "@xberg-io/node-pipeline";
@@ -198,6 +198,17 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
 			return;
 		}
 		serveStaticDir(res, wasmDir, pathname.slice("/wasm/".length));
+		return;
+	}
+
+	if (pathname.startsWith("/vendor/embedpdf/") && method === "GET") {
+		const pdfiumDir = resolveEmbedPdfiumDir();
+		if (!pdfiumDir) {
+			res.writeHead(404, { "content-type": "text/plain" });
+			res.end("@embedpdf/pdfium package not installed");
+			return;
+		}
+		serveStaticDir(res, pdfiumDir, pathname.slice("/vendor/embedpdf/".length));
 		return;
 	}
 
