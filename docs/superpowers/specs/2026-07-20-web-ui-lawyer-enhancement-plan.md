@@ -4,7 +4,7 @@
 **Status:** Ready to build
 **Spec:** `docs/superpowers/specs/2026-07-20-web-ui-lawyer-enhancement.md`
 **Depends on:** Current branch (all extend-hq/ui components already integrated via prior stash pop)
-**Out of scope:** E-signature (removed per request). Sign-off out of v1.
+**Out of scope:** E-signature (removed per request). Sign-off out of v1. Note: `apps/web/components/ui/e-signature.tsx` **is present in the repo** (arrived with the extend-hq/ui migration) but is intentionally **not wired** in v1 — leave it unimported, do not route to it.
 
 ## Codebase Review Summary (Key Findings)
 
@@ -49,14 +49,15 @@
 
 ## STEP 1 — Fix PII Privacy (Critical, Build First)
 
-**Files:** `components/PiiPanel.tsx`, `lib/engine/adapter.ts`
+**Files:** `components/PiiPanel.tsx` (M), `lib/engine/adapter.ts` (M — **new export `rehydrateSpanForUi`**)
 - [ ] In `PiiPanel`, stop rendering `e.text`. Render **masked token spans** only:
   - Use `e.token` (format `{{KIND_N}}`) or derive stable mask from `start`/`end`.
   - Group entries by `e.kind`; filter chips per kind with counts.
   - Never put plaintext in the DOM.
-- [ ] Click span → passphrase dialog → call `redactDocumentForUi(placeholderText, [pii], passphrase)` to rehydrate.
+- [ ] **NET-NEW: add `rehydrateSpanForUi(span, passphrase)` to `lib/engine/adapter.ts`.** There is currently **no** UI-facing rehydrate function. `redactDocumentForUi` *redacts* (returns `{redacted, entries}`), it does NOT rehydrate. The only rehydrate primitive is `BrowserVault.rehydrate(cipherB64)` (`packages/wasm-pipeline/src/vault.ts:79`), which takes the span's `ciphertext` (from `MirrorPiiSpan.ciphertext`). New adapter fn: derive key from passphrase → `vault.rehydrate(span.ciphertext)` → return plaintext.
+- [ ] Click span → passphrase dialog → call `rehydrateSpanForUi(span, passphrase)` (NOT `redactDocumentForUi`) to reveal.
 - [ ] Show rehydrated value **session-only** in a popover; do not persist plaintext.
-- [ ] "Redact all of type X in matter" → batch `redactDocumentForUi` across matter's entities; show redaction marker (strikethrough token).
+- [ ] "Redact all of type X in matter" → batch mask (token spans) across matter's entities; show redaction marker (strikethrough token). (Reveal, if needed, still goes through `rehydrateSpanForUi` per-span.)
 - [ ] Verify no network call on rehydration (`assertLocalFirst` invariant).
 - [ ] `pnpm --filter @xberg-io/web typecheck`.
 
@@ -82,8 +83,9 @@
   - `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` → `xlsx-viewer`
   - `application/vnd.openxmlformats-officedocument.presentationml.presentation` → `pptx-viewer`
   - `text/csv` / `text/tab-separated-values` → `csv-viewer`
-  - `image/*` → preview + OCR overlay
-  - `text/*`, `application/json`, `text/markdown` → rendered with chunk boundaries
+  - `image/*` → **NET-NEW inline** preview (`<img>`) + OCR overlay (no dedicated `image-viewer` component exists — render inline)
+  - `text/*`, `application/json`, `text/markdown` → **NET-NEW inline** render (`<pre>` / markdown) with chunk boundaries (no dedicated `text-viewer` component exists)
+  - _Available viewer components (confirmed present): `pdf-viewer`, `docx-viewer`, `xlsx-viewer`, `pptx-viewer`, `csv-viewer`. Only image/text branches are net-new._
 - [ ] **3-pane layout:** `[Viewer] ‖ [document-viewer-sidebar thumbnails] ‖ [PII/Context pane]`
 - [ ] Viewer text-layer selection forwards selected span → opens PII panel / review for that span.
 - [ ] Add `#portal` div in `app/layout.tsx` (Glide Data Grid requirement for bounding-box-citations).
@@ -116,6 +118,7 @@
 - [ ] `PiiReviewPanel` builds `ReviewField[]` from doc's PII + extracted values:
   - `key` (stable id), `schema` (infer from `kind`), `actual` (masked token), `expected` (editable),
   - `location: { page, area }` from `chunk.page` + `chunk.bbox`.
+  - **⚠️ Shape conversion required:** `ReviewLocation.area` is `HighlightArea` = `{left, top, width, height}`, but `chunk.bbox` is `BoundingBox` = `{x, y, w, h}` (`packages/core/src/types.ts:64`). Add a `bboxToHighlightArea(bbox)` mapper (x→left, y→top, w→width, h→height) and confirm the coordinate space: `ReviewCitation` carries `pageWidth`/`pageHeight`, so normalize bbox to page dimensions if the panel expects normalized coords.
 - [ ] Mount `HumanReviewPanel` with `fields`, `showExpected`, `onFieldFocus` (→ viewer scrolls/highlights `location`).
 - [ ] Reviewer actions: Confirm (accept masked), Correct (set `expected`), Reject (mark null); per-field Undo + "Set to NULL".
 - [ ] "Save review" → compile corrections → `pushMirror` (re-mirror) so reviewed state persists (Q3).
@@ -129,7 +132,8 @@
 **Files:** `app/search/page.tsx`, `components/RetrievedChunkCard.tsx`
 - [ ] Add facet controls: folder `select`, PII-type `badge` toggle row, confidence `toggle` (Base UI `tabs`/`badge`/`select`).
 - [ ] Persistent **zero-egress badge** while `queryRagForUi` runs (wrap in `assertLocalFirst` guard; show "100% on-device").
-- [ ] `RetrievedChunkCard`: citation link → `/documents/:id?folder_id=:fid&page=:n&bbox=...` (from `chunk.citation` + `chunk.page` + `chunk.bbox`); click deep-links into viewer at exact source location (Step 3 reads query params).
+- [ ] `RetrievedChunkCard`: citation link → `/documents/:id?page=:n&bbox=...` (from `chunk.doc_id` + `chunk.page` + `chunk.bbox`); click deep-links into viewer at exact source location (Step 3 reads query params).
+  - **⚠️ `folder_id` is NOT on `RetrievedChunk`** (`packages/core/src/types.ts:71` has `doc_id`, `page?`, `bbox?`, `citation`, `score` — no `folder_id`). Either drop `folder_id` from the deep-link (recommended) or resolve it via a doc→folder lookup (`lib/api.ts`) before building the URL.
 - [ ] Render results in `scroll-area`; empty/loading states.
 - [ ] `pnpm --filter @xberg-io/web typecheck`.
 
@@ -199,7 +203,7 @@
 | Step | Files (N=new, M=modified) |
 |---|---|
 | 0 | (verify) |
-| 1 | `components/PiiPanel.tsx` (M), `lib/engine/adapter.ts` (M) |
+| 1 | `components/PiiPanel.tsx` (M), `lib/engine/adapter.ts` (M — new `rehydrateSpanForUi`) |
 | 2 | `app/folders/[id]/FolderView.tsx` (M), `components/ui/file-dropzone.tsx` (use) |
 | 3 | `app/documents/[id]/DocumentView.tsx` (M), `app/documents/[id]/page.tsx` (M), `components/document-router.tsx` (N) |
 | 4 | `components/DocumentDualView.tsx` (N), `app/documents/[id]/DocumentView.tsx` (M) |
