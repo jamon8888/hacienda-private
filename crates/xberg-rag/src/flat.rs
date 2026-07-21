@@ -3,6 +3,7 @@ use crate::{IndexedChunk, RagError, Result, RetrievedChunk, SearchStore};
 /// Exact (brute-force cosine) vector store. O(n) search — correct for any n,
 /// fast enough for small matters, and the correctness oracle for P2's HNSW
 /// backend.
+#[derive(Debug)]
 pub struct FlatStore {
     dim: usize,
     chunks: Vec<IndexedChunk>,

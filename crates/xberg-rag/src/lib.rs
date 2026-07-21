@@ -8,6 +8,7 @@ mod types;
 
 pub use error::{RagError, Result};
 pub use flat::FlatStore;
+pub use snapshot::SNAPSHOT_VERSION;
 pub use store::SearchStore;
 pub use types::{IndexedChunk, RetrievedChunk};
 
