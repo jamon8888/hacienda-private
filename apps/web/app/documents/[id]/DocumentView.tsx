@@ -81,6 +81,7 @@ export default function DocumentView({ id: propId }: DocumentViewProps) {
 				if (kind === "text" || kind === "csv") {
 					setTextContent(await cached.file.text());
 				}
+				if (cancelled) return;
 				const url = URL.createObjectURL(cached.file);
 				srcRef.current = url;
 				setSrc(url);

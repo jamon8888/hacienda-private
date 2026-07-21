@@ -40,6 +40,7 @@ export default function MatterView({ id: propId }: MatterViewProps) {
 	const [templateOpen, setTemplateOpen] = useState(false);
 	const [forgetOpen, setForgetOpen] = useState(false);
 	const [forgetting, setForgetting] = useState(false);
+	const [forgetError, setForgetError] = useState<string | null>(null);
 	const [selectedKinds, setSelectedKinds] = useState<string[]>([]);
 	const allKinds = listPiiTypes();
 
@@ -65,17 +66,22 @@ export default function MatterView({ id: propId }: MatterViewProps) {
 	const forget = async () => {
 		if (!auth) return;
 		setForgetting(true);
+		setForgetError(null);
 		try {
-			// Clear the browser-only cache (original files, PII, mirror, splits) before the server
-			// rows disappear — otherwise these documents' ids become unreachable orphans in IndexedDB.
+			// docIds are captured up front, but the local cache (original files, PII, mirror,
+			// splits) is only cleared *after* the server confirms deletion — otherwise a failed
+			// forgetMatter call (network/auth/server error) would leave the matter still existing
+			// server-side while its local cache is already irrecoverably gone.
 			const docIds = (
 				await Promise.all(folders.map((f) => getFolderDocuments(auth.token, f.id)))
 			).flat().map((d) => d.id);
+			await forgetMatter(auth.token, matterId);
 			await deleteOriginalFiles(docIds);
 			await deleteMatterTemplate(matterId);
-			await forgetMatter(auth.token, matterId);
 			setForgetOpen(false);
 			router.push("/matters");
+		} catch (err) {
+			setForgetError(err instanceof Error ? err.message : "Failed to forget matter");
 		} finally {
 			setForgetting(false);
 		}
@@ -117,6 +123,7 @@ export default function MatterView({ id: propId }: MatterViewProps) {
 								<strong>{matter?.name}</strong> on the server, and clears every cached original file, PII
 								span, and vault for its documents in this browser. This cannot be undone.
 							</p>
+							{forgetError && <p className="text-sm text-destructive">{forgetError}</p>}
 							<Button variant="destructive" onClick={forget} disabled={forgetting}>
 								{forgetting ? "Forgetting…" : "Forget permanently"}
 							</Button>
