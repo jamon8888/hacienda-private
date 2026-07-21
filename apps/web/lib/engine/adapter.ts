@@ -224,6 +224,9 @@ export async function rehydrateSpanForUi(
     vault: number[];
     vaultSalt: number[];
   };
+  if (!Array.isArray(parsed.vault) || !Array.isArray(parsed.vaultSalt)) {
+    throw new Error("this document's cached mirror is missing vault data — please re-ingest it");
+  }
   const entries = await openVault(
     { cipher: Uint8Array.from(parsed.vault), salt: Uint8Array.from(parsed.vaultSalt) },
     passphrase,

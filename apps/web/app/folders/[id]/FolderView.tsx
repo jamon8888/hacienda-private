@@ -84,8 +84,12 @@ export default function FolderView({ id: propId }: FolderViewProps) {
 			const matter: Matter = { id: matterId, name: "", created_at: "" };
 
 			await Promise.all(
-				files.map(async (file) => {
-					setUploads((prev) => ({ ...prev, [file.name]: { name: file.name, stage: "extract", progress: 0 } }));
+				files.map(async (file, idx) => {
+					// Keyed by index, not just file.name — two files accepted in the same batch can
+					// share a name (e.g. scans from different sources), and a name-only key would
+					// collide, silently overwriting one file's progress/error with the other's.
+					const uploadKey = `${file.name}-${idx}`;
+					setUploads((prev) => ({ ...prev, [uploadKey]: { name: file.name, stage: "extract", progress: 0 } }));
 					let docId: string | undefined;
 					try {
 						const content_hash = await sha256Hex(file);
@@ -100,7 +104,7 @@ export default function FolderView({ id: propId }: FolderViewProps) {
 							scopeToken: auth.token,
 							passphrase: auth.passphrase as string,
 							onProgress: (p) =>
-								setUploads((prev) => ({ ...prev, [file.name]: { name: file.name, stage: p.stage, progress: p.progress } })),
+								setUploads((prev) => ({ ...prev, [uploadKey]: { name: file.name, stage: p.stage, progress: p.progress } })),
 						});
 
 						await saveOriginalFile(docId, file, result.pii, result.mirror);
@@ -112,7 +116,7 @@ export default function FolderView({ id: propId }: FolderViewProps) {
 						});
 					} catch (err) {
 						const message = err instanceof Error ? err.message : "ingest failed";
-						setUploads((prev) => ({ ...prev, [file.name]: { name: file.name, stage: "error", progress: 1, error: message } }));
+						setUploads((prev) => ({ ...prev, [uploadKey]: { name: file.name, stage: "error", progress: 1, error: message } }));
 						if (docId) {
 							await updateDocumentStatus(auth.token, docId, { status: "error", error_message: message });
 						}
@@ -155,8 +159,8 @@ export default function FolderView({ id: propId }: FolderViewProps) {
 
 			{Object.values(uploads).length > 0 && (
 				<div className="mb-6 grid gap-2">
-					{Object.values(uploads).map((u) => (
-						<div key={u.name} className="text-sm">
+					{Object.entries(uploads).map(([key, u]) => (
+						<div key={key} className="text-sm">
 							<div className="flex items-center justify-between">
 								<span className="truncate">{u.name}</span>
 								<span className="text-xs text-muted-foreground">{u.error ? "error" : u.stage}</span>

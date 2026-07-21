@@ -113,6 +113,7 @@ const CONTENT_TYPES: Record<string, string> = {
 // ConsentGrant.scope field is loosely typed as AuthScopes, but the values that actually mean
 // anything to requireConsent() are these two.
 const VALID_CONSENT_SCOPES = ["pii_read", "redact_rehydrate"] as const;
+const VALID_DOCUMENT_STATUSES = ["processing", "done", "error"] as const;
 
 // Cross-origin isolation headers required by the browser engine (ORT-Web WASM threads /
 // SharedArrayBuffer, WebGPU/WebGL, WASM-SIMD). Next.js `output: "export"` cannot emit custom
@@ -427,6 +428,9 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
 			error_message?: string;
 		}>(req);
 		if (!body.status) throw new AppError("bad_request", "status is required");
+		if (!VALID_DOCUMENT_STATUSES.includes(body.status)) {
+			throw new AppError("bad_request", `unsupported status: ${body.status}`);
+		}
 		ctx.store.updateDocumentStatus(documentId, body.status, {
 			pages: body.pages,
 			chunk_count: body.chunk_count,

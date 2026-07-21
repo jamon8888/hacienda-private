@@ -68,6 +68,7 @@ async function getSession(scenario: ModelScenario = DEFAULT_SCENARIO): Promise<O
 			console.log("DEBUG2 fetching model", e5ModelUrl(scenario.modelVariant, scenario.quant));
 			const resp = await fetch(e5ModelUrl(scenario.modelVariant, scenario.quant));
 			console.log("DEBUG2 model fetch status", resp.status);
+			if (!resp.ok) throw new Error(`Failed to fetch e5 model: ${resp.status} ${resp.url}`);
 			const buf = await resp.arrayBuffer();
 			console.log("DEBUG2 model bytes", buf.byteLength, "EPs", JSON.stringify(scenario.executionProviders));
 			const session = await ort.InferenceSession.create(buf, {

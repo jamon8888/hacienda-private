@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { PiiEntity } from "@xberg-io/core";
 import { rehydrateSpanForUi } from "@xberg-io/wasm-pipeline";
 import { Badge } from "@/components/ui/badge";
@@ -17,14 +17,6 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
-function maskFor(kind: string, indexInKind: number): string {
-	const cat = kind
-		.toUpperCase()
-		.replace(/[^A-Z0-9]+/g, "_")
-		.replace(/^_+|_+$/g, "");
-	return `{{${cat}_${indexInKind}}}`;
-}
-
 interface PiiPanelProps {
 	pii: PiiEntity[];
 	// Raw mirror payload bytes for this document (IngestResult.mirror). Required to reveal a span —
@@ -36,15 +28,6 @@ interface PiiPanelProps {
 }
 
 export function PiiPanel({ pii, mirror, selectedKinds }: PiiPanelProps) {
-	const masked = useMemo(() => {
-		const counters = new Map<string, number>();
-		return pii.map((e) => {
-			const n = (counters.get(e.kind) ?? 0) + 1;
-			counters.set(e.kind, n);
-			return { entity: e, mask: maskFor(e.kind, n) };
-		});
-	}, [pii]);
-
 	const isSelected = (kind: string) =>
 		!selectedKinds || selectedKinds.length === 0 || selectedKinds.some((k) => k.toLowerCase() === kind.toLowerCase());
 
@@ -58,7 +41,7 @@ export function PiiPanel({ pii, mirror, selectedKinds }: PiiPanelProps) {
 					<p className="text-sm text-muted-foreground">No PII detected.</p>
 				) : (
 					<ul className="space-y-2">
-						{masked.map(({ entity, mask }, i) => (
+						{pii.map((entity, i) => (
 							<li
 								key={i}
 								className={cn(
@@ -66,7 +49,7 @@ export function PiiPanel({ pii, mirror, selectedKinds }: PiiPanelProps) {
 									!isSelected(entity.kind) && "opacity-40",
 								)}
 							>
-								<RevealableSpan mask={mask} entity={entity} mirror={mirror} />
+								<RevealableSpan entity={entity} mirror={mirror} />
 								<Badge variant="destructive">{entity.kind}</Badge>
 							</li>
 						))}
@@ -78,11 +61,9 @@ export function PiiPanel({ pii, mirror, selectedKinds }: PiiPanelProps) {
 }
 
 function RevealableSpan({
-	mask,
 	entity,
 	mirror,
 }: {
-	mask: string;
 	entity: PiiEntity;
 	mirror?: Uint8Array;
 }) {
@@ -105,8 +86,14 @@ function RevealableSpan({
 			const value = await rehydrateSpanForUi(mirror, entity, passphrase);
 			setRevealed(value);
 			setOpen(false);
-		} catch {
-			setError("Wrong passphrase or no matching entry.");
+		} catch (err) {
+			// Distinguish a stale/incompatible cached mirror (re-ingest needed) from an actual
+			// wrong-passphrase/no-match failure, so the message doesn't mislead the user.
+			setError(
+				err instanceof Error && err.message.includes("missing vault data")
+					? err.message
+					: "Wrong passphrase or no matching entry.",
+			);
 		} finally {
 			setBusy(false);
 			setPassphrase("");
@@ -117,12 +104,15 @@ function RevealableSpan({
 		<Popover
 			onOpenChange={(next) => {
 				// Session-only reveal: closing the popover forgets the plaintext, never persisted.
-				if (!next) setRevealed(null);
+				if (!next) {
+					setRevealed(null);
+					setError(null);
+				}
 			}}
 		>
 			<PopoverTrigger asChild>
 				<span className="truncate rounded bg-muted px-2 py-1 font-mono text-xs cursor-pointer">
-					{revealed ?? mask}
+					{revealed ?? entity.text}
 				</span>
 			</PopoverTrigger>
 			<PopoverContent className="w-64 space-y-2">

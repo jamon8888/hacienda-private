@@ -51,13 +51,13 @@ function SearchPageInner() {
   const search = async () => {
     if (!query.trim() || !matter) return;
     ensureAuth();
-    // Zero-egress guard: the search itself never leaves the browser (local EdgeVec + local
-    // embedding model) — this just asserts the configured API base isn't a remote host before
-    // showing the "100% on-device" badge below.
-    assertLocalFirst(API_BASE);
     setLoading(true);
     setError(null);
     try {
+      // Zero-egress guard: the search itself never leaves the browser (local EdgeVec + local
+      // embedding model) — this just asserts the configured API base isn't a remote host before
+      // showing the "100% on-device" badge below.
+      assertLocalFirst(API_BASE);
       const chunks = await queryRag(matter, query.trim(), 8);
       setResults(chunks);
     } catch (e) {
