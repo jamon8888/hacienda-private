@@ -37,12 +37,24 @@ async function readWithProgress(
 	return out;
 }
 
+// The Cache Storage API is absent (older runtimes, some Node builds) or throws a SecurityError
+// when accessed in an insecure context or certain private-browsing modes. Opening it must never
+// crash warmup, so probe it defensively and fall back to plain network fetches when unavailable.
+async function openCache(): Promise<Cache | undefined> {
+	try {
+		if (typeof caches === "undefined") return undefined;
+		return await caches.open(CACHE_NAME);
+	} catch {
+		return undefined;
+	}
+}
+
 export async function cachedFetchBuffer(
 	url: string,
 	onProgress?: (p: FetchProgress) => void,
 ): Promise<ArrayBuffer> {
-	const cache = await caches.open(CACHE_NAME);
-	const cached = await cache.match(url);
+	const cache = await openCache();
+	const cached = await cache?.match(url);
 	if (cached) {
 		const buf = new Uint8Array(await cached.arrayBuffer());
 		onProgress?.({ bytesLoaded: buf.byteLength, bytesTotal: buf.byteLength });
@@ -55,7 +67,7 @@ export async function cachedFetchBuffer(
 	}
 	const bytes = await readWithProgress(response, onProgress);
 	try {
-		await cache.put(url, new Response(bytes.slice()));
+		await cache?.put(url, new Response(bytes.slice()));
 	} catch {
 		// Caching is best-effort: a full Cache Storage (e.g. Safari/iOS quota limits) must
 		// never fail an otherwise-successful download.
@@ -64,8 +76,8 @@ export async function cachedFetchBuffer(
 }
 
 export async function cachedFetchJson(url: string): Promise<unknown> {
-	const cache = await caches.open(CACHE_NAME);
-	const cached = await cache.match(url);
+	const cache = await openCache();
+	const cached = await cache?.match(url);
 	if (cached) return cached.json();
 
 	const response = await fetch(url);
@@ -73,7 +85,7 @@ export async function cachedFetchJson(url: string): Promise<unknown> {
 		throw new Error(`failed to fetch ${url}: ${response.status}`);
 	}
 	try {
-		await cache.put(url, response.clone());
+		await cache?.put(url, response.clone());
 	} catch {
 		// Caching is best-effort: a full Cache Storage (e.g. Safari/iOS quota limits) must
 		// never fail an otherwise-successful fetch.
@@ -81,23 +93,49 @@ export async function cachedFetchJson(url: string): Promise<unknown> {
 	return response.json();
 }
 
+// A single persistent interceptor backed by a reference-counted registry of active URL overrides.
+// Swapping `globalThis.fetch` per call and restoring it in a `finally` races when two scopes overlap:
+// the second call captures the first's scoped fetch as its "original", so restoring in either order
+// can permanently leave a scoped closure installed and break the network layer. Installing one
+// interceptor and routing through the registry lets concurrent scopes coexist safely; the original
+// fetch is only restored once the last active override drains.
+const fetchOverrides = new Map<string, { buffer: ArrayBuffer; refs: number }>();
+let originalFetch: typeof fetch | null = null;
+
 export async function withScopedFetchOverride<T>(
 	matchUrl: string,
 	cachedBuffer: ArrayBuffer,
 	fn: () => Promise<T>,
 ): Promise<T> {
-	const original: typeof fetch = globalThis.fetch;
-	const scoped: typeof fetch = (input, init) => {
-		const requestUrl = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-		if (requestUrl === matchUrl) {
-			return Promise.resolve(new Response(cachedBuffer.slice(0)));
-		}
-		return original(input, init);
-	};
-	globalThis.fetch = scoped;
+	if (!originalFetch) {
+		originalFetch = globalThis.fetch;
+		globalThis.fetch = (input, init) => {
+			const requestUrl = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+			const override = fetchOverrides.get(requestUrl);
+			if (override) {
+				return Promise.resolve(new Response(override.buffer.slice(0)));
+			}
+			return originalFetch!(input, init);
+		};
+	}
+
+	const existing = fetchOverrides.get(matchUrl);
+	if (existing) {
+		existing.refs++;
+	} else {
+		fetchOverrides.set(matchUrl, { buffer: cachedBuffer, refs: 1 });
+	}
+
 	try {
 		return await fn();
 	} finally {
-		globalThis.fetch = original;
+		const current = fetchOverrides.get(matchUrl);
+		if (current && --current.refs === 0) {
+			fetchOverrides.delete(matchUrl);
+		}
+		if (fetchOverrides.size === 0 && originalFetch) {
+			globalThis.fetch = originalFetch;
+			originalFetch = null;
+		}
 	}
 }

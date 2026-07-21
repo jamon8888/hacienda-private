@@ -76,26 +76,37 @@ export async function ensurePiiModel(
 	if (!modelPromise || sig !== cachedSig) {
 		cachedSig = sig;
 		modelPromise = (async () => {
-			const { Gliner: GlinerClass } = await import("gliner");
-			await disableRemoteModels();
-			const transformersSettings: ITransformersSettings = {
-				allowLocalModels: true,
-				useBrowserCache: true,
-			};
-			const modelUrl = glinerModelUrl(scenario.quant);
-			const onnxSettings: IONNXWebSettings = {
-				modelPath: modelUrl,
-				executionProvider: scenario.executionProviders[0],
-			};
-			const config: InitConfig = {
-				tokenizerPath: GLINER_TOKENIZER_REPO_ID,
-				onnxSettings,
-				transformersSettings,
-			};
-			const model = new GlinerClass(config);
-			const modelBytes = await cachedFetchBuffer(modelUrl, onProgress);
-			await withScopedFetchOverride(modelUrl, modelBytes, () => model.initialize());
-			return model;
+			try {
+				const { Gliner: GlinerClass } = await import("gliner");
+				await disableRemoteModels();
+				const transformersSettings: ITransformersSettings = {
+					allowLocalModels: true,
+					useBrowserCache: true,
+				};
+				const modelUrl = glinerModelUrl(scenario.quant);
+				const onnxSettings: IONNXWebSettings = {
+					modelPath: modelUrl,
+					executionProvider: scenario.executionProviders[0],
+				};
+				const config: InitConfig = {
+					tokenizerPath: GLINER_TOKENIZER_REPO_ID,
+					onnxSettings,
+					transformersSettings,
+				};
+				const model = new GlinerClass(config);
+				const modelBytes = await cachedFetchBuffer(modelUrl, onProgress);
+				await withScopedFetchOverride(modelUrl, modelBytes, () => model.initialize());
+				return model;
+			} catch (err) {
+				// Don't cache a rejected promise: callers outside warmup's retry loop (e.g. detectPii)
+				// would otherwise fail forever even after the network recovers. Clear the memoized
+				// state so the next call retries from scratch.
+				if (sig === cachedSig) {
+					cachedSig = null;
+					modelPromise = null;
+				}
+				throw err;
+			}
 		})();
 	}
 	return modelPromise;

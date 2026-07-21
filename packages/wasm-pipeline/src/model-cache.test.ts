@@ -203,4 +203,121 @@ describe("withScopedFetchOverride", () => {
 
 		expect(original).toHaveBeenCalledWith("https://example.test/other.json", undefined);
 	});
+
+	it("keeps each active override reachable when two scopes overlap and restores fetch only after both drain", async () => {
+		const original = vi.fn(async () => new Response("untouched"));
+		vi.stubGlobal("fetch", original);
+		const aBytes = new Uint8Array([1, 1]).buffer;
+		const bBytes = new Uint8Array([2, 2]).buffer;
+
+		let releaseA!: () => void;
+		const aGate = new Promise<void>((resolve) => {
+			releaseA = resolve;
+		});
+
+		const aDone = withScopedFetchOverride("https://example.test/a.onnx", aBytes, async () => {
+			await aGate;
+		});
+
+		// While scope A is still open, run scope B to completion and confirm A's override is still served.
+		await withScopedFetchOverride("https://example.test/b.onnx", bBytes, async () => {
+			const [a, b] = await Promise.all([
+				globalThis.fetch("https://example.test/a.onnx"),
+				globalThis.fetch("https://example.test/b.onnx"),
+			]);
+			expect(new Uint8Array(await a.arrayBuffer())).toEqual(new Uint8Array(aBytes));
+			expect(new Uint8Array(await b.arrayBuffer())).toEqual(new Uint8Array(bBytes));
+		});
+
+		// B drained but A is still active, so the interceptor must stay installed.
+		expect(globalThis.fetch).not.toBe(original);
+
+		releaseA();
+		await aDone;
+
+		// Only now that the last override drained is the original fetch restored.
+		expect(globalThis.fetch).toBe(original);
+		expect(original).not.toHaveBeenCalled();
+	});
+});
+
+describe("cache API fallback", () => {
+	beforeEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	it("cachedFetchBuffer falls back to network when caches is undefined", async () => {
+		vi.stubGlobal("caches", undefined);
+		const bytes = new Uint8Array([7, 7, 7]);
+		const fetchMock = vi.fn(async () => ({
+			ok: true,
+			headers: { get: (k: string) => (k === "content-length" ? "3" : null) },
+			body: {
+				getReader: () => {
+					let done = false;
+					return {
+						read: async () => {
+							if (done) return { done: true, value: undefined };
+							done = true;
+							return { done: false, value: bytes };
+						},
+					};
+				},
+			},
+			arrayBuffer: async () => bytes.buffer,
+		}));
+		vi.stubGlobal("fetch", fetchMock);
+
+		const buf = await cachedFetchBuffer("https://example.test/model.onnx");
+
+		expect(new Uint8Array(buf)).toEqual(bytes);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("cachedFetchBuffer falls back to network when caches.open throws (e.g. SecurityError)", async () => {
+		vi.stubGlobal("caches", {
+			open: async () => {
+				throw new Error("SecurityError");
+			},
+		});
+		const bytes = new Uint8Array([8, 8]);
+		const fetchMock = vi.fn(async () => ({
+			ok: true,
+			headers: { get: (k: string) => (k === "content-length" ? "2" : null) },
+			body: {
+				getReader: () => {
+					let done = false;
+					return {
+						read: async () => {
+							if (done) return { done: true, value: undefined };
+							done = true;
+							return { done: false, value: bytes };
+						},
+					};
+				},
+			},
+			arrayBuffer: async () => bytes.buffer,
+		}));
+		vi.stubGlobal("fetch", fetchMock);
+
+		const buf = await cachedFetchBuffer("https://example.test/model.onnx");
+
+		expect(new Uint8Array(buf)).toEqual(bytes);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("cachedFetchJson falls back to network when caches is undefined", async () => {
+		vi.stubGlobal("caches", undefined);
+		const fetchMock = vi.fn(async () => ({
+			ok: true,
+			clone: () => ({ json: async () => ({ hello: "world" }) }),
+			json: async () => ({ hello: "world" }),
+		}));
+		vi.stubGlobal("fetch", fetchMock);
+
+		const result = await cachedFetchJson("https://example.test/tokenizer.json");
+
+		expect(result).toEqual({ hello: "world" });
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
 });

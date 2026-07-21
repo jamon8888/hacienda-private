@@ -61,28 +61,39 @@ export async function ensureEmbedSession(
 	if (!sessionPromise || sig !== cachedSig) {
 		cachedSig = sig;
 		sessionPromise = (async () => {
-			console.log("DEBUG2 import ort");
-			// "/wasm" is the wasm-only bundle (no webgpu/webgl code); the bare "onnxruntime-web"
-			// entry pulls in the full bundle instead, which shares its worker module with
-			// webgpu/jsep and corrupts wasm init when that fails (see scenario.ts).
-			const ort = await import("onnxruntime-web/wasm");
-			console.log("DEBUG2 ort imported, numThreads=", scenario.numThreads);
-			ort.env.wasm.numThreads = scenario.numThreads;
-			// onnxruntime-web auto-detects its worker/wasm asset URLs from import.meta.url, which
-			// this webpack build doesn't preserve as a real browser URL — it resolves to the
-			// node_modules file:// source path instead, so every backend fails. Point it at a copy
-			// of those assets under public/ort/ (served statically alongside the rest of the app)
-			// instead of relying on that broken auto-detection.
-			ort.env.wasm.wasmPaths = "/ort/";
-			console.log("DEBUG2 fetching model", e5ModelUrl(scenario.modelVariant, scenario.quant));
-			const buf = await cachedFetchBuffer(e5ModelUrl(scenario.modelVariant, scenario.quant), onProgress);
-			console.log("DEBUG2 model bytes", buf.byteLength, "EPs", JSON.stringify(scenario.executionProviders));
-			const session = await ort.InferenceSession.create(buf, {
-				executionProviders: scenario.executionProviders,
-				graphOptimizationLevel: "all",
-			});
-			console.log("DEBUG2 session created");
-			return session as unknown as OrtSessionHandle;
+			try {
+				console.log("DEBUG2 import ort");
+				// "/wasm" is the wasm-only bundle (no webgpu/webgl code); the bare "onnxruntime-web"
+				// entry pulls in the full bundle instead, which shares its worker module with
+				// webgpu/jsep and corrupts wasm init when that fails (see scenario.ts).
+				const ort = await import("onnxruntime-web/wasm");
+				console.log("DEBUG2 ort imported, numThreads=", scenario.numThreads);
+				ort.env.wasm.numThreads = scenario.numThreads;
+				// onnxruntime-web auto-detects its worker/wasm asset URLs from import.meta.url, which
+				// this webpack build doesn't preserve as a real browser URL — it resolves to the
+				// node_modules file:// source path instead, so every backend fails. Point it at a copy
+				// of those assets under public/ort/ (served statically alongside the rest of the app)
+				// instead of relying on that broken auto-detection.
+				ort.env.wasm.wasmPaths = "/ort/";
+				console.log("DEBUG2 fetching model", e5ModelUrl(scenario.modelVariant, scenario.quant));
+				const buf = await cachedFetchBuffer(e5ModelUrl(scenario.modelVariant, scenario.quant), onProgress);
+				console.log("DEBUG2 model bytes", buf.byteLength, "EPs", JSON.stringify(scenario.executionProviders));
+				const session = await ort.InferenceSession.create(buf, {
+					executionProviders: scenario.executionProviders,
+					graphOptimizationLevel: "all",
+				});
+				console.log("DEBUG2 session created");
+				return session as unknown as OrtSessionHandle;
+			} catch (err) {
+				// Don't cache a rejected promise: callers outside warmup's retry loop (e.g. embedQuery)
+				// would otherwise fail forever even after the network recovers. Clear the memoized
+				// state so the next call retries from scratch.
+				if (sig === cachedSig) {
+					cachedSig = null;
+					sessionPromise = null;
+				}
+				throw err;
+			}
 		})();
 	}
 	return sessionPromise;
@@ -102,16 +113,22 @@ export async function ensureEmbedSession(
 async function getTokenizer(): Promise<CallableTokenizer> {
 	if (!tokenizerPromise) {
 		tokenizerPromise = (async () => {
-			const { env, XLMRobertaTokenizer } = await import("@xenova/transformers");
-			env.allowRemoteModels = false;
-			env.allowLocalModels = false;
+			try {
+				const { env, XLMRobertaTokenizer } = await import("@xenova/transformers");
+				env.allowRemoteModels = false;
+				env.allowLocalModels = false;
 
-			const [tokenizerJSON, tokenizerConfig] = await Promise.all([
-				cachedFetchJson(E5_TOKENIZER_URL),
-				cachedFetchJson(E5_TOKENIZER_CONFIG_URL),
-			]);
-			const tok = new XLMRobertaTokenizer(tokenizerJSON, tokenizerConfig);
-			return tok as unknown as CallableTokenizer;
+				const [tokenizerJSON, tokenizerConfig] = await Promise.all([
+					cachedFetchJson(E5_TOKENIZER_URL),
+					cachedFetchJson(E5_TOKENIZER_CONFIG_URL),
+				]);
+				const tok = new XLMRobertaTokenizer(tokenizerJSON, tokenizerConfig);
+				return tok as unknown as CallableTokenizer;
+			} catch (err) {
+				// Don't cache a rejected promise — clear so the next call retries the tokenizer fetch.
+				tokenizerPromise = null;
+				throw err;
+			}
 		})();
 	}
 	return tokenizerPromise;
