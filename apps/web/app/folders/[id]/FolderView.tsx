@@ -156,6 +156,10 @@ export default function FolderView({ id: propId }: FolderViewProps) {
 						Unlock vault
 					</Button>
 				</div>
+			) : modelStage === "error" ? (
+				<div className="mb-6 rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+					On-device AI models are unavailable — see the status indicator to retry.
+				</div>
 			) : modelStage !== "ready" ? (
 				<div className="mb-6 rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
 					Preparing on-device AI models before you can upload…

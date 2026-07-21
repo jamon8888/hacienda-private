@@ -115,7 +115,13 @@ export function SearchPageInner() {
           onKeyDown={(e) => e.key === "Enter" && search()}
         />
         <Button onClick={search} disabled={loading || !query.trim() || !matter || modelStage !== "ready"}>
-          {loading ? "Searching…" : modelStage !== "ready" ? "Preparing models…" : "Search"}
+          {loading
+            ? "Searching…"
+            : modelStage === "error"
+              ? "Models unavailable"
+              : modelStage !== "ready"
+                ? "Preparing models…"
+                : "Search"}
         </Button>
       </div>
 

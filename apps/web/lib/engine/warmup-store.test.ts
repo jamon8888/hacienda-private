@@ -52,10 +52,16 @@ describe("warmup-store", () => {
 	});
 
 	it("moves to an error state when warmupModels rejects, and retry re-runs it", async () => {
-		warmupModelsMock.mockRejectedValueOnce(new Error("network down"));
+		warmupModelsMock.mockImplementation(
+			(onProgress: (p: { stage: string; overall: number }) => void) => {
+				onProgress({ stage: "gliner", overall: 0.5 });
+				return Promise.reject(new Error("network down"));
+			},
+		);
 		startModelWarmup();
 		await vi.waitFor(() => expect(getModelWarmupSnapshot().stage).toBe("error"));
 		expect(getModelWarmupSnapshot().error).toBe("network down");
+		expect(getModelWarmupSnapshot().progress).toBe(0);
 
 		warmupModelsMock.mockResolvedValueOnce(undefined);
 		retryModelWarmup();

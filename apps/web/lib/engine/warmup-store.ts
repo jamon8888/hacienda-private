@@ -29,7 +29,11 @@ async function runWarmup(): Promise<void> {
 		await warmupModels((p: WarmupProgress) => setState({ progress: p.overall }));
 		setState({ stage: "ready", progress: 1, error: null });
 	} catch (err) {
-		setState({ stage: "error", error: err instanceof Error ? err.message : "Failed to load on-device models" });
+		setState({
+			stage: "error",
+			progress: 0,
+			error: err instanceof Error ? err.message : "Failed to load on-device models",
+		});
 	}
 }
 

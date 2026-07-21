@@ -43,4 +43,11 @@ describe("SearchPageInner", () => {
 		const button = await screen.findByRole("button", { name: "Search" });
 		expect(button).not.toBeDisabled();
 	});
+
+	it("shows a models-unavailable label and disables search when warmup errored", async () => {
+		warmupState.current = { stage: "error" };
+		render(<SearchPageInner />);
+		const button = await screen.findByRole("button", { name: /models unavailable/i });
+		expect(button).toBeDisabled();
+	});
 });

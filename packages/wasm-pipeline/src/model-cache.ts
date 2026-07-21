@@ -54,7 +54,12 @@ export async function cachedFetchBuffer(
 		throw new Error(`failed to fetch ${url}: ${response.status}`);
 	}
 	const bytes = await readWithProgress(response, onProgress);
-	await cache.put(url, new Response(bytes.slice()));
+	try {
+		await cache.put(url, new Response(bytes.slice()));
+	} catch {
+		// Caching is best-effort: a full Cache Storage (e.g. Safari/iOS quota limits) must
+		// never fail an otherwise-successful download.
+	}
 	return bytes.buffer;
 }
 
@@ -67,7 +72,12 @@ export async function cachedFetchJson(url: string): Promise<unknown> {
 	if (!response.ok) {
 		throw new Error(`failed to fetch ${url}: ${response.status}`);
 	}
-	await cache.put(url, response.clone());
+	try {
+		await cache.put(url, response.clone());
+	} catch {
+		// Caching is best-effort: a full Cache Storage (e.g. Safari/iOS quota limits) must
+		// never fail an otherwise-successful fetch.
+	}
 	return response.json();
 }
 

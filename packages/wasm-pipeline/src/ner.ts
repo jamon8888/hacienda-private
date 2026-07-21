@@ -23,7 +23,7 @@ async function disableRemoteModels(): Promise<void> {
 		const { env } = await import("@xenova/transformers");
 		env.allowRemoteModels = false;
 		// `AutoTokenizer.from_pretrained(GLINER_TOKENIZER_REPO_ID)` joins this with the bare repo
-		// id + "tokenizer.json" to build the request URL — see the getModel() comment below.
+		// id + "tokenizer.json" to build the request URL — see the ensurePiiModel() comment below.
 		env.localModelPath = `${API_BASE}/models/`;
 	} catch {
 		// transformers runtime unavailable here (e.g. typecheck-only) — no-op.

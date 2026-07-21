@@ -65,4 +65,11 @@ describe("FolderView ingest gating", () => {
 		await screen.findByText("Folder One");
 		expect(screen.queryByText(/Preparing on-device AI models/i)).not.toBeInTheDocument();
 	});
+
+	it("shows an unavailable message instead of the preparing-models placeholder when warmup errored", async () => {
+		warmupState.current = { stage: "error" };
+		render(<FolderView id="f1" />);
+		expect(await screen.findByText(/On-device AI models are unavailable/i)).toBeInTheDocument();
+		expect(screen.queryByText(/Preparing on-device AI models/i)).not.toBeInTheDocument();
+	});
 });

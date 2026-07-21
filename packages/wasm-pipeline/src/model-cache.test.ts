@@ -77,6 +77,41 @@ describe("cachedFetchBuffer", () => {
 			"failed to fetch https://example.test/missing.onnx: 404",
 		);
 	});
+
+	it("still resolves with the fetched bytes when cache.put throws (e.g. QuotaExceededError)", async () => {
+		const cache = fakeCacheStorage();
+		cache.open = async () => ({
+			match: async () => undefined,
+			put: async () => {
+				throw new Error("QuotaExceededError");
+			},
+		});
+		vi.stubGlobal("caches", cache);
+		const bytes = new Uint8Array([1, 2, 3, 4]);
+		const fetchMock = vi.fn(async () => ({
+			ok: true,
+			headers: { get: (k: string) => (k === "content-length" ? "4" : null) },
+			body: {
+				getReader: () => {
+					let done = false;
+					return {
+						read: async () => {
+							if (done) return { done: true, value: undefined };
+							done = true;
+							return { done: false, value: bytes };
+						},
+					};
+				},
+			},
+			arrayBuffer: async () => bytes.buffer,
+		}));
+		vi.stubGlobal("fetch", fetchMock);
+
+		const buf = await cachedFetchBuffer("https://example.test/model.onnx");
+
+		expect(new Uint8Array(buf)).toEqual(bytes);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
 });
 
 describe("cachedFetchJson", () => {
@@ -95,6 +130,28 @@ describe("cachedFetchJson", () => {
 		vi.stubGlobal("fetch", fetchMock);
 
 		const result = await cachedFetchJson("https://example.test/tokenizer.json");
+		expect(result).toEqual({ hello: "world" });
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("still resolves with the fetched JSON when cache.put throws (e.g. QuotaExceededError)", async () => {
+		const cache = fakeCacheStorage();
+		cache.open = async () => ({
+			match: async () => undefined,
+			put: async () => {
+				throw new Error("QuotaExceededError");
+			},
+		});
+		vi.stubGlobal("caches", cache);
+		const fetchMock = vi.fn(async () => ({
+			ok: true,
+			clone: () => ({ json: async () => ({ hello: "world" }) }),
+			json: async () => ({ hello: "world" }),
+		}));
+		vi.stubGlobal("fetch", fetchMock);
+
+		const result = await cachedFetchJson("https://example.test/tokenizer.json");
+
 		expect(result).toEqual({ hello: "world" });
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
