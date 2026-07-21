@@ -35,3 +35,6 @@ export {
 } from "./constants";
 
 export type { Matter, Folder, PiiEntity, RetrievedChunk, AuthScopes } from "@xberg-io/core";
+
+export { warmupModels } from "./warmup";
+export type { WarmupProgress, WarmupResult, WarmupStage } from "./warmup";

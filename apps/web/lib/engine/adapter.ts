@@ -273,3 +273,6 @@ export async function rehydrateSpanForUi(
   if (!match) throw new Error("no matching PII entry for this span");
   return match.original;
 }
+
+export { warmupModels } from "@xberg-io/wasm-pipeline-real";
+export type { WarmupProgress, WarmupResult } from "@xberg-io/wasm-pipeline-real";
