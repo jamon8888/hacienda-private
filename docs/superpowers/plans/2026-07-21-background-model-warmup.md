@@ -1380,12 +1380,15 @@ git commit -m "feat(web): add model warmup status pill and kick off warmup from 
 **Files:**
 - Modify: `apps/web/app/search/page.tsx`
 - Modify: `apps/web/app/folders/[id]/FolderView.tsx`
+- Create: `apps/web/app/search/SearchPageInner.tsx`
 - Test: `apps/web/app/search/page.test.tsx` (new)
 - Test: `apps/web/app/folders/[id]/FolderView.test.tsx` (new)
 
 **Interfaces:**
 - Consumes: `useModelWarmup` from `@/lib/engine/warmup-store` (Task 6).
-- Produces: exported `SearchPageInner` (newly named-exported, in addition to the existing default export) so the test can render it directly without a `<Suspense>` wrapper.
+- Produces: `SearchPageInner` exported from its own file (`apps/web/app/search/SearchPageInner.tsx`), imported by both `page.tsx` (as the default export's render target) and `page.test.tsx` (directly, no `<Suspense>` needed).
+
+**Correction (found during implementation):** the original version of this task asked to export `SearchPageInner` by name directly from `page.tsx`. Next.js's App Router enforces a fixed allow-list of named exports from any `page.tsx` (`default`, `metadata`, `generateStaticParams`, etc.) — an extra named export fails `tsc`/`next build`'s type check. The fix is the standard one: move `SearchPageInner` into its own file; `page.tsx` becomes a thin wrapper that imports it and renders it inside `<Suspense>`. This is a one-file addition to Task 8's scope, not a restructuring of anything else.
 
 Both real, already-wired model-dependent user actions in the app get gated here: `app/search/page.tsx` calls `queryRag(...)` directly, and `FolderView.tsx` (via PR #23) wires its `FileDropzone` to `ingestFolder(...)` through `onFilesAccepted`. Make both targeted edits below against the *current* file content — do not replace either file wholesale, since both carry real PR #23 functionality (PII-type/confidence facets and the zero-egress badge in search; the passphrase-gated upload flow, hashing, and document status tracking in FolderView) that must be preserved untouched.
 
@@ -1417,7 +1420,7 @@ vi.mock("@/lib/engine/warmup-store", () => ({
 	useModelWarmup: () => warmupState.current,
 }));
 
-import { SearchPageInner } from "./page";
+import { SearchPageInner } from "./SearchPageInner";
 
 describe("SearchPageInner", () => {
 	it("disables search and labels the button while models are loading", async () => {
@@ -1494,23 +1497,23 @@ describe("FolderView ingest gating", () => {
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `pnpm --filter @xberg-io/web test -- app/search/page`
-Expected: FAIL — `SearchPageInner` is not exported yet.
+Expected: FAIL — `./SearchPageInner` doesn't exist as a module yet.
 
 Run: `pnpm --filter @xberg-io/web test -- FolderView`
 Expected: FAIL — no "Preparing on-device AI models" text exists yet.
 
-- [ ] **Step 3: Modify search/page.tsx**
+- [ ] **Step 3: Split search/page.tsx — move `SearchPageInner` to its own file, then gate it**
 
-Read the current file first. Make these four targeted edits, leaving the PII-facet filtering, zero-egress badge, and `ScrollArea` results list completely untouched:
+Read the current `apps/web/app/search/page.tsx` in full first. It currently defines an unexported `function SearchPageInner() { ... }` (with all the PII-facet/zero-egress logic) followed by `export default function SearchPage() { return <Suspense>...<SearchPageInner /></Suspense> }`.
 
-1. Add an import for the warmup hook, right after the `useAuth` import:
+1. **Create `apps/web/app/search/SearchPageInner.tsx`**: move the entire `SearchPageInner` function and every import it uses (`useSearchParams`, `useEffect`/`useMemo`/`useState`, `Input`, `Button`, `Badge`, `ScrollArea`, `RetrievedChunkCard`, `useAuth`, `getMatters`, `queryRag`, `assertLocalFirst`/`API_BASE`, `Matter`/`RetrievedChunk` types, the `"use client"` directive, and the `TOKEN_PATTERN`/`piiKindsInChunk` helper) into this new file verbatim, byte-for-byte, from the current `page.tsx` — do not change any of the PII-facet/zero-egress/ScrollArea logic while moving it. Add `export` to the function so it becomes `export function SearchPageInner() { ... }`.
+
+2. In this new file, add an import for the warmup hook and read the warmup stage, right after the existing hooks:
 
 ```ts
 import { useAuth } from "@/lib/auth";
 import { useModelWarmup } from "@/lib/engine/warmup-store";
 ```
-
-2. Export the inner component and read the warmup stage, right after the existing hooks:
 
 ```ts
 export function SearchPageInner() {
@@ -1519,8 +1522,6 @@ export function SearchPageInner() {
   const { ensureAuth } = useAuth();
   const { stage: modelStage } = useModelWarmup();
 ```
-
-(it's currently `function SearchPageInner() {`, not exported — add the `export` keyword and the `useModelWarmup()` line.)
 
 3. Guard the `search()` function — change:
 
@@ -1557,6 +1558,25 @@ to:
           {loading ? "Searching…" : modelStage !== "ready" ? "Preparing models…" : "Search"}
         </Button>
 ```
+
+5. **Reduce `apps/web/app/search/page.tsx` to a thin wrapper** — replace the whole file with:
+
+```tsx
+"use client";
+
+import { Suspense } from "react";
+import { SearchPageInner } from "./SearchPageInner";
+
+export default function SearchPage() {
+  return (
+    <Suspense fallback={<main className="mx-auto max-w-3xl p-6">Loading…</main>}>
+      <SearchPageInner />
+    </Suspense>
+  );
+}
+```
+
+6. In `apps/web/app/search/page.test.tsx` (Step 1's test file), change the import from `import { SearchPageInner } from "./page";` to `import { SearchPageInner } from "./SearchPageInner";`.
 
 - [ ] **Step 4: Modify FolderView.tsx**
 
@@ -1664,7 +1684,7 @@ Expected: both succeed with 0 errors.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add apps/web/app/search/page.tsx apps/web/app/search/page.test.tsx apps/web/app/folders/\[id\]/FolderView.tsx apps/web/app/folders/\[id\]/FolderView.test.tsx
+git add apps/web/app/search/page.tsx apps/web/app/search/SearchPageInner.tsx apps/web/app/search/page.test.tsx apps/web/app/folders/\[id\]/FolderView.tsx apps/web/app/folders/\[id\]/FolderView.test.tsx
 git commit -m "feat(web): gate search and ingest on model warmup readiness"
 ```
 
