@@ -113,6 +113,7 @@ const CONTENT_TYPES: Record<string, string> = {
 // ConsentGrant.scope field is loosely typed as AuthScopes, but the values that actually mean
 // anything to requireConsent() are these two.
 const VALID_CONSENT_SCOPES = ["pii_read", "redact_rehydrate"] as const;
+const VALID_DOCUMENT_STATUSES = ["processing", "done", "error"] as const;
 
 // Cross-origin isolation headers required by the browser engine (ORT-Web WASM threads /
 // SharedArrayBuffer, WebGPU/WebGL, WASM-SIMD). Next.js `output: "export"` cannot emit custom
@@ -131,6 +132,16 @@ function serveFile(res: ServerResponse, filePath: string): void {
 	const ct = CONTENT_TYPES[extname(filePath)] ?? "application/octet-stream";
 	res.writeHead(200, { "content-type": ct, ...ISOLATION_HEADERS });
 	res.end(readFileSync(filePath));
+}
+
+function serveHtmlWithToken(res: ServerResponse, filePath: string, token: string, status = 200): void {
+	const html = injectToken(readFileSync(filePath, "utf8"), token);
+	res.writeHead(status, {
+		"content-type": "text/html; charset=utf-8",
+		"cache-control": "no-store",
+		...ISOLATION_HEADERS,
+	});
+	res.end(html);
 }
 
 function serveStaticDir(res: ServerResponse, rootDir: string, relPath: string): void {
@@ -173,20 +184,17 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
 	// happens further down, scoped to the routes that actually need it.
 	if (pathname === "/" && method === "GET") {
 		const uiDir = resolveUiDir();
-		let html: string;
-		if (uiDir) {
-			html = readFileSync(join(uiDir, "index.html"), "utf8");
+		const indexPath = uiDir ? join(uiDir, "index.html") : null;
+		if (indexPath && existsSync(indexPath)) {
+			serveHtmlWithToken(res, indexPath, auth.token);
 		} else {
-			html = PLACEHOLDER_HTML;
+			res.writeHead(200, {
+				"content-type": "text/html; charset=utf-8",
+				"cache-control": "no-store",
+				...ISOLATION_HEADERS,
+			});
+			res.end(injectToken(PLACEHOLDER_HTML, auth.token));
 		}
-		// Inject session token so same-origin UI can read it
-		html = injectToken(html, auth.token);
-		res.writeHead(200, {
-			"content-type": "text/html; charset=utf-8",
-			"cache-control": "no-store",
-			...ISOLATION_HEADERS,
-		});
-		res.end(html);
 		return;
 	}
 
@@ -215,6 +223,54 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
 	if (pathname.startsWith("/models/") && method === "GET") {
 		await handleModels(ctx, res, pathname.slice("/models/".length));
 		return;
+	}
+
+	// Static assets from the export: also public — Next.js's own built JS/CSS chunks
+	// (/_next/static/*) plus anything else next export drops next to the pages (favicon, etc.).
+	// There was previously NO route for these at all: every page's HTML loaded fine (200), but
+	// every script/stylesheet it referenced 404'd, so nothing ever hydrated — the app has never
+	// actually been able to run against this server, only against `next dev`'s own server on a
+	// separate port.
+	if (method === "GET" && !pathname.startsWith("/api/") && pathname !== "/") {
+		const uiDir = resolveUiDir();
+		if (uiDir) {
+			const assetPath = join(uiDir, decodeURIComponent(pathname));
+			if (assetPath.startsWith(uiDir) && existsSync(assetPath) && !statSync(assetPath).isDirectory()) {
+				serveFile(res, assetPath);
+				return;
+			}
+		}
+	}
+
+	// SPA fallback: also public, same reasoning as "/" above — the static export only ever
+	// produces a page per *route*, not per dynamic id (`app/documents/[id]/page.tsx`'s
+	// generateStaticParams emits a single `documents/_.html` shell that reads the real id
+	// client-side). Without this, a direct navigation or a full-page reload of /documents/:id,
+	// /folders/:id, /matters/:id, /browse, /search, or /onboarding 404'd — even though those
+	// pages work fine as client-side (Link/router.push) transitions from within an
+	// already-loaded page. Gating the shell itself behind auth would defeat the fix: a fresh
+	// tab hitting a deep link has no token yet either (data still comes from the authenticated
+	// /api/* calls the shell's client JS makes once it loads).
+	if (method === "GET" && !pathname.startsWith("/api/")) {
+		const uiDir = resolveUiDir();
+		if (uiDir) {
+			const segments = pathname.split("/").filter(Boolean);
+			const candidate =
+				segments.length === 2
+					? join(uiDir, segments[0]!, "_.html")
+					: segments.length === 1
+						? join(uiDir, `${segments[0]}.html`)
+						: null;
+			if (candidate && existsSync(candidate)) {
+				serveHtmlWithToken(res, candidate, auth.token);
+				return;
+			}
+			const notFoundPage = join(uiDir, "404.html");
+			if (existsSync(notFoundPage)) {
+				serveHtmlWithToken(res, notFoundPage, auth.token, 404);
+				return;
+			}
+		}
 	}
 
 	// Every remaining route is protected: derive the per-request Principal now (throws
@@ -321,6 +377,68 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
 		authorize(principal.scopes, "read");
 		const folderId = decodeURIComponent(folderDocsMatch[1] ?? "");
 		sendJson(res, 200, { documents: ctx.store.getDocumentsByFolder(folderId) });
+		return;
+	}
+	// Registers a document ingested entirely client-side (browser WASM pipeline): the browser
+	// never uploads the raw file here, only the metadata needed for matter-nav/folder-view to
+	// show it — extraction, OCR, PII detection, and redaction all already happened locally.
+	if (folderDocsMatch && method === "POST") {
+		authorize(principal.scopes, "ingest");
+		const folderId = decodeURIComponent(folderDocsMatch[1] ?? "");
+		const folder = ctx.store.getFolder(folderId);
+		if (!folder) throw new AppError("not_found", `folder ${folderId} not found`);
+		const body = await readJson<{ path: string; content_hash: string }>(req);
+		if (!body.path || !body.content_hash) {
+			throw new AppError("bad_request", "path and content_hash are required");
+		}
+		const doc = ctx.store.createDocument({
+			folder_id: folderId,
+			matter_id: folder.matter_id,
+			path: body.path,
+			content_hash: body.content_hash,
+			ingested_via: "browser",
+		});
+		ctx.store.recordAudit(principal.subject, "ingest", "create_document", folder.matter_id);
+		sendJson(res, 201, doc);
+		return;
+	}
+
+	const docStatusMatch = pathname.match(/^\/api\/documents\/([^/]+)$/);
+	if (docStatusMatch && method === "GET") {
+		authorize(principal.scopes, "read");
+		const documentId = decodeURIComponent(docStatusMatch[1] ?? "");
+		const doc = ctx.store.getDocument(documentId);
+		if (!doc) throw new AppError("not_found", `document ${documentId} not found`);
+		sendJson(res, 200, doc);
+		return;
+	}
+
+	// Client-side ingestion is synchronous from the browser's perspective, but the folder-view
+	// poll loop needs a status transition to reflect completion (or failure) without a reload.
+	if (docStatusMatch && method === "PATCH") {
+		authorize(principal.scopes, "ingest");
+		const documentId = decodeURIComponent(docStatusMatch[1] ?? "");
+		const existing = ctx.store.getDocument(documentId);
+		if (!existing) throw new AppError("not_found", `document ${documentId} not found`);
+		const body = await readJson<{
+			status: "processing" | "done" | "error";
+			pages?: number;
+			chunk_count?: number;
+			pii_count?: number;
+			error_message?: string;
+		}>(req);
+		if (!body.status) throw new AppError("bad_request", "status is required");
+		if (!VALID_DOCUMENT_STATUSES.includes(body.status)) {
+			throw new AppError("bad_request", `unsupported status: ${body.status}`);
+		}
+		ctx.store.updateDocumentStatus(documentId, body.status, {
+			pages: body.pages,
+			chunk_count: body.chunk_count,
+			pii_count: body.pii_count,
+			error_message: body.error_message,
+		});
+		ctx.store.recordAudit(principal.subject, "ingest", "update_document_status", existing.matter_id);
+		sendJson(res, 200, ctx.store.getDocument(documentId));
 		return;
 	}
 

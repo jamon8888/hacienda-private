@@ -19,6 +19,7 @@ import {
   buildRedaction,
   redactDocument,
   sealVault,
+  openVault,
   buildIndex,
   serializeIndex,
   pushMirror,
@@ -55,6 +56,10 @@ export interface IngestResult {
 export interface IngestContext {
   matter: Matter;
   folder: Folder;
+  // The server-assigned Document id (from createDocument), used to key mirror chunks/pii spans
+  // and citations so RAG results and PII-review deep-links route to the right document. Falls
+  // back to folder.id when omitted, for callers that haven't registered a Document row yet.
+  docId?: string;
   scopeToken: string;
   passphrase: string;
   onProgress?: (p: IngestProgress) => void;
@@ -105,6 +110,7 @@ export async function ingestFolder(file: File, ctx: IngestContext): Promise<Inge
   );
   emit(ctx, name, name, "embed", 0.6);
 
+  const docId = ctx.docId ?? ctx.folder.id;
   const items: IndexedChunk[] = [];
   const allEntries: RedactionEntry[] = [];
   for (const [i, c] of chunks.entries()) {
@@ -114,11 +120,11 @@ export async function ingestFolder(file: File, ctx: IngestContext): Promise<Inge
     const { redacted, entries } = buildRedaction(c.content, pii, `C${i}`);
     for (const e of entries) allEntries.push(e);
     items.push({
-      docId: ctx.folder.id,
+      docId,
       chunkIndex: c.metadata.chunkIndex,
       text: redacted,
       page: chunkPage(c),
-      citation: chunkCitation(ctx.folder.id, c),
+      citation: chunkCitation(docId, c),
       bbox: chunkBoundingBox(doc, c),
       vector: v,
     });
@@ -133,6 +139,7 @@ export async function ingestFolder(file: File, ctx: IngestContext): Promise<Inge
       version: 1,
       index: Array.from(indexBytes),
       vault: Array.from(sealed.cipher),
+      vaultSalt: Array.from(sealed.salt),
       pii: mirrorPiiSpans(items, allEntries),
       chunks: items.map((it, i) => ({
         doc_id: it.docId,
@@ -199,4 +206,32 @@ export async function redactDocumentForUi(
   passphrase: string,
 ): Promise<{ redacted: string; entries: unknown[] }> {
   return redactDocument(text, pii, passphrase);
+}
+
+// Reveals the plaintext behind one masked PII span, gated by the matter's passphrase. `mirror` is
+// the same payload bytes `ingestFolder` produced (IngestResult.mirror) — it carries the sealed
+// vault (`vault` + `vaultSalt`) that `sealVault`/`openVault` round-trip through PBKDF2+AES-GCM.
+// `redactDocumentForUi` does NOT do this — it redacts (builds a new sealed vault), it never
+// decrypts one. There is no "already open" plaintext to read here: `openVault` decrypts the whole
+// entries array once per call, so the matching span is looked up by (kind, start, end) — the same
+// stable identity PiiEntity carries — rather than by an index into a live array.
+export async function rehydrateSpanForUi(
+  mirror: Uint8Array,
+  span: Pick<PiiEntity, "kind" | "start" | "end">,
+  passphrase: string,
+): Promise<string> {
+  const parsed = JSON.parse(new TextDecoder().decode(mirror)) as {
+    vault: number[];
+    vaultSalt: number[];
+  };
+  if (!Array.isArray(parsed.vault) || !Array.isArray(parsed.vaultSalt)) {
+    throw new Error("this document's cached mirror is missing vault data — please re-ingest it");
+  }
+  const entries = await openVault(
+    { cipher: Uint8Array.from(parsed.vault), salt: Uint8Array.from(parsed.vaultSalt) },
+    passphrase,
+  );
+  const match = entries.find((e) => e.kind === span.kind && e.start === span.start && e.end === span.end);
+  if (!match) throw new Error("no matching PII entry for this span");
+  return match.original;
 }

@@ -33,6 +33,10 @@ export interface MirrorBundle {
 	version: 1;
 	index: number[]; // raw EdgeVec bytes (browser uses)
 	vault: number[]; // raw curtain-vault bytes (browser uses)
+	// PBKDF2 salt used to seal `vault` (see redact.ts sealVault/openVault). Required to re-derive
+	// the AES-GCM key from the passphrase later — without it the vault can never be opened again,
+	// even with the correct passphrase.
+	vaultSalt: number[];
 	pii: MirrorPiiSpan[]; // server answers list_pii from this
 	chunks: MirrorChunk[]; // server answers rag_query from this (cited)
 }
@@ -40,6 +44,7 @@ export interface MirrorBundle {
 export function serializeMirror(
 	index: Uint8Array,
 	vault: Uint8Array,
+	vaultSalt: Uint8Array,
 	pii: MirrorPiiSpan[] = [],
 	chunks: MirrorChunk[] = [],
 ): MirrorBundle {
@@ -47,6 +52,7 @@ export function serializeMirror(
 		version: 1,
 		index: Array.from(index),
 		vault: Array.from(vault),
+		vaultSalt: Array.from(vaultSalt),
 		pii,
 		chunks,
 	};
@@ -55,15 +61,16 @@ export function serializeMirror(
 export function serializeMirrorToBytes(
 	index: Uint8Array,
 	vault: Uint8Array,
+	vaultSalt: Uint8Array,
 	pii: MirrorPiiSpan[] = [],
 	chunks: MirrorChunk[] = [],
 ): Uint8Array {
-	const bundle = serializeMirror(index, vault, pii, chunks);
+	const bundle = serializeMirror(index, vault, vaultSalt, pii, chunks);
 	return new TextEncoder().encode(JSON.stringify(bundle));
 }
 
 export async function pushMirror(matter: Matter, payload: Uint8Array, scopeToken: string): Promise<void> {
-	const res = await fetch(`${API_BASE}/rag/mirror?matter_id=${encodeURIComponent(matter.id)}`, {
+	const res = await fetch(`${API_BASE}/api/rag/mirror?matter_id=${encodeURIComponent(matter.id)}`, {
 		method: "POST",
 		headers: {
 			authorization: `Bearer ${scopeToken}`,

@@ -52,14 +52,30 @@ async function getSession(scenario: ModelScenario = DEFAULT_SCENARIO): Promise<O
 	if (!sessionPromise || sig !== cachedSig) {
 		cachedSig = sig;
 		sessionPromise = (async () => {
-			const ort = await import("onnxruntime-web");
+			console.log("DEBUG2 import ort");
+			// "/wasm" is the wasm-only bundle (no webgpu/webgl code); the bare "onnxruntime-web"
+			// entry pulls in the full bundle instead, which shares its worker module with
+			// webgpu/jsep and corrupts wasm init when that fails (see scenario.ts).
+			const ort = await import("onnxruntime-web/wasm");
+			console.log("DEBUG2 ort imported, numThreads=", scenario.numThreads);
 			ort.env.wasm.numThreads = scenario.numThreads;
+			// onnxruntime-web auto-detects its worker/wasm asset URLs from import.meta.url, which
+			// this webpack build doesn't preserve as a real browser URL — it resolves to the
+			// node_modules file:// source path instead, so every backend fails. Point it at a copy
+			// of those assets under public/ort/ (served statically alongside the rest of the app)
+			// instead of relying on that broken auto-detection.
+			ort.env.wasm.wasmPaths = "/ort/";
+			console.log("DEBUG2 fetching model", e5ModelUrl(scenario.modelVariant, scenario.quant));
 			const resp = await fetch(e5ModelUrl(scenario.modelVariant, scenario.quant));
+			console.log("DEBUG2 model fetch status", resp.status);
+			if (!resp.ok) throw new Error(`Failed to fetch e5 model: ${resp.status} ${resp.url}`);
 			const buf = await resp.arrayBuffer();
+			console.log("DEBUG2 model bytes", buf.byteLength, "EPs", JSON.stringify(scenario.executionProviders));
 			const session = await ort.InferenceSession.create(buf, {
 				executionProviders: scenario.executionProviders,
 				graphOptimizationLevel: "all",
 			});
+			console.log("DEBUG2 session created");
 			return session as unknown as OrtSessionHandle;
 		})();
 	}
@@ -115,15 +131,20 @@ async function embedOne(
 	const attn = enc.attention_mask;
 	const seqLen = inputIds.length;
 
-	const ort = await import("onnxruntime-web");
+	const ort = await import("onnxruntime-web/wasm");
 	const ids = BigInt64Array.from(inputIds.map((x: number) => BigInt(x)));
 	const mask = BigInt64Array.from(attn.map((x: number) => BigInt(x)));
 	const types = new BigInt64Array(seqLen);
-	const feeds: Record<string, OrtTensor> = {
+	const allFeeds: Record<string, OrtTensor> = {
 		input_ids: new ort.Tensor("int64", ids, [1, seqLen]) as unknown as OrtTensor,
 		attention_mask: new ort.Tensor("int64", mask, [1, seqLen]) as unknown as OrtTensor,
 		token_type_ids: new ort.Tensor("int64", types, [1, seqLen]) as unknown as OrtTensor,
 	};
+	// Not every e5 ONNX export declares a token_type_ids input — only feed names the session
+	// actually asks for, or ort rejects the run with "invalid input 'token_type_ids'".
+	const feeds: Record<string, OrtTensor> = Object.fromEntries(
+		Object.entries(allFeeds).filter(([name]) => session.inputNames.includes(name)),
+	);
 
 	const out = await session.run(feeds);
 	const values = Object.values(out);

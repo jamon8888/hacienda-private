@@ -7,7 +7,14 @@ function resolveApiBase(): string {
 	const viteValue = meta.env && meta.env.VITE_API_BASE;
 	const procValue = typeof process !== "undefined" && process.env && process.env["API_BASE"];
 	const envValue = viteValue || procValue || null;
-	return envValue ?? "http://localhost:8787";
+	if (envValue) return envValue;
+	// The mcp-server serves the API and the static UI from the same origin, on whatever port it's
+	// actually running on — not necessarily 8787. Falling back to a hardcoded port broke
+	// pushMirror/model downloads for every deployment on a different port; the browser's own
+	// origin is the correct default in the environment this code actually runs in (a page the
+	// server served).
+	if (typeof window !== "undefined" && window.location?.origin) return window.location.origin;
+	return "http://localhost:8787";
 }
 
 export const API_BASE = resolveApiBase();
@@ -15,7 +22,12 @@ export const API_BASE = resolveApiBase();
 export const E5_TOKENIZER_URL = `${API_BASE}/models/e5.tokenizer.json`;
 export const E5_TOKENIZER_CONFIG_URL = `${API_BASE}/models/e5.tokenizer_config.json`;
 
-export const GLINER_TOKENIZER_URL = `${API_BASE}/models/gliner-tokenizer.json`;
+// Bare repo-id (not a full URL): `@xenova/transformers`' `AutoTokenizer.from_pretrained()` always
+// appends "/tokenizer.json" itself, so this is joined with `env.localModelPath` (see ner.ts) to
+// produce `${API_BASE}/models/gliner-pii/tokenizer.json` — matching manifest.json's
+// "gliner-pii-tokenizer" entry, from the same onnx-community/gliner_small-v2.1 HF repo the
+// gliner-pii.{quant}.onnx model itself comes from.
+export const GLINER_TOKENIZER_REPO_ID = "gliner-pii";
 
 export const EMBED_DIM = 768;
 

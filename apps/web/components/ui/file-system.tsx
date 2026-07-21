@@ -665,14 +665,14 @@ function fileMatchesFilter(file: FileEntry, filter: FileSystemFilter) {
 
 	if (Number.isNaN(time)) return false;
 	if (filter.operator === "in-range" || filter.operator === "not-in-range") {
-		const from = Date.parse(filter.value[0]);
-		const to = Date.parse(filter.value[1] ?? filter.value[0]);
+		const from = Date.parse(filter.value[0]!);
+		const to = Date.parse(filter.value[1] ?? filter.value[0]!);
 		const isInRange = time >= from && time <= to;
 
 		return filter.operator === "not-in-range" ? !isInRange : isInRange;
 	}
 
-	const cutoff = dateFilterPresetCutoff(filter.value[0]).getTime();
+	const cutoff = dateFilterPresetCutoff(filter.value[0]!).getTime();
 
 	return filter.operator === "before" ? time <= cutoff : time >= cutoff;
 }
@@ -1448,8 +1448,8 @@ export function FileSystem({
 				initialRange:
 					existing && isCustomDateRangeValue(existing.value)
 						? {
-								from: new Date(existing.value[0]),
-								to: new Date(existing.value[1]),
+								from: new Date(existing.value[0]!),
+								to: new Date(existing.value[1]!),
 							}
 						: undefined,
 				type,
@@ -1667,7 +1667,7 @@ export function FileSystem({
 
 				if (next.length <= GALLERY_STAGE_POOL_SIZE) return next;
 
-				let evicted = next[0];
+				let evicted = next[0]!;
 
 				for (const candidate of next) {
 					if (candidate === path) continue;
@@ -2155,7 +2155,7 @@ function FileSystemSearchField({
 				className="pointer-events-none absolute left-2 size-3.5 text-muted-foreground"
 			/>
 			<input
-				ref={inputRef}
+				ref={inputRef as React.RefObject<HTMLInputElement>}
 				type="text"
 				role="searchbox"
 				aria-label="Search files"
@@ -2991,7 +2991,7 @@ function useEntryTypeAhead() {
 			const startIndex = currentIndex < 0 ? 0 : currentIndex + (state.buffer.length === 1 ? 1 : 0);
 
 			for (let step = 0; step < entries.length; step += 1) {
-				const entry = entries[(startIndex + step) % entries.length];
+				const entry = entries[(startIndex + step) % entries.length]!;
 
 				if (entry.name.toLowerCase().startsWith(state.buffer)) {
 					event.preventDefault();
@@ -3030,7 +3030,7 @@ function moveGridSelection({
 	} else if (key === "ArrowLeft" || key === "ArrowRight") {
 		nextEntry = entries[currentIndex + (key === "ArrowLeft" ? -1 : 1)];
 	} else {
-		const currentElement = itemRefs.get(entries[currentIndex].path);
+		const currentElement = itemRefs.get(entries[currentIndex]!.path);
 
 		if (!currentElement) return false;
 
@@ -3460,7 +3460,7 @@ function FileSystemPierreTree({
 				if (leftEntry && rightEntry) {
 					return compareEntriesBySort(leftEntry, rightEntry, sort);
 				}
-				return left.segments[depth] < right.segments[depth] ? -1 : 1;
+				return (left.segments[depth] ?? "") < (right.segments[depth] ?? "") ? -1 : 1;
 			}
 			return left.segments.length - right.segments.length;
 		};
@@ -3712,7 +3712,7 @@ function FileSystemPierreTree({
 	// filters are active their matches are revealed instead, and the
 	// remembered disclosure is the pre-filter one.
 	React.useLayoutEffect(() => {
-		const expansionStore = treeExpansionRef.current;
+		const expansionStore = treeExpansionRef.current!;
 		const savedExpansion = expansionStore.get(currentPath) ?? [];
 
 		if (hasActiveFiltersRef.current) {
@@ -4185,9 +4185,9 @@ const FileSystemColumn = React.memo(function FileSystemColumn({
 									tabIndex={entry.path === tabStopChildPath ? 0 : -1}
 									ref={(element) => {
 										if (element) {
-											rowRefs.current.set(entry.path, element);
+											rowRefs.current!.set(entry.path, element);
 										} else {
-											rowRefs.current.delete(entry.path);
+											rowRefs.current!.delete(entry.path);
 										}
 									}}
 									// Selecting on press (mouse only) starts mounting the

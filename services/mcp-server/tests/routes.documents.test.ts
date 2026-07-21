@@ -37,7 +37,17 @@ async function makeAuthedServer() {
 	const base = `http://127.0.0.1:${address.port}`;
 	const authedFetch = (path: string) =>
 		fetch(`${base}${path}`, { headers: { authorization: `Bearer ${token}`, "sec-fetch-site": "same-origin" } });
-	return { ctx, server, authedFetch };
+	const authedFetchJson = (method: string, path: string, body: unknown) =>
+		fetch(`${base}${path}`, {
+			method,
+			headers: {
+				authorization: `Bearer ${token}`,
+				"sec-fetch-site": "same-origin",
+				"content-type": "application/json",
+			},
+			body: JSON.stringify(body),
+		});
+	return { ctx, server, authedFetch, authedFetchJson };
 }
 
 describe("document routes", () => {
@@ -57,6 +67,46 @@ describe("document routes", () => {
 		const body = (await res.json()) as { documents: { id: string }[] };
 		expect(res.status).toBe(200);
 		expect(body.documents.map((d) => d.id)).toEqual([doc.id]);
+		server.close();
+	});
+
+	it("registers a browser-ingested document from metadata only, then transitions it to done", async () => {
+		const { ctx, server, authedFetch, authedFetchJson } = await makeAuthedServer();
+		const matter = ctx.store.createMatter("Acme v Doe");
+		const folder = ctx.store.createFolder(matter.id, "Discovery");
+
+		const createRes = await authedFetchJson("POST", `/api/folders/${folder.id}/documents`, {
+			path: "contract.pdf",
+			content_hash: "abc123",
+		});
+		expect(createRes.status).toBe(201);
+		const created = (await createRes.json()) as { id: string; status: string; ingested_via: string };
+		expect(created.status).toBe("processing");
+		expect(created.ingested_via).toBe("browser");
+
+		const listRes = await authedFetch(`/api/folders/${folder.id}/documents`);
+		const listed = (await listRes.json()) as { documents: { id: string; status: string }[] };
+		expect(listed.documents.map((d) => d.id)).toEqual([created.id]);
+
+		const patchRes = await authedFetchJson("PATCH", `/api/documents/${created.id}`, {
+			status: "done",
+			pages: 3,
+			chunk_count: 5,
+			pii_count: 2,
+		});
+		expect(patchRes.status).toBe(200);
+		const updated = (await patchRes.json()) as { status: string; pages: number; chunk_count: number; pii_count: number };
+		expect(updated.status).toBe("done");
+		expect(updated.pages).toBe(3);
+		expect(updated.chunk_count).toBe(5);
+		expect(updated.pii_count).toBe(2);
+		server.close();
+	});
+
+	it("returns not_found when patching a document that does not exist", async () => {
+		const { server, authedFetchJson } = await makeAuthedServer();
+		const res = await authedFetchJson("PATCH", "/api/documents/does-not-exist", { status: "done" });
+		expect(res.status).toBe(404);
 		server.close();
 	});
 

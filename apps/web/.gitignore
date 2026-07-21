@@ -9,3 +9,9 @@ build_out.txt
 build_err.txt
 test_out.txt
 test_err.txt
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/

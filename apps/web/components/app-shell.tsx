@@ -105,6 +105,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 						<kbd className="ml-auto hidden rounded border bg-muted px-1.5 text-[10px] sm:inline">⌘K</kbd>
 					</Button>
 					<div className="ml-auto flex items-center gap-2">
+						<Button variant="ghost" size="sm" onClick={() => router.push("/browse")}>
+							Browse
+						</Button>
 						<VaultStatus locked={!auth?.passphrase} />
 					</div>
 				</header>
