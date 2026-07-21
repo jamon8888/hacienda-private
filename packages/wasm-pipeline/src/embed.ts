@@ -1,3 +1,4 @@
+import { cachedFetchBuffer, cachedFetchJson, type FetchProgress } from "./model-cache";
 import { E5_TOKENIZER_URL, E5_TOKENIZER_CONFIG_URL, EMBED_DIM, e5ModelUrl } from "./constants";
 import type { ModelScenario } from "./scenario";
 
@@ -42,7 +43,15 @@ interface OrtSessionHandle {
 
 type Prefix = "query" | "passage";
 
-async function getSession(scenario: ModelScenario = DEFAULT_SCENARIO): Promise<OrtSessionHandle> {
+export function resetEmbedSession(): void {
+	cachedSig = null;
+	sessionPromise = null;
+}
+
+export async function ensureEmbedSession(
+	scenario: ModelScenario = DEFAULT_SCENARIO,
+	onProgress?: (p: FetchProgress) => void,
+): Promise<OrtSessionHandle> {
 	const sig = JSON.stringify({
 		ep: scenario.executionProviders,
 		quant: scenario.quant,
@@ -66,10 +75,7 @@ async function getSession(scenario: ModelScenario = DEFAULT_SCENARIO): Promise<O
 			// instead of relying on that broken auto-detection.
 			ort.env.wasm.wasmPaths = "/ort/";
 			console.log("DEBUG2 fetching model", e5ModelUrl(scenario.modelVariant, scenario.quant));
-			const resp = await fetch(e5ModelUrl(scenario.modelVariant, scenario.quant));
-			console.log("DEBUG2 model fetch status", resp.status);
-			if (!resp.ok) throw new Error(`Failed to fetch e5 model: ${resp.status} ${resp.url}`);
-			const buf = await resp.arrayBuffer();
+			const buf = await cachedFetchBuffer(e5ModelUrl(scenario.modelVariant, scenario.quant), onProgress);
 			console.log("DEBUG2 model bytes", buf.byteLength, "EPs", JSON.stringify(scenario.executionProviders));
 			const session = await ort.InferenceSession.create(buf, {
 				executionProviders: scenario.executionProviders,
@@ -80,14 +86,6 @@ async function getSession(scenario: ModelScenario = DEFAULT_SCENARIO): Promise<O
 		})();
 	}
 	return sessionPromise;
-}
-
-async function fetchJson(url: string): Promise<unknown> {
-	const res = await fetch(url);
-	if (!res.ok) {
-		throw new Error(`failed to fetch local tokenizer asset ${url}: ${res.status}`);
-	}
-	return res.json();
 }
 
 // Local tokenizer loading (no Hugging Face egress).
@@ -109,8 +107,8 @@ async function getTokenizer(): Promise<CallableTokenizer> {
 			env.allowLocalModels = false;
 
 			const [tokenizerJSON, tokenizerConfig] = await Promise.all([
-				fetchJson(E5_TOKENIZER_URL),
-				fetchJson(E5_TOKENIZER_CONFIG_URL),
+				cachedFetchJson(E5_TOKENIZER_URL),
+				cachedFetchJson(E5_TOKENIZER_CONFIG_URL),
 			]);
 			const tok = new XLMRobertaTokenizer(tokenizerJSON, tokenizerConfig);
 			return tok as unknown as CallableTokenizer;
@@ -124,7 +122,7 @@ async function embedOne(
 	prefix: Prefix,
 	scenario: ModelScenario = DEFAULT_SCENARIO,
 ): Promise<Float32Array> {
-	const [session, tok] = await Promise.all([getSession(scenario), getTokenizer()]);
+	const [session, tok] = await Promise.all([ensureEmbedSession(scenario), getTokenizer()]);
 	const prefixed = prefix === "query" ? `query: ${text}` : `passage: ${text}`;
 	const enc = tok(prefixed, { return_tensor: false });
 	const inputIds = enc.input_ids;
