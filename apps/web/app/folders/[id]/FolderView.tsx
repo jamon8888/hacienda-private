@@ -10,6 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileDropzone } from "@/components/ui/file-dropzone";
 import { useAuth } from "@/lib/auth";
+import { useModelWarmup } from "@/lib/engine/warmup-store";
 import { getFolders, getFolderDocuments, createDocument, updateDocumentStatus } from "@/lib/api";
 import { saveOriginalFile } from "@/lib/file-store";
 import { routeIdFromLocation } from "@/lib/route-id";
@@ -36,6 +37,7 @@ export default function FolderView({ id: propId }: FolderViewProps) {
 	const searchParams = useSearchParams();
 	const matterId = searchParams.get("matter_id") ?? "";
 	const { auth, setPassphrase } = useAuth();
+	const { stage: modelStage } = useModelWarmup();
 	const [folder, setFolder] = useState<Folder | null>(null);
 	const [documents, setDocuments] = useState<DocumentType[]>([]);
 	const [uploads, setUploads] = useState<Record<string, UploadState>>({});
@@ -80,7 +82,7 @@ export default function FolderView({ id: propId }: FolderViewProps) {
 
 	const onFilesAccepted = useCallback(
 		async (files: File[]) => {
-			if (!auth?.passphrase || !folder) return;
+			if (!auth?.passphrase || !folder || modelStage !== "ready") return;
 			const matter: Matter = { id: matterId, name: "", created_at: "" };
 
 			// Sequential, not Promise.all: each file's ingest reads-then-writes the matter's cumulative
@@ -127,7 +129,7 @@ export default function FolderView({ id: propId }: FolderViewProps) {
 				}
 			}
 		},
-		[auth, folder, folderId, matterId, refresh],
+		[auth, folder, folderId, matterId, refresh, modelStage],
 	);
 
 	const vaultLocked = !auth?.passphrase;
@@ -153,6 +155,10 @@ export default function FolderView({ id: propId }: FolderViewProps) {
 					>
 						Unlock vault
 					</Button>
+				</div>
+			) : modelStage !== "ready" ? (
+				<div className="mb-6 rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+					Preparing on-device AI models before you can upload…
 				</div>
 			) : (
 				<FileDropzone className="mb-6" onFilesAccepted={onFilesAccepted} />
