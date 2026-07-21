@@ -14,6 +14,8 @@ import { getMatters } from "@/lib/api";
 import type { Matter } from "@xberg-io/core";
 import { Button } from "@/components/ui/button";
 import { MatterNav, VaultStatus } from "@/components/matter-nav";
+import { ModelWarmupStatus } from "@/components/model-warmup-status";
+import { startModelWarmup } from "@/lib/engine/warmup-store";
 import {
 	CommandDialog,
 	CommandEmpty,
@@ -53,6 +55,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 		};
 		document.addEventListener("keydown", onKey);
 		return () => document.removeEventListener("keydown", onKey);
+	}, []);
+
+	useEffect(() => {
+		startModelWarmup();
 	}, []);
 
 	const activeMatter = matters.find((x) => x.id === activeMatterId);
@@ -105,6 +111,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 						<kbd className="ml-auto hidden rounded border bg-muted px-1.5 text-[10px] sm:inline">⌘K</kbd>
 					</Button>
 					<div className="ml-auto flex items-center gap-2">
+						<ModelWarmupStatus />
 						<Button variant="ghost" size="sm" onClick={() => router.push("/browse")}>
 							Browse
 						</Button>
