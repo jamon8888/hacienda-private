@@ -17,6 +17,10 @@ export async function initWasm(): Promise<void> {
   wasmMod = mod;
 }
 
+export function resetWasm(): void {
+  wasmMod = null;
+}
+
 export async function getWasm(): Promise<XbergWasm> {
   if (!wasmMod) await initWasm();
   return wasmMod as XbergWasm;
