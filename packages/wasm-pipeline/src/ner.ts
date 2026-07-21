@@ -1,6 +1,7 @@
 import type { PiiEntity } from "@xberg-io/core";
 import type { Gliner, IEntityResult, InitConfig, IONNXWebSettings, ITransformersSettings } from "gliner";
 import { API_BASE, GLINER_TOKENIZER_REPO_ID, glinerModelUrl } from "./constants";
+import { cachedFetchBuffer, withScopedFetchOverride, type FetchProgress } from "./model-cache";
 import type { ModelScenario } from "./scenario";
 
 // DEFAULT_SCENARIO is a defensive fallback; ingest.ts and query.ts now pass a real selectScenario() output.
@@ -52,7 +53,22 @@ let modelPromise: Promise<Gliner> | null = null;
 // "gliner-pii-tokenizer" entry, from the same HF repo the gliner-pii.{quant}.onnx model comes
 // from. `env.allowRemoteModels = false` and `allowLocalModels: true` below stay as
 // belt-and-suspenders guards against ever falling back to a real HF fetch.
-async function getModel(scenario: ModelScenario): Promise<Gliner> {
+//
+// The GLiNER model binary is a separate story: gliner's `ONNXWebWrapper.init()` calls
+// `ort.InferenceSession.create(modelPath, ...)` with a URL string, so `onnxruntime-web` does its
+// own internal fetch that we can't observe or redirect. We pre-fetch the same URL ourselves via
+// `cachedFetchBuffer` (for progress + Cache Storage), then run `model.initialize()` inside
+// `withScopedFetchOverride` so the internal fetch is served from those same bytes instead of
+// hitting the network a second time.
+export function resetPiiModel(): void {
+	cachedSig = null;
+	modelPromise = null;
+}
+
+export async function ensurePiiModel(
+	scenario: ModelScenario,
+	onProgress?: (p: FetchProgress) => void,
+): Promise<Gliner> {
 	const sig = JSON.stringify({
 		quant: scenario.quant,
 		ep: scenario.executionProviders[0],
@@ -64,10 +80,11 @@ async function getModel(scenario: ModelScenario): Promise<Gliner> {
 			await disableRemoteModels();
 			const transformersSettings: ITransformersSettings = {
 				allowLocalModels: true,
-				useBrowserCache: false,
+				useBrowserCache: true,
 			};
+			const modelUrl = glinerModelUrl(scenario.quant);
 			const onnxSettings: IONNXWebSettings = {
-				modelPath: glinerModelUrl(scenario.quant),
+				modelPath: modelUrl,
 				executionProvider: scenario.executionProviders[0],
 			};
 			const config: InitConfig = {
@@ -76,7 +93,8 @@ async function getModel(scenario: ModelScenario): Promise<Gliner> {
 				transformersSettings,
 			};
 			const model = new GlinerClass(config);
-			await model.initialize();
+			const modelBytes = await cachedFetchBuffer(modelUrl, onProgress);
+			await withScopedFetchOverride(modelUrl, modelBytes, () => model.initialize());
 			return model;
 		})();
 	}
@@ -94,7 +112,7 @@ export async function detectPii(
 			"[wasm-pipeline] detectPii called without a ModelScenario — using DEFAULT_SCENARIO; callers should pass selectScenario() output (see plan task 4-5)",
 		);
 	}
-	const model = await getModel(scenario);
+	const model = await ensurePiiModel(scenario);
 	const result = await model.inference({
 		texts: [text],
 		entities: [...types],
