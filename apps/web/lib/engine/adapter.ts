@@ -1,3 +1,4 @@
+import { get, set } from "idb-keyval";
 import type { Matter, Folder, PiiEntity, RetrievedChunk } from "@xberg-io/core";
 import type { RedactionEntry } from "@xberg-io/wasm-pipeline-real";
 
@@ -20,13 +21,19 @@ import {
   redactDocument,
   sealVault,
   openVault,
-  buildIndex,
+  appendIndex,
   serializeIndex,
   pushMirror,
   detectCapabilities,
   selectScenario,
   type IndexedChunk,
 } from "@xberg-io/wasm-pipeline-real";
+import {
+  mergeIntoAccumulator,
+  accumulatorKey,
+  type MatterMirrorAccumulator,
+  type MirrorChunk,
+} from "./mirror-merge";
 
 export interface ExtractedDocument {
   doc_id: string;
@@ -131,29 +138,60 @@ export async function ingestFolder(file: File, ctx: IngestContext): Promise<Inge
   }
   emit(ctx, name, name, "pii", 0.8);
 
-  const db = await buildIndex(ctx.matter.id, items);
+  // Additive retrieval index: augment the matter's existing EdgeVec index rather than replacing it.
+  const db = await appendIndex(ctx.matter.id, items);
   const indexBytes = await serializeIndex(db);
-  const sealed = await sealVault(allEntries, ctx.passphrase);
-  const payload = new TextEncoder().encode(
+
+  const thisPii = mirrorPiiSpans(items, allEntries);
+  const thisChunks: MirrorChunk[] = items.map((it, i) => ({
+    doc_id: it.docId,
+    chunk_index: it.chunkIndex,
+    text: it.text,
+    page: it.page,
+    bbox: it.bbox,
+    score: 1 - i * 0.01,
+    citation: it.citation ?? "",
+  }));
+
+  // Cumulative server bundle: merge this document's tokenized pii/chunks + vault entries into the
+  // matter accumulator, then push the FULL matter state (server saveMirror replaces the whole matter
+  // dir, so every push must carry everything). Sequential upload (FolderView) makes this race-free.
+  const prior = await get<MatterMirrorAccumulator>(accumulatorKey(ctx.matter.id));
+  const merged = await mergeIntoAccumulator(
+    prior,
+    { entries: allEntries, pii: thisPii, chunks: thisChunks },
+    ctx.passphrase,
+  );
+  await set(accumulatorKey(ctx.matter.id), merged);
+
+  const cumulativePayload = new TextEncoder().encode(
     JSON.stringify({
       version: 1,
       index: Array.from(indexBytes),
-      vault: Array.from(sealed.cipher),
-      vaultSalt: Array.from(sealed.salt),
-      pii: mirrorPiiSpans(items, allEntries),
-      chunks: items.map((it, i) => ({
-        doc_id: it.docId,
-        chunk_index: it.chunkIndex,
-        text: it.text,
-        page: it.page,
-        bbox: it.bbox,
-        score: 1 - i * 0.01,
-        citation: it.citation ?? "",
-      })),
+      vault: merged.vaultCipher,
+      vaultSalt: merged.vaultSalt,
+      pii: merged.pii,
+      chunks: merged.chunks,
     }),
   );
-  await pushMirror(ctx.matter, payload, ctx.scopeToken);
+  await pushMirror(ctx.matter, cumulativePayload, ctx.scopeToken);
   emit(ctx, name, name, "index", 1);
+
+  // Per-document mirror stored locally (file-store): this document's OWN sealed vault + pii + chunks.
+  // rehydrateSpanForUi matches spans by (kind,start,end) — cumulative entries from several documents
+  // could collide on those, so local rehydrate and this-document redacted text must use a per-doc
+  // vault, not the matter-wide one. `index` is unused locally, kept empty.
+  const docSealed = await sealVault(allEntries, ctx.passphrase);
+  const docMirror = new TextEncoder().encode(
+    JSON.stringify({
+      version: 1,
+      index: [],
+      vault: Array.from(docSealed.cipher),
+      vaultSalt: Array.from(docSealed.salt),
+      pii: thisPii,
+      chunks: thisChunks,
+    }),
+  );
 
   const pii: PiiEntity[] = allEntries.map((e) => ({
     kind: e.kind,
@@ -180,7 +218,7 @@ export async function ingestFolder(file: File, ctx: IngestContext): Promise<Inge
     pages: doc.pages?.length ?? 1,
     pii,
     chunks: retrieved,
-    mirror: payload,
+    mirror: docMirror,
   };
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import type { Document as DocumentType } from "@xberg-io/core";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import { getOriginalFile, saveReviewedPii, saveSplits, type StoredDocument } fro
 import { createInitialSplits, type DocumentSplit } from "@/components/ui/document-splits";
 import { getMatterTemplate } from "@/lib/matter-templates";
 import { routeIdFromLocation } from "@/lib/route-id";
+import { parseCitationTarget } from "@/lib/citation-target";
 
 // bounding-box-citations renders via Glide Data Grid (JSON tab), which requires browser APIs not
 // present during SSR/static export.
@@ -49,6 +50,8 @@ interface DocumentViewProps {
 export default function DocumentView({ id: propId }: DocumentViewProps) {
 	const id = routeIdFromLocation("documents", propId);
 	const router = useRouter();
+	const searchParams = useSearchParams();
+	const citationTarget = parseCitationTarget(searchParams);
 	const { auth } = useAuth();
 	const [doc, setDoc] = useState<DocumentType | null>(null);
 	const [stored, setStored] = useState<StoredDocument | null>(null);
@@ -136,6 +139,7 @@ export default function DocumentView({ id: propId }: DocumentViewProps) {
 						src={src}
 						textContent={textContent}
 						redactedText={redactedTextFromMirror(stored.mirror)}
+						citationTarget={citationTarget}
 					/>
 				</ResizablePanel>
 				<ResizableHandle withHandle />
