@@ -74,10 +74,23 @@ const nextConfig = {
     });
     // The onnxruntime-web ESM bundles are .mjs files that webpack would otherwise
     // try to parse as CommonJS scripts; treat them as ESM (javascript/auto).
+    //
+    // parser.url: false disables webpack 5's `new URL('…', import.meta.url)` asset-dependency
+    // rewriting for these modules. onnxruntime-web references its own sibling worker `.mjs`
+    // via `new URL('./ort-…​.mjs', import.meta.url)`; because that `.mjs` is a JS module
+    // (type: javascript/auto above), webpack rewrites the reference into
+    // `new __webpack_require__.U(__webpack_require__(<ortModuleId>))` — handing the module
+    // EXPORT OBJECT (not a URL string) to its internal URL shim, whose first op is
+    // `e.replace(...)`, crashing every ingest at import time with "e.replace is not a
+    // function" (the sibling `.wasm` reference works because it's an asset that returns a
+    // string). Left untransformed, onnxruntime-web resolves its worker/wasm asset URLs at
+    // runtime from `ort.env.wasm.wasmPaths` (set to "/ort/" in embed.ts, assets staged under
+    // public/ort/) instead.
     config.module.rules.push({
       test: /\.mjs$/,
       include: /onnxruntime/,
       type: "javascript/auto",
+      parser: { url: false },
     });
     config.resolve.fullySpecified = false;
 
