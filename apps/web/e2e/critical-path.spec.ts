@@ -9,28 +9,36 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // real — nothing here is mocked), which can take several minutes depending on network speed.
 test.setTimeout(10 * 60_000);
 
-const FIXTURE = path.join(__dirname, "fixtures", "contract-note.txt");
+const FIXTURE = path.join(__dirname, "fixtures", "contract-note.csv");
 const PII_NAME = "John Smith";
 const PII_EMAIL = "john.smith@example.com";
 const PASSPHRASE = "correct horse battery staple";
 
 test("upload -> PII masked -> passphrase reveal -> forget", async ({ page }) => {
+	page.on("console", (msg) => {
+		if (msg.text().startsWith("DEBUG2")) console.log(msg.text());
+	});
 	await page.goto("/");
 	await page.waitForURL("**/onboarding");
 	await page.getByRole("button", { name: "Enter workspace" }).click();
 	await page.waitForURL("**/matters");
 
+	// Scope content locators to the routed page's own <main> — the sidebar (matter-nav) renders
+	// the same matter/folder names and races the content area's fetch, so bare getByText() is
+	// ambiguous as soon as the sidebar catches up.
+	const content = page.locator("main.mx-auto");
+
 	// Create a matter
 	const matterName = `E2E Matter ${Date.now()}`;
 	await page.getByPlaceholder("New matter name").fill(matterName);
 	await page.getByRole("button", { name: "Create" }).click();
-	await page.getByText(matterName).click();
+	await content.getByText(matterName).click();
 	await page.waitForURL("**/matters/*");
 
 	// Create a folder (native prompt())
 	page.once("dialog", (dialog) => dialog.accept("Discovery"));
 	await page.getByRole("button", { name: "Create Folder" }).click();
-	await page.getByText("Discovery").click();
+	await content.getByText("Discovery").click();
 	await page.waitForURL("**/folders/*");
 
 	// Unlock the vault before uploading
@@ -45,8 +53,15 @@ test("upload -> PII masked -> passphrase reveal -> forget", async ({ page }) => 
 
 	// The redacted text (visible in the dual-pane view once we open the document) must never
 	// contain the raw PII — this is the core privacy guarantee the whole plan is built around.
-	await page.getByText("contract-note.txt").click();
+	// Documents are only reachable via the sidebar (matter-nav) — FolderView's own document
+	// cards aren't links.
+	const nav = page.getByRole("navigation", { name: "Workspace navigation" });
+	await nav.getByRole("button", { name: "Discovery" }).click();
+	await nav.getByRole("button", { name: /contract-note\.csv/ }).click();
 	await page.waitForURL("**/documents/*");
+	// waitForURL only confirms navigation — DocumentView still has to await getDocument() +
+	// getOriginalFile() and render the dual-pane view before the redacted text is on the page.
+	await expect(page.getByRole("tab", { name: "PII" })).toBeVisible();
 
 	const pageText = await page.locator("body").innerText();
 	expect(pageText).not.toContain(PII_NAME);
@@ -59,7 +74,11 @@ test("upload -> PII masked -> passphrase reveal -> forget", async ({ page }) => 
 	await page.getByRole("button", { name: "Reveal" }).click();
 	await page.getByPlaceholder("Passphrase").fill(PASSPHRASE);
 	await page.getByRole("button", { name: "Reveal", exact: true }).last().click();
-	await expect(page.getByText(new RegExp(`${PII_NAME}|${PII_EMAIL.replace(".", "\\.")}`))).toBeVisible({
+	// Scoped to the reveal dialog — the same revealed value also renders in the grid cell
+	// preview and the popover trigger span, which would make an unscoped locator ambiguous.
+	await expect(
+		page.getByRole("dialog").getByText(new RegExp(`${PII_NAME}|${PII_EMAIL.replace(".", "\\.")}`)),
+	).toBeVisible({
 		timeout: 10_000,
 	});
 

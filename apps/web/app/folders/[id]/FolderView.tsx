@@ -180,7 +180,9 @@ export default function FolderView({ id: propId }: FolderViewProps) {
 								<p className="text-xs text-muted-foreground">
 									{d.status === "processing"
 										? "Processing…"
-										: `${d.pages} pages · ${d.pii_count} PII entities · ${d.chunk_count} chunks`}
+										: d.status === "error"
+											? "Failed to ingest"
+											: `${d.pages} pages · ${d.pii_count} PII entities · ${d.chunk_count} chunks`}
 								</p>
 								{d.status === "error" && <p className="text-xs text-destructive">{d.error_message}</p>}
 							</CardContent>

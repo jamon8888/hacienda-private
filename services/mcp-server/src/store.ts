@@ -451,6 +451,10 @@ export class MetadataStore {
 		const r = (sql: string): number => this.db.prepare(sql).run(matterId).changes;
 		// All-or-nothing: a mid-sequence failure must not leave the matter half-deleted.
 		const forgetTxn = this.db.transaction((id: string) => {
+			// documents/document_pii reference folders/documents respectively — must go first or
+			// the later folder delete violates their foreign keys.
+			r("DELETE FROM document_pii WHERE document_id IN (SELECT id FROM documents WHERE matter_id = ?)");
+			r("DELETE FROM documents WHERE matter_id = ?");
 			const folders = r("DELETE FROM folders WHERE matter_id = ?");
 			const consents = r("DELETE FROM consent WHERE matter_id = ?");
 			const ingests = r("DELETE FROM ingests WHERE matter_id = ?");

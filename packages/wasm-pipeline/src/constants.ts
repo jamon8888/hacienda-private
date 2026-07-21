@@ -22,7 +22,12 @@ export const API_BASE = resolveApiBase();
 export const E5_TOKENIZER_URL = `${API_BASE}/models/e5.tokenizer.json`;
 export const E5_TOKENIZER_CONFIG_URL = `${API_BASE}/models/e5.tokenizer_config.json`;
 
-export const GLINER_TOKENIZER_URL = `${API_BASE}/models/gliner-tokenizer.json`;
+// Bare repo-id (not a full URL): `@xenova/transformers`' `AutoTokenizer.from_pretrained()` always
+// appends "/tokenizer.json" itself, so this is joined with `env.localModelPath` (see ner.ts) to
+// produce `${API_BASE}/models/gliner-pii/tokenizer.json` — matching manifest.json's
+// "gliner-pii-tokenizer" entry, from the same onnx-community/gliner_small-v2.1 HF repo the
+// gliner-pii.{quant}.onnx model itself comes from.
+export const GLINER_TOKENIZER_REPO_ID = "gliner-pii";
 
 export const EMBED_DIM = 768;
 

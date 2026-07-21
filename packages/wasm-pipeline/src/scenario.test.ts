@@ -15,7 +15,7 @@ function profile(over: Partial<DeviceProfile>): DeviceProfile {
 }
 
 describe("selectScenario", () => {
-	it("picks WebGPU + INT8 on a discrete GPU laptop", () => {
+	it("picks INT8 on a discrete GPU laptop, but stays WASM-only for execution", () => {
 		const s = selectScenario(
 			profile({
 				webgpu: true,
@@ -27,9 +27,12 @@ describe("selectScenario", () => {
 				deviceMemoryGb: 16,
 			}),
 		);
-		expect(s.executionProviders).toEqual(["webgpu", "webgl", "wasm"]);
+		// webgpu/webgl are never selected regardless of detection — see scenario.ts.
+		expect(s.executionProviders).toEqual(["wasm"]);
 		expect(s.quant).toBe("int8");
-		expect(s.numThreads).toBe(8);
+		// Pinned to 1 regardless of hardwareConcurrency — multi-threaded onnxruntime-web needs
+		// SharedArrayBuffer/cross-origin isolation this deployment doesn't provide (see scenario.ts).
+		expect(s.numThreads).toBe(1);
 	});
 
 	it("picks WASM-only + INT4 on a low-RAM 4-thread laptop", () => {
@@ -59,6 +62,6 @@ describe("selectScenario", () => {
 			}),
 		);
 		expect(s.quant).toBe("int4");
-		expect(s.executionProviders[0]).toBe("webgpu");
+		expect(s.executionProviders[0]).toBe("wasm");
 	});
 });

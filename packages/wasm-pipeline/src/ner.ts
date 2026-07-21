@@ -1,6 +1,6 @@
 import type { PiiEntity } from "@xberg-io/core";
 import type { Gliner, IEntityResult, InitConfig, IONNXWebSettings, ITransformersSettings } from "gliner";
-import { GLINER_TOKENIZER_URL, glinerModelUrl } from "./constants";
+import { API_BASE, GLINER_TOKENIZER_REPO_ID, glinerModelUrl } from "./constants";
 import type { ModelScenario } from "./scenario";
 
 // DEFAULT_SCENARIO is a defensive fallback; ingest.ts and query.ts now pass a real selectScenario() output.
@@ -21,6 +21,9 @@ async function disableRemoteModels(): Promise<void> {
 	try {
 		const { env } = await import("@xenova/transformers");
 		env.allowRemoteModels = false;
+		// `AutoTokenizer.from_pretrained(GLINER_TOKENIZER_REPO_ID)` joins this with the bare repo
+		// id + "tokenizer.json" to build the request URL — see the getModel() comment below.
+		env.localModelPath = `${API_BASE}/models/`;
 	} catch {
 		// transformers runtime unavailable here (e.g. typecheck-only) — no-op.
 	}
@@ -38,15 +41,17 @@ let modelPromise: Promise<Gliner> | null = null;
 // Local tokenizer loading (no Hugging Face egress).
 //
 // gliner's `initialize()` calls `AutoTokenizer.from_pretrained(tokenizerPath)` internally via
-// `@xenova/transformers`. We point `tokenizerPath` at the Node-served local tokenizer JSON
-// (`${API_BASE}/models/gliner-tokenizer.json`) rather than an HF repo id, so no runtime request
-// to huggingface.co / hf.co is made. We also disable remote model loading in transformers.js
-// (`env.allowRemoteModels = false`) and tell gliner to only use local models, as belt-and-suspenders
-// guards so the library can never fall back to a remote HF fetch.
-//
-// NOTE (cross-plan dependency): this requires Plan 1's `services/mcp-server` ModelCache to serve a
-// GLiNER tokenizer file at `/models/gliner-tokenizer.json` (standard transformers tokenizer.json
-// layout). If the Node service serves it under a different name, update `GLINER_TOKENIZER_URL`.
+// `@xenova/transformers`, which always builds its request URL as `pathJoin(tokenizerPath,
+// "tokenizer.json")`. Passing a full URL there (as this used to) double-appends into a broken
+// path like ".../gliner-tokenizer.json/tokenizer.json" — and since the joined string is itself an
+// absolute http(s) URL, transformers.js treats it as "remote" and refuses it outright under
+// `allowRemoteModels = false`, regardless of it actually being our own local server. Passing the
+// bare repo id `GLINER_TOKENIZER_REPO_ID` instead keeps requestURL a plain relative path, which
+// takes the "local" branch and resolves via `env.localModelPath` (set in disableRemoteModels()
+// above) to `${API_BASE}/models/gliner-pii/tokenizer.json` — matching manifest.json's
+// "gliner-pii-tokenizer" entry, from the same HF repo the gliner-pii.{quant}.onnx model comes
+// from. `env.allowRemoteModels = false` and `allowLocalModels: true` below stay as
+// belt-and-suspenders guards against ever falling back to a real HF fetch.
 async function getModel(scenario: ModelScenario): Promise<Gliner> {
 	const sig = JSON.stringify({
 		quant: scenario.quant,
@@ -66,7 +71,7 @@ async function getModel(scenario: ModelScenario): Promise<Gliner> {
 				executionProvider: scenario.executionProviders[0],
 			};
 			const config: InitConfig = {
-				tokenizerPath: GLINER_TOKENIZER_URL,
+				tokenizerPath: GLINER_TOKENIZER_REPO_ID,
 				onnxSettings,
 				transformersSettings,
 			};

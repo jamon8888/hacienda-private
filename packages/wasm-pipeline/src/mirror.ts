@@ -70,7 +70,7 @@ export function serializeMirrorToBytes(
 }
 
 export async function pushMirror(matter: Matter, payload: Uint8Array, scopeToken: string): Promise<void> {
-	const res = await fetch(`${API_BASE}/rag/mirror?matter_id=${encodeURIComponent(matter.id)}`, {
+	const res = await fetch(`${API_BASE}/api/rag/mirror?matter_id=${encodeURIComponent(matter.id)}`, {
 		method: "POST",
 		headers: {
 			authorization: `Bearer ${scopeToken}`,

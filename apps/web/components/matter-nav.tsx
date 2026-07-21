@@ -165,6 +165,18 @@ function FolderNode({
 	const router = useRouter();
 	const folderActive = usePathname().startsWith(`/folders/${folder.id}`);
 
+	// Client-side navigation in this static export falls back to a full page reload (no live
+	// Next.js server to resolve the dynamic route), which remounts this component and resets
+	// `open` to false — so landing on this folder's own page would otherwise never show its
+	// document list until the user manually re-clicks to expand it. Auto-expand instead.
+	useEffect(() => {
+		if (folderActive && !open) {
+			setOpen(true);
+			onToggle();
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [folderActive]);
+
 	return (
 		<div>
 			<div className="flex items-center gap-1 rounded-md hover:bg-accent">
