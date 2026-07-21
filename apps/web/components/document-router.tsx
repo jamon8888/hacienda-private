@@ -1,11 +1,13 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { useTheme } from "next-themes";
-import { PDFViewer } from "@/components/ui/pdf-viewer";
+import { PDFViewer, type PDFViewerHandle } from "@/components/ui/pdf-viewer";
 import { DocxViewerPreview } from "@/components/ui/docx-viewer";
 import { XlsxViewerPreview } from "@/components/ui/xlsx-viewer";
 import { PptxViewerPreview } from "@/components/ui/pptx-viewer";
 import { CsvViewer } from "@/components/ui/csv-viewer";
+import type { CitationTarget } from "@/lib/citation-target";
 
 export type ViewerKind = "pdf" | "docx" | "xlsx" | "pptx" | "csv" | "image" | "text";
 
@@ -59,9 +61,12 @@ interface DocumentRouterProps {
 	// Only used by the text/CSV/image inline branches, which render content directly rather than
 	// fetching from `src` themselves.
 	textContent?: string;
+	// Page/bbox to scroll to and highlight, parsed from a citation deep-link. Only the PDF branch
+	// acts on it; other viewers don't have a page/bbox concept.
+	citationTarget?: CitationTarget;
 }
 
-export function DocumentRouter({ mimeType, fileName, src, textContent }: DocumentRouterProps) {
+export function DocumentRouter({ mimeType, fileName, src, textContent, citationTarget }: DocumentRouterProps) {
 	const { resolvedTheme, setTheme } = useTheme();
 	const isDark = resolvedTheme === "dark";
 	const onIsDarkChange = (next: boolean) => setTheme(next ? "dark" : "light");
@@ -69,7 +74,7 @@ export function DocumentRouter({ mimeType, fileName, src, textContent }: Documen
 
 	switch (kind) {
 		case "pdf":
-			return <PDFViewer src={src} fileName={fileName} />;
+			return <PdfWithCitation src={src} fileName={fileName} citationTarget={citationTarget} />;
 		case "docx":
 			return <DocxViewerPreview src={src} fileName={fileName} isDark={isDark} onIsDarkChange={onIsDarkChange} />;
 		case "xlsx":
@@ -85,4 +90,54 @@ export function DocumentRouter({ mimeType, fileName, src, textContent }: Documen
 		default:
 			return <pre className="whitespace-pre-wrap text-sm p-4">{textContent ?? ""}</pre>;
 	}
+}
+
+function PdfWithCitation({
+	src,
+	fileName,
+	citationTarget,
+}: {
+	src: string;
+	fileName: string;
+	citationTarget?: CitationTarget;
+}) {
+	const viewerRef = useRef<PDFViewerHandle>(null);
+
+	useEffect(() => {
+		const page = citationTarget?.page;
+		if (!page) return;
+		// The engine reports bbox in PDF-point corners (x,y top-left). scrollToPageArea's `top`/`left`
+		// are page-relative offsets in the same space; width/height frame the cited region. Absent bbox
+		// → scroll to the page top. Retry briefly: the viewport may not be laid out on first paint.
+		const bbox = citationTarget?.bbox;
+		const area = bbox ? { top: bbox.y, left: bbox.x, width: bbox.w, height: bbox.h } : { top: 0 };
+		let tries = 0;
+		const timer = setInterval(() => {
+			viewerRef.current?.scrollToPageArea(page, area);
+			if (viewerRef.current?.getViewportElement() || ++tries >= 10) clearInterval(timer);
+		}, 150);
+		return () => clearInterval(timer);
+	}, [citationTarget?.page, citationTarget?.bbox]);
+
+	return (
+		<PDFViewer
+			ref={viewerRef}
+			src={src}
+			fileName={fileName}
+			renderPageOverlay={({ pageNumber, scale }) =>
+				citationTarget?.bbox && citationTarget.page === pageNumber ? (
+					<div
+						aria-hidden
+						className="pointer-events-none absolute rounded-sm bg-blue-500/20 ring-2 ring-blue-500/70"
+						style={{
+							left: citationTarget.bbox.x * scale,
+							top: citationTarget.bbox.y * scale,
+							width: citationTarget.bbox.w * scale,
+							height: citationTarget.bbox.h * scale,
+						}}
+					/>
+				) : null
+			}
+		/>
+	);
 }

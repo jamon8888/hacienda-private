@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Toggle } from "@/components/ui/toggle";
 import { DocumentRouter } from "@/components/document-router";
+import type { CitationTarget } from "@/lib/citation-target";
 
 interface DocumentDualViewProps {
 	mimeType: string;
@@ -14,9 +15,18 @@ interface DocumentDualViewProps {
 	// Redacted text reconstructed from this document's mirror chunks — the exact text a Claude
 	// Desktop MCP query would retrieve, tokens (`{{PERSON_1}}`, ...) standing in for PII.
 	redactedText: string;
+	// Page/bbox to scroll to and highlight, parsed from a citation deep-link (RetrievedChunkCard).
+	citationTarget?: CitationTarget;
 }
 
-export function DocumentDualView({ mimeType, fileName, src, textContent, redactedText }: DocumentDualViewProps) {
+export function DocumentDualView({
+	mimeType,
+	fileName,
+	src,
+	textContent,
+	redactedText,
+	citationTarget,
+}: DocumentDualViewProps) {
 	const [syncScroll, setSyncScroll] = useState(false);
 
 	async function copyForClaude() {
@@ -26,7 +36,13 @@ export function DocumentDualView({ mimeType, fileName, src, textContent, redacte
 	return (
 		<div className="flex h-full min-h-0 flex-col gap-3">
 			<div className="min-h-0 flex-1 overflow-auto rounded-lg border">
-				<DocumentRouter mimeType={mimeType} fileName={fileName} src={src} textContent={textContent} />
+				<DocumentRouter
+					mimeType={mimeType}
+					fileName={fileName}
+					src={src}
+					textContent={textContent}
+					citationTarget={citationTarget}
+				/>
 			</div>
 
 			<div className="flex items-center justify-between gap-2">
