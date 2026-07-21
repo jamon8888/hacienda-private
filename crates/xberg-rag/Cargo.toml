@@ -1,0 +1,24 @@
+[package]
+name = "xberg-rag"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Isomorphic RAG core: SearchStore, snapshots, and the RagEngine shared by xberg's browser and native hosts"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }
+rkyv = { workspace = true }
+edgevec = { workspace = true, optional = true }
+
+[features]
+default = []
+# Compile-gate only in P1: proves edgevec builds for native + wasm (see examples/edgevec_smoke.rs).
+hnsw = ["dep:edgevec"]
+
+[lints]
+workspace = true

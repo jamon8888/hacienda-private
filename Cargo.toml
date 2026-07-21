@@ -11,6 +11,7 @@ members = [
     "crates/xberg-paddle-ocr",
     "crates/xberg-php",
     "crates/xberg-py",
+    "crates/xberg-rag",
     "crates/xberg-tesseract",
     "crates/xberg-wasm",
     "packages/dart/rust",
@@ -55,6 +56,7 @@ console_error_panic_hook = "0.1"
 crawlberg = { version = "1.0.5", default-features = false }
 criterion = { version = "0.8", features = ["html_reports"] }
 dbase = "0.8"
+edgevec = { version = "0.9.0", default-features = false }
 futures = "0.3"
 getrandom = { version = "0.4.3", features = ["wasm_js"] }
 hex = "0.4.3"
@@ -79,6 +81,7 @@ parking_lot = "0.12.5"
 pdf_oxide = { version = "0.3.74", default-features = false, features = ["rendering", "legacy-crypto"] }
 rayon = "1.12.0"
 reqwest = { version = "0.13.4", default-features = false }
+rkyv = { version = "0.8", default-features = false, features = ["alloc", "bytecheck"] }
 # SVG rendering (resvg re-exports tiny_skia and usvg; default-features = false
 # drops text, system-fonts, memmap-fonts, raster-images — all pure-Rust, WASM-safe).
 resvg = { version = "0.47", default-features = false }
