@@ -83,48 +83,49 @@ export default function FolderView({ id: propId }: FolderViewProps) {
 			if (!auth?.passphrase || !folder) return;
 			const matter: Matter = { id: matterId, name: "", created_at: "" };
 
-			await Promise.all(
-				files.map(async (file, idx) => {
-					// Keyed by index, not just file.name — two files accepted in the same batch can
-					// share a name (e.g. scans from different sources), and a name-only key would
-					// collide, silently overwriting one file's progress/error with the other's.
-					const uploadKey = `${file.name}-${idx}`;
-					setUploads((prev) => ({ ...prev, [uploadKey]: { name: file.name, stage: "extract", progress: 0 } }));
-					let docId: string | undefined;
-					try {
-						const content_hash = await sha256Hex(file);
-						const doc = await createDocument(auth.token, folderId, { path: file.name, content_hash });
-						docId = doc.id;
-						await refresh();
+			// Sequential, not Promise.all: each file's ingest reads-then-writes the matter's cumulative
+			// mirror accumulator (see lib/engine/mirror-merge.ts), so concurrent uploads would race on
+			// that read and one file's chunks/PII would clobber another's.
+			for (const [idx, file] of files.entries()) {
+				// Keyed by index, not just file.name — two files accepted in the same batch can
+				// share a name (e.g. scans from different sources), and a name-only key would
+				// collide, silently overwriting one file's progress/error with the other's.
+				const uploadKey = `${file.name}-${idx}`;
+				setUploads((prev) => ({ ...prev, [uploadKey]: { name: file.name, stage: "extract", progress: 0 } }));
+				let docId: string | undefined;
+				try {
+					const content_hash = await sha256Hex(file);
+					const doc = await createDocument(auth.token, folderId, { path: file.name, content_hash });
+					docId = doc.id;
+					await refresh();
 
-						const result = await ingestFolder(file, {
-							matter,
-							folder,
-							docId,
-							scopeToken: auth.token,
-							passphrase: auth.passphrase as string,
-							onProgress: (p) =>
-								setUploads((prev) => ({ ...prev, [uploadKey]: { name: file.name, stage: p.stage, progress: p.progress } })),
-						});
+					const result = await ingestFolder(file, {
+						matter,
+						folder,
+						docId,
+						scopeToken: auth.token,
+						passphrase: auth.passphrase as string,
+						onProgress: (p) =>
+							setUploads((prev) => ({ ...prev, [uploadKey]: { name: file.name, stage: p.stage, progress: p.progress } })),
+					});
 
-						await saveOriginalFile(docId, file, result.pii, result.mirror);
-						await updateDocumentStatus(auth.token, docId, {
-							status: "done",
-							pages: result.pages,
-							chunk_count: result.chunks.length,
-							pii_count: result.pii.length,
-						});
-					} catch (err) {
-						const message = err instanceof Error ? err.message : "ingest failed";
-						setUploads((prev) => ({ ...prev, [uploadKey]: { name: file.name, stage: "error", progress: 1, error: message } }));
-						if (docId) {
-							await updateDocumentStatus(auth.token, docId, { status: "error", error_message: message });
-						}
-					} finally {
-						await refresh();
+					await saveOriginalFile(docId, file, result.pii, result.mirror);
+					await updateDocumentStatus(auth.token, docId, {
+						status: "done",
+						pages: result.pages,
+						chunk_count: result.chunks.length,
+						pii_count: result.pii.length,
+					});
+				} catch (err) {
+					const message = err instanceof Error ? err.message : "ingest failed";
+					setUploads((prev) => ({ ...prev, [uploadKey]: { name: file.name, stage: "error", progress: 1, error: message } }));
+					if (docId) {
+						await updateDocumentStatus(auth.token, docId, { status: "error", error_message: message });
 					}
-				}),
-			);
+				} finally {
+					await refresh();
+				}
+			}
 		},
 		[auth, folder, folderId, matterId, refresh],
 	);

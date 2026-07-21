@@ -10,8 +10,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 test.setTimeout(10 * 60_000);
 
 const FIXTURE = path.join(__dirname, "fixtures", "contract-note.csv");
+const FIXTURE_2 = path.join(__dirname, "fixtures", "contract-note-2.csv");
 const PII_NAME = "John Smith";
 const PII_EMAIL = "john.smith@example.com";
+const PII_NAME_2 = "Mary Jones";
 const PASSPHRASE = "correct horse battery staple";
 
 test("upload -> PII masked -> passphrase reveal -> forget", async ({ page }) => {
@@ -51,12 +53,24 @@ test("upload -> PII masked -> passphrase reveal -> forget", async ({ page }) => 
 	await expect(page.getByText(/PII entities/)).toBeVisible({ timeout: 5 * 60_000 });
 	await expect(page.getByText("Processing…")).not.toBeVisible();
 
+	// Upload a second file into the SAME folder — the mirror must merge into the matter's
+	// cumulative state, not overwrite it (regression coverage for the multi-file upload bug).
+	await page.locator('input[type="file"]').setInputFiles(FIXTURE_2);
+	await expect(page.getByText(/contract-note-2\.csv/)).toBeVisible({ timeout: 5 * 60_000 });
+	await expect(page.getByText("Processing…")).not.toBeVisible();
+
 	// The redacted text (visible in the dual-pane view once we open the document) must never
 	// contain the raw PII — this is the core privacy guarantee the whole plan is built around.
 	// Documents are only reachable via the sidebar (matter-nav) — FolderView's own document
 	// cards aren't links.
 	const nav = page.getByRole("navigation", { name: "Workspace navigation" });
 	await nav.getByRole("button", { name: "Discovery" }).click();
+
+	// Both documents remain reachable after the second upload committed — proves the first
+	// upload's chunks/PII survived the second ingest's mirror push.
+	await expect(nav.getByRole("button", { name: /contract-note\.csv/ })).toBeVisible();
+	await expect(nav.getByRole("button", { name: /contract-note-2\.csv/ })).toBeVisible();
+
 	await nav.getByRole("button", { name: /contract-note\.csv/ }).click();
 	await page.waitForURL("**/documents/*");
 	// waitForURL only confirms navigation — DocumentView still has to await getDocument() +
@@ -67,6 +81,24 @@ test("upload -> PII masked -> passphrase reveal -> forget", async ({ page }) => 
 	expect(pageText).not.toContain(PII_NAME);
 	expect(pageText).not.toContain(PII_EMAIL);
 	expect(pageText).toMatch(/\{\{[A-Z0-9_]+\}\}/); // a redaction token is present somewhere
+
+	// Open the second document and confirm its own PII was independently redacted too — proves the
+	// matter's cumulative mirror carries both documents' PII, not just whichever was uploaded last.
+	await page.goBack();
+	await page.waitForURL("**/folders/*");
+	await nav.getByRole("button", { name: /contract-note-2\.csv/ }).click();
+	await page.waitForURL("**/documents/*");
+	await expect(page.getByRole("tab", { name: "PII" })).toBeVisible();
+	const pageText2 = await page.locator("body").innerText();
+	expect(pageText2).not.toContain(PII_NAME_2);
+	expect(pageText2).toMatch(/\{\{[A-Z0-9_]+\}\}/);
+
+	// Back to the first document to continue the reveal/forget flow below.
+	await page.goBack();
+	await page.waitForURL("**/folders/*");
+	await nav.getByRole("button", { name: /contract-note\.csv/ }).click();
+	await page.waitForURL("**/documents/*");
+	await expect(page.getByRole("tab", { name: "PII" })).toBeVisible();
 
 	// Reveal one masked PII span with the correct passphrase
 	await page.getByRole("tab", { name: "PII" }).click();
