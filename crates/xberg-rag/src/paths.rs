@@ -71,6 +71,14 @@ mod tests {
         assert_eq!(encode_uri_component("a:b"), "a%3Ab");
         // Multi-byte UTF-8 is encoded byte-by-byte, same as JS.
         assert_eq!(encode_uri_component("é"), "%C3%A9");
+        // JS-specific unreserved extras: encodeURIComponent leaves these alone,
+        // unlike most Rust percent-encoders. This is the likeliest parity break.
+        assert_eq!(encode_uri_component("!*'()"), "!*'()");
+        // Reserved characters that MUST be escaped, with uppercase hex.
+        assert_eq!(encode_uri_component("a+b"), "a%2Bb");
+        assert_eq!(encode_uri_component("a&b=c"), "a%26b%3Dc");
+        assert_eq!(encode_uri_component("#"), "%23");
+        assert_eq!(encode_uri_component("%"), "%25");
     }
 
     #[test]
@@ -82,10 +90,11 @@ mod tests {
     }
 
     #[test]
-    fn default_mirrors_dir_honours_data_dir_env() {
-        // SAFETY-free: set_var is safe on the 2024 edition's std API surface used here
-        // only via a serialised test; this test does not run concurrently with another
-        // that reads XBERG_DATA_DIR.
+    fn default_mirrors_dir_ends_with_mirrors() {
+        // Only the unset-default path is asserted: overriding XBERG_DATA_DIR would
+        // require `std::env::set_var`, which is `unsafe` on edition 2024 and barred
+        // by the workspace's `unsafe_code = "deny"` lint. The env-override branch is
+        // covered by the CLI integration tests, which set the variable per-process.
         let dir = default_mirrors_dir();
         assert!(dir.ends_with("mirrors"), "got {dir:?}");
     }
