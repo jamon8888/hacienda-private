@@ -130,8 +130,9 @@ impl<E: Embedder> RagEngine<E> {
     }
 
     /// Rebuild a matter's snapshot from a legacy JSON `MirrorBundle` by
-    /// re-embedding its chunk texts. Replaces any existing snapshot; returns the
-    /// number of chunks imported.
+    /// re-embedding its chunk texts. Replaces any existing snapshot unless the
+    /// bundle is empty, in which case it is a no-op that leaves any existing
+    /// snapshot untouched; returns the number of chunks imported.
     pub fn import_legacy(&self, matter_id: &str) -> Result<usize> {
         let path = self.paths(matter_id).legacy_bundle();
         if !path.exists() {
@@ -145,6 +146,14 @@ impl<E: Embedder> RagEngine<E> {
 
         let texts: Vec<String> = legacy.iter().map(|c| c.text.clone()).collect();
         let vectors = self.embedder.embed_documents(&texts)?;
+        if vectors.len() != texts.len() {
+            return Err(RagError::Embed(format!(
+                "embedder returned {} vectors for {} texts",
+                vectors.len(),
+                texts.len()
+            )));
+        }
+
         let items: Vec<IndexedChunk> = legacy
             .into_iter()
             .zip(vectors)
@@ -282,5 +291,41 @@ mod tests {
         // A brand-new engine (as a fresh MCP process would build) sees the data.
         let hits = engine(tmp.path()).query("m1", "persisted text", 1).unwrap();
         assert_eq!(hits[0].text, "persisted text");
+    }
+
+    /// Returns fewer vectors than it was given texts — the failure mode that
+    /// `zip` would otherwise swallow as silent data loss.
+    struct ShortEmbedder;
+
+    impl Embedder for ShortEmbedder {
+        fn dim(&self) -> usize {
+            4
+        }
+        fn embed_documents(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
+            // One fewer vector than requested.
+            Ok(texts.iter().skip(1).map(|_| vec![0.0; 4]).collect())
+        }
+        fn embed_query(&self, _text: &str) -> Result<Vec<f32>> {
+            Ok(vec![0.0; 4])
+        }
+    }
+
+    #[test]
+    fn import_legacy_rejects_an_embedder_that_returns_too_few_vectors() {
+        let tmp = tempfile::tempdir().unwrap();
+        let e = RagEngine::new(ShortEmbedder, tmp.path().to_path_buf());
+        let paths = MatterPaths::new(tmp.path(), "m1");
+        std::fs::create_dir_all(&paths.dir).unwrap();
+        std::fs::write(
+            paths.legacy_bundle(),
+            r#"{"version":1,"index":[],"vault":[],"pii":[],"chunks":[
+                {"doc_id":"d1","chunk_index":0,"text":"alpha","score":0.1,"citation":"d1:0"},
+                {"doc_id":"d1","chunk_index":1,"text":"beta","score":0.2,"citation":"d1:1"}
+            ]}"#,
+        )
+        .unwrap();
+
+        // Must error, not silently import only one of the two chunks.
+        assert!(matches!(e.import_legacy("m1").unwrap_err(), RagError::Embed(_)));
     }
 }
