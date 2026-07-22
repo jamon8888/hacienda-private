@@ -30,6 +30,7 @@ mod errors;
 mod format;
 mod params;
 pub(crate) mod prompts;
+mod rag;
 pub(crate) mod resources;
 pub(crate) mod schema;
 mod server;
@@ -45,4 +46,4 @@ pub use server::start_mcp_server_http_with_config;
 #[allow(unused_imports)]
 pub use server::start_mcp_server_with_config;
 
-pub use params::{CacheWarmParams, DetectMimeTypeParams, ExtractBatchParams, ExtractParams};
+pub use params::{CacheWarmParams, DetectMimeTypeParams, ExtractBatchParams, ExtractParams, RagQueryParams};

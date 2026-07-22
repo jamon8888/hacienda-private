@@ -88,6 +88,34 @@ pub struct CacheStatsOutput {
     pub available_space_mb: f64,
 }
 
+/// One retrieved chunk in a `rag_query` result.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct RagHit {
+    /// Document the chunk came from.
+    pub doc_id: String,
+    /// Zero-based position of the chunk within its document.
+    pub chunk_index: u32,
+    /// Chunk text.
+    pub text: String,
+    /// Similarity score; higher is closer.
+    pub score: f32,
+    /// Stable citation handle, typically `<doc_id>:<chunk_index>`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub citation: Option<String>,
+    /// Source page, when the document had pagination.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub page: Option<u32>,
+}
+
+/// Structured output for `rag_query`.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct RagQueryOutput {
+    /// Matter that was searched.
+    pub matter_id: String,
+    /// Hits, most similar first.
+    pub hits: Vec<RagHit>,
+}
+
 /// Structured output for the model manifest.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct CacheManifestOutput {
