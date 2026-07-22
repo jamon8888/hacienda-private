@@ -1119,8 +1119,9 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 - Create: `crates/xberg-cli/tests/rag_test.rs`
 
 **Interfaces:**
-- Consumes: `xberg::XbergEmbedder` (Task 5), `xberg_rag::{RagEngine, DocumentInput, ChunkInput, default_mirrors_dir}` (Tasks 2 & 4), `xberg::chunking::chunk_for_rag`.
+- Consumes: `xberg::XbergEmbedder` (Task 5), `xberg_rag::{RagEngine, DocumentInput, ChunkInput, MockEmbedder, default_mirrors_dir}` (Tasks 1, 2 & 4), `xberg::chunking::chunk_for_rag`.
 - Produces: `pub fn rag_index_command(...)`, `pub fn rag_query_command(...)`, `pub fn rag_import_legacy_command(...)`, and the `Commands::Rag { .. }` clap variant with a `RagAction` subcommand enum.
+- Note: `RagEngine<E>::{index_documents, query, import_legacy}` return `xberg_rag::Result<T>` (error type `RagError`, which derives `thiserror::Error`). `anyhow::Result`'s `?` converts any `std::error::Error + Send + Sync + 'static` automatically, so these calls use plain `?` — no `.map_err(anyhow::Error::from)` needed.
 
 **Why a CLI before the MCP tool:** it makes the whole native path testable end-to-end from a shell, in the codebase's existing integration-test style (`crates/xberg-cli/tests/commands_test.rs` spawns `target/debug/xberg`), without an MCP client in the loop. Task 7's MCP tool then binds an already-proven engine.
 
@@ -1221,7 +1222,7 @@ use anyhow::{Context, Result, bail};
 use std::path::{Path, PathBuf};
 use xberg::chunking::chunk_for_rag;
 use xberg::core::config::ChunkingConfig;
-use xberg_rag::{ChunkInput, DocumentInput, Embedder, RagEngine, default_mirrors_dir};
+use xberg_rag::{ChunkInput, DocumentInput, RagEngine, default_mirrors_dir};
 
 /// Which embedding backend the command should use.
 ///
@@ -1290,49 +1291,19 @@ fn collect_documents(input: &Path, chunk_size: usize) -> Result<Vec<DocumentInpu
     Ok(docs)
 }
 
-/// Run `f` with an engine built for `kind`. Both engine types are concrete, so
-/// this generic closure avoids boxing the embedder.
-fn with_engine<T>(
-    kind: EmbedderKind,
-    preset: &str,
-    mirrors_dir: PathBuf,
-    f: impl FnOnce(&dyn EngineOps) -> Result<T>,
-) -> Result<T> {
-    match kind {
-        EmbedderKind::Mock => {
-            let engine = RagEngine::new(xberg_rag::MockEmbedder::new(64), mirrors_dir);
-            f(&engine)
-        }
-        EmbedderKind::Preset => {
-            let embedder =
-                xberg::XbergEmbedder::from_preset(preset).with_context(|| format!("embedding preset {preset:?}"))?;
-            let engine = RagEngine::new(embedder, mirrors_dir);
-            f(&engine)
-        }
-    }
-}
-
-/// Object-safe slice of `RagEngine` used by [`with_engine`] so both embedder
-/// choices share one command body.
-pub trait EngineOps {
-    fn index(&self, matter: &str, docs: &[DocumentInput]) -> xberg_rag::Result<usize>;
-    fn search(&self, matter: &str, text: &str, top_k: usize) -> xberg_rag::Result<Vec<xberg_rag::RetrievedChunk>>;
-    fn import(&self, matter: &str) -> xberg_rag::Result<usize>;
-}
-
-impl<E: Embedder> EngineOps for RagEngine<E> {
-    fn index(&self, matter: &str, docs: &[DocumentInput]) -> xberg_rag::Result<usize> {
-        self.index_documents(matter, docs)
-    }
-    fn search(&self, matter: &str, text: &str, top_k: usize) -> xberg_rag::Result<Vec<xberg_rag::RetrievedChunk>> {
-        self.query(matter, text, top_k)
-    }
-    fn import(&self, matter: &str) -> xberg_rag::Result<usize> {
-        self.import_legacy(matter)
-    }
+/// Resolve `--embedder preset` into a real model-backed embedder. Shared by
+/// all three commands so the "load the preset" error path only exists once.
+fn preset_embedder(preset: &str) -> Result<xberg::XbergEmbedder> {
+    xberg::XbergEmbedder::from_preset(preset).with_context(|| format!("embedding preset {preset:?}"))
 }
 
 /// `xberg rag index` — chunk, embed, and index every text file under `input`.
+///
+/// There is no generic `with_engine` helper here on purpose: `RagEngine<E>` is
+/// generic over `Embedder`, so a helper shared across the `mock`/`preset` arms
+/// would need either a boxed `dyn` embedder or a `for<E>` closure (not
+/// expressible in stable Rust) — machinery only worth it with far more than
+/// three call sites. Each command matches on `embedder` directly instead.
 pub fn rag_index_command(
     matter: &str,
     input: &Path,
@@ -1348,9 +1319,14 @@ pub fn rag_index_command(
     if docs.is_empty() {
         bail!("no indexable text files found under {}", input.display());
     }
-    let total = with_engine(embedder, preset, mirrors_root(mirrors_dir), |e| {
-        e.index(matter, &docs).map_err(anyhow::Error::from)
-    })?;
+    let mirrors_dir = mirrors_root(mirrors_dir);
+
+    let total = match embedder {
+        EmbedderKind::Mock => {
+            RagEngine::new(xberg_rag::MockEmbedder::new(64), mirrors_dir).index_documents(matter, &docs)?
+        }
+        EmbedderKind::Preset => RagEngine::new(preset_embedder(preset)?, mirrors_dir).index_documents(matter, &docs)?,
+    };
     println!("indexed {} document(s); matter {matter} now holds {total} chunk(s)", docs.len());
     Ok(())
 }
@@ -1365,9 +1341,12 @@ pub fn rag_query_command(
     preset: &str,
     json: bool,
 ) -> Result<()> {
-    let hits = with_engine(embedder, preset, mirrors_root(mirrors_dir), |e| {
-        e.search(matter, text, top_k).map_err(anyhow::Error::from)
-    })?;
+    let mirrors_dir = mirrors_root(mirrors_dir);
+
+    let hits = match embedder {
+        EmbedderKind::Mock => RagEngine::new(xberg_rag::MockEmbedder::new(64), mirrors_dir).query(matter, text, top_k)?,
+        EmbedderKind::Preset => RagEngine::new(preset_embedder(preset)?, mirrors_dir).query(matter, text, top_k)?,
+    };
     if json {
         println!("{}", serde_json::to_string_pretty(&hits).context("failed to serialize hits")?);
     } else if hits.is_empty() {
@@ -1387,9 +1366,12 @@ pub fn rag_import_legacy_command(
     embedder: EmbedderKind,
     preset: &str,
 ) -> Result<()> {
-    let count = with_engine(embedder, preset, mirrors_root(mirrors_dir), |e| {
-        e.import(matter).map_err(anyhow::Error::from)
-    })?;
+    let mirrors_dir = mirrors_root(mirrors_dir);
+
+    let count = match embedder {
+        EmbedderKind::Mock => RagEngine::new(xberg_rag::MockEmbedder::new(64), mirrors_dir).import_legacy(matter)?,
+        EmbedderKind::Preset => RagEngine::new(preset_embedder(preset)?, mirrors_dir).import_legacy(matter)?,
+    };
     println!("imported {count} chunk(s) from the legacy bundle for matter {matter}");
     Ok(())
 }
@@ -1958,11 +1940,11 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 **2. Placeholder scan:** No "TBD", "handle edge cases", or "similar to Task N". Every code step carries compilable code; every test step names the command and the expected result. Task 8 is documentation whose content is enumerated point-by-point rather than left to judgement. Task 7 Step 4 is a manual check with a stated expected observation and an instruction to record deviations.
 
 **3. Type consistency:**
-- `Embedder::{dim, embed_documents, embed_query}` — defined Task 1, implemented by `MockEmbedder` (Task 1) and `XbergEmbedder` (Task 5), consumed by `RagEngine` (Task 4) and `EngineOps` (Task 6). Identical spelling throughout.
+- `Embedder::{dim, embed_documents, embed_query}` — defined Task 1, implemented by `MockEmbedder` (Task 1) and `XbergEmbedder` (Task 5), consumed by `RagEngine`'s `E: Embedder` bound (Task 4). Task 6's CLI commands construct concrete `RagEngine<MockEmbedder>` / `RagEngine<XbergEmbedder>` values directly per `match` arm rather than through a trait-object bridge — simpler than the original draft's `EngineOps`/`with_engine` indirection for three call sites, with identical behavior. Identical spelling throughout.
 - `IndexedChunk` fields (`doc_id`, `chunk_index`, `text`, `page`, `citation`, `vector`) and `RetrievedChunk` fields (`doc_id`, `chunk_index`, `text`, `score`, `citation`, `page`) match P1 Task 2 exactly; `schema::RagHit` (Task 7) mirrors `RetrievedChunk` field-for-field.
 - `RagError` variants added across tasks — `Embed` (Task 1), `Legacy` (Task 3), `Io` + `MatterNotFound` (Task 4) — are each added once and matched on by their exact names in Tasks 4, 6, and 7.
 - `MatterPaths::{dir, snapshot, legacy_bundle}` (Task 2) used verbatim in Task 4's `paths`/`save`/`import_legacy` and Task 4's `import_legacy_rebuilds_a_searchable_snapshot` test.
-- `RagEngine::{index_documents, query, import_legacy}` (Task 4) are the exact names bridged by `EngineOps::{index, search, import}` (Task 6) and called by `mcp::rag::query` (Task 7).
+- `RagEngine::{index_documents, query, import_legacy}` (Task 4) are called by their exact names directly in Task 6's three CLI command functions and by `mcp::rag::query` (Task 7) — no intermediate trait renames them.
 - `EmbedderKind::{Preset, Mock}` (Task 6) is re-exported from `commands` and referenced as `commands::EmbedderKind` in `main.rs` — same path in both places.
 
 **One item flagged for the executor:** Task 5 gives the `xberg-rag` dependency twice — once as an inline `path` form and once as the workspace form it then tells you to use instead. Use the **workspace form** (`xberg-rag = { workspace = true }`) with the entry added to the root `[workspace.dependencies]`; the inline form is shown only to make the version/path explicit. This is stated in the task and is not a defect.
