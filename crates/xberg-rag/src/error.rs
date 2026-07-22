@@ -15,6 +15,10 @@ pub enum RagError {
     Embed(String),
     #[error("legacy mirror bundle: {0}")]
     Legacy(String),
+    #[error("io: {0}")]
+    Io(String),
+    #[error("no indexed data for matter {0}")]
+    MatterNotFound(String),
 }
 
 /// Convenience alias for fallible RAG operations.
