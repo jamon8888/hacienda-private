@@ -41,6 +41,13 @@ function dbName(matterId: string): string {
 // earlier append in this same page session.
 const liveIndexes = new Map<string, EdgeVec>();
 
+// Call after a matter is successfully forgotten/deleted server-side — otherwise its vectors stay
+// resident in this cache (and therefore in the tab's memory) until the page reloads, even though
+// the user asked for the matter's data to be gone.
+export function evictLiveIndex(matterId: string): void {
+  liveIndexes.delete(matterId);
+}
+
 export async function buildIndex(matterId: string, items: IndexedChunk[]): Promise<EdgeVec> {
   await ensureEdgeVec();
   const config = new EdgeVecConfig(EMBED_DIM);

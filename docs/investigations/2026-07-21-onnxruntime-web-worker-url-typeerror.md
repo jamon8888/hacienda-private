@@ -28,7 +28,7 @@ With the onnxruntime crash fixed, ingestion now reaches the GLiNER PII-detection
 (`packages/wasm-pipeline/src/ner.ts` `detectPii` → `getModel` → gliner `model.initialize()` /
 `inference()`). The document then errors with:
 
-```
+```text
 failed to load external data file: http://127.0.0.1:8799/models/gliner-pii.int8.onnx
 ```
 
@@ -114,7 +114,7 @@ Original (pre-disproof) external-data notes, kept for the record:
 Every browser document ingest fails. The UI shows a generic "Failed to ingest"; the
 document row's `error_message` is:
 
-```
+```text
 e.replace is not a function
 ```
 
@@ -289,10 +289,12 @@ depends on `^1.24.2` and resolves `1.27.0`; gliner drags in `1.19.2` (its self-w
 also appeared in the built graph). A dependency-dedup or a version bump is a separate lever
 worth considering if the parser fix proves fragile, but it is NOT the root cause.
 
-## Status of the working tree (superseded — see final resolution below)
+## Historical note: probe attempts along the way (superseded — see final resolution below)
 
-Both probe edits (`next.config.mjs` conditionNames, `FolderView.tsx` debug logging) were
-**reverted** — `git status` is clean on `main` state on this branch. No fix committed yet.
+Two probe edits tried before landing on the `parser: { url: false }` fix (`next.config.mjs`
+`conditionNames`, and a temporary `FolderView.tsx` debug-logging line) were reverted before
+that fix was committed. Both are long since superseded: the actual fix is committed in PR #27
+(merged), and the downstream work is committed in PR #29 — see "Final resolution" below.
 
 ---
 
@@ -341,7 +343,7 @@ reused for both `appendIndex` and `mergeIntoAccumulator`), so it passes that in 
 With Bug 3 fixed, the *second* document into any matter (`hasExistingIndex: true`, so `load()`
 now actually executes) failed fast with:
 
-```
+```text
 corrupted data: Deserialization failed: This is a feature that PostCard will never implement
 ```
 

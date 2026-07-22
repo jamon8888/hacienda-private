@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import type { Folder, Matter } from "@xberg-io/core";
-import { listPiiTypes } from "@xberg-io/wasm-pipeline-real";
+import { listPiiTypes, evictLiveIndex } from "@xberg-io/wasm-pipeline-real";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useAuth } from "@/lib/auth";
@@ -76,6 +76,7 @@ export default function MatterView({ id: propId }: MatterViewProps) {
 				await Promise.all(folders.map((f) => getFolderDocuments(auth.token, f.id)))
 			).flat().map((d) => d.id);
 			await forgetMatter(auth.token, matterId);
+			evictLiveIndex(matterId);
 			await deleteOriginalFiles(docIds);
 			await deleteMatterTemplate(matterId);
 			setForgetOpen(false);
