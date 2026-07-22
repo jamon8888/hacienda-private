@@ -3,6 +3,7 @@
 **Date:** 2026-07-21
 **Status:** Draft (pending user review of this document)
 **Depends on / extends:**
+
 - `docs/superpowers/specs/2026-07-20-edgevec-pipeline-perf-design.md` (SearchStore abstraction; this spec **changes** its "Node MCP server stays" decision)
 - `docs/superpowers/specs/2026-07-18-mcp-folder-ingest-design.md` (node-pipeline ingest path this spec absorbs)
 - `docs/superpowers/specs/2026-07-18-mcp-local-auth-solo-design.md` (single-owner auth boundary — preserved verbatim)
@@ -137,7 +138,7 @@ Alternatives rejected:
 
 ## Section 1 — Crate & module topology
 
-```
+```text
 crates/
 ├─ xberg/            (unchanged: extraction, ocr, chunking, embeddings, reranking, …)
 ├─ xberg-rag/        NEW — the isomorphic core
@@ -205,7 +206,8 @@ modèles sans retélécharger" from this session, now structural.
 
 Replace the JSON `MirrorBundle` (`index: number[]`, `vault: number[]`) with the
 `snapshot.rs` format: `[magic|version|rkyv(SearchStore snapshot)]` for the index+vectors
-+ vault bytes, and a small `serde` sidecar for PII token spans / cited chunks that HTTP
+
+- vault bytes, and a small `serde` sidecar for PII token spans / cited chunks that HTTP
 clients read without touching the index. Keep a **compatibility reader** for the legacy
 JSON bundle through the transition (parse old, write new), so existing on-disk mirrors
 still load. Atomic staged-write + audited-save semantics
@@ -267,7 +269,7 @@ assertions:
   browser rewrite). **Mitigation:** ship as **phased implementation plans**, each
   independently green: (P1) `xberg-rag` extraction + SearchStore; (P2) native store +
   snapshot + real `rag_query` behind a flag; (P3) wire-format migration; (P4) MCP-tool
-  + host collapse; (P5) browser host swap + TS deletion. Each phase keeps the app
+  - host collapse; (P5) browser host swap + TS deletion. Each phase keeps the app
   working (the e2e suite must stay green between phases).
 - **R6 — Supersedes a prior decision.** The perf spec said "Node MCP server stays
   `better-sqlite3` + EdgeVec bytes mirror." This spec consciously reverses that once the
@@ -277,7 +279,10 @@ assertions:
   **not yet compiled or tested by a compiler** — see
   `docs/superpowers/notes/2026-07-21-p2-native-rag-status.md` for the full status and the
   outstanding `cargo build`/`cargo test` precondition. The Node host is untouched and remains
-  the deployed one until that verification runs and the branch merges.
+  the deployed one until that verification runs and the branch merges. The embedding-model/
+  dimension incompatibility this status note's §3 documents (tracked as GitHub issue #30, out
+  of scope for this spec per its own Non-goals) now has a dedicated design:
+  `docs/superpowers/specs/2026-07-22-shared-embedding-backend-design.md`.
 
 ## Out of scope (explicit)
 

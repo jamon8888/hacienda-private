@@ -25,9 +25,11 @@ Two entry points, both wired to `RagEngine::{index_documents, query, import_lega
   gated at runtime via `ToolRouter::with_disabled` rather than a cargo feature, because rmcp
   2.2.0's `tool_router` macro emits routes without propagating `#[cfg]` (a gated `#[tool]`
   method fails to compile). To try it:
-  ```
+
+  ```text
   XBERG_RAG_ENABLED=1 xberg mcp
   ```
+
   then call `rag_query` with `{ "matter_id": "...", "query": "...", "top_k": 8 }` over the MCP
   stdio/http transport. The embedding preset used server-side is controlled by
   `XBERG_RAG_PRESET` (default `lightweight`, `preset_name()` at rag.rs:32-34).
@@ -68,16 +70,21 @@ pipeline and one produced by the native `lightweight` preset are not comparable,
 P2 attempted to make them comparable. This was a known, accepted limitation going into this
 phase (not a regression introduced by it), and reconciling the two — either by moving the
 browser onto the same model family/dimension as the native host, or by defining an explicit
-migration/re-embedding step — is P3's job (wire-format migration), not P2b's.
+migration/re-embedding step — is P3's job (wire-format migration), not P2b's. Tracked as GitHub
+issue #30. The reconciliation design (candle-based shared backend, BGE-M3, strict per-host
+identity) is now written up separately:
+`docs/superpowers/specs/2026-07-22-shared-embedding-backend-design.md`.
 
 ## 4. Node host status
 
 Unchanged. `services/mcp-server` is still the deployed host; nothing in this phase touched it.
 Confirmed directly:
-```
+
+```text
 $ git diff --stat main -- services/mcp-server
 (no output)
 ```
+
 Zero files changed under `services/mcp-server` across the entire `feat/isomorphic-rag-core`
 branch relative to `main`. The Rust-native `rag_query` tool built in Task 7 lives only in
 `crates/xberg` (the `xberg-cli`/`xberg` MCP host); the browser/Node host referenced by spec R6
@@ -97,6 +104,7 @@ shape.
 `docs/superpowers/notes/2026-07-21-edgevec-native-spike.md`) — was **never executed** in this
 branch. It was skipped by an earlier session decision, for two reasons found at the time, not
 guessed at now:
+
 1. The plan's original R1 premise about the crates.io-published `edgevec` 0.9.0 was
    independently found to be stale.
 2. A worse problem surfaced: `edgevec` carries an **unconditional** `wasm-bindgen` dependency,
