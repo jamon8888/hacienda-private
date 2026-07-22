@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { createReadStream, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { chmodSync } from "node:fs";
 import { dirname } from "node:path";
 import type { ModelManifest, ModelManifestEntry } from "@xberg-io/core";
@@ -20,6 +20,12 @@ function sha256File(path: string): Promise<string> {
 export class ModelCache {
   private readonly manifest: ModelManifest;
   private readonly manifestByFile: Map<string, ModelManifestEntry>;
+  // Records the `${mtimeMs}:${size}` of each cached model file at the moment its SHA256 was last
+  // verified against the manifest. ensureModel() re-hashes only when this stamp no longer matches,
+  // so serving a 300–800 MB model doesn't re-read+hash the whole file on every single request
+  // (which serialized on the single Node event loop and looked like a multi-minute hang). Any
+  // tampering changes the file's size or mtime, forcing a fresh hash — the integrity guarantee holds.
+  private readonly verified = new Map<string, string>();
 
   constructor(
     private readonly modelCacheDir: string,
@@ -72,8 +78,14 @@ export class ModelCache {
 
     const cachePath = `${this.modelCacheDir}/${entry.file}`;
     if (existsSync(cachePath)) {
+      const stamp = this.fileStamp(cachePath);
+      // Already integrity-verified this exact file (unchanged mtime+size) — skip the full re-hash.
+      if (this.verified.get(cachePath) === stamp) {
+        return cachePath;
+      }
       const existing = await sha256File(cachePath);
       if (existing === entry.sha256) {
+        this.verified.set(cachePath, stamp);
         return cachePath;
       }
       throw new AppError("model", `cached model '${name}' SHA256 mismatch — refusing to serve`);
@@ -84,7 +96,13 @@ export class ModelCache {
     if (actual !== entry.sha256) {
       throw new AppError("model", `downloaded model '${name}' SHA256 mismatch — refusing to serve`);
     }
+    this.verified.set(downloaded, this.fileStamp(downloaded));
     return downloaded;
+  }
+
+  private fileStamp(path: string): string {
+    const st = statSync(path);
+    return `${st.mtimeMs}:${st.size}`;
   }
 
   private async download(entry: ModelManifestEntry, cachePath: string): Promise<string> {

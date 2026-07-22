@@ -1,11 +1,16 @@
 # Investigation: `e.replace is not a function` on browser ingest (onnxruntime-web + webpack)
 
-**Date:** 2026-07-21
-**Status:** onnxruntime crash **FIXED & VERIFIED** via `parser: { url: false }` (probe #3).
-A **separate, newly-surfaced** downstream blocker remains at the GLiNER PII stage (see
-"Downstream blocker" section) — the onnxruntime fix is correct and self-contained regardless.
-**Branch:** `fix/onnxruntime-embed-typeerror` (fix applied to `next.config.mjs`, not yet committed;
-a temporary `DEBUG_STACK_V3` console.error in FolderView.tsx must be reverted before commit).
+**Date:** 2026-07-21 to 2026-07-22
+**Status:** ✅ **RESOLVED end-to-end.** Full Playwright critical-path e2e passes
+(`1 passed`, ~53–57s): upload → PII masked → second file uploaded into the same
+matter (additive path) → both documents independently verified redacted → PII
+reveal with passphrase → forget matter. Every bug found across this investigation
+and the follow-on issue #28 (model-server blocking, `appendIndex` hang, edgevec
+`load()` corruption) is fixed or worked around; see the sections below in
+chronological order for the full trail.
+**Branches:** `fix/onnxruntime-embed-typeerror` (merged, PR #27) for the onnxruntime
+fix; `fix/gliner-model-serving` for everything in the "Downstream blocker" and
+"appendIndex" sections below.
 
 ## FIX (verified)
 
@@ -23,7 +28,7 @@ With the onnxruntime crash fixed, ingestion now reaches the GLiNER PII-detection
 (`packages/wasm-pipeline/src/ner.ts` `detectPii` → `getModel` → gliner `model.initialize()` /
 `inference()`). The document then errors with:
 
-```
+```text
 failed to load external data file: http://127.0.0.1:8799/models/gliner-pii.int8.onnx
 ```
 
@@ -109,7 +114,7 @@ Original (pre-disproof) external-data notes, kept for the record:
 Every browser document ingest fails. The UI shows a generic "Failed to ingest"; the
 document row's `error_message` is:
 
-```
+```text
 e.replace is not a function
 ```
 
@@ -284,7 +289,126 @@ depends on `^1.24.2` and resolves `1.27.0`; gliner drags in `1.19.2` (its self-w
 also appeared in the built graph). A dependency-dedup or a version bump is a separate lever
 worth considering if the parser fix proves fragile, but it is NOT the root cause.
 
-## Status of the working tree
+## Historical note: probe attempts along the way (superseded — see final resolution below)
 
-Both probe edits (`next.config.mjs` conditionNames, `FolderView.tsx` debug logging) were
-**reverted** — `git status` is clean on `main` state on this branch. No fix committed yet.
+Two probe edits tried before landing on the `parser: { url: false }` fix (`next.config.mjs`
+`conditionNames`, and a temporary `FolderView.tsx` debug-logging line) were reverted before
+that fix was committed. Both are long since superseded: the actual fix is committed in PR #27
+(merged), and the downstream work is committed in PR #29 — see "Final resolution" below.
+
+---
+
+# Final resolution (branch `fix/gliner-model-serving`, 2026-07-22)
+
+Picking up from the GLiNER blocker above, three MORE bugs were found in sequence, each
+masking the next until fixed. All are now resolved or worked around; the full critical-path
+e2e passes.
+
+## Bug 2: mcp-server blocks its single Node event loop serving giant models
+
+`services/mcp-server/src/index.ts` `serveFile()` did `res.end(readFileSync(filePath))` —
+reading a 200–800 MB model FULLY into memory synchronously before responding. `models.ts`
+`ensureModel()` additionally re-computed a SHA256 of the entire cached model on **every**
+request (`sha256File`), even though the file hadn't changed since the last request. Under
+back-to-back giant-model requests (e5 278 MB / 823 MB, gliner-pii 183 MB / 463 MB) these
+serialize on the single event loop and can look exactly like a multi-minute hang from the
+browser's side — which is exactly how the GLiNER blocker above first presented.
+
+**Fix:**
+- `serveFile` now streams via `createReadStream(filePath).pipe(res)` instead of `readFileSync`.
+- `ensureModel` now caches `` `${mtimeMs}:${size}` `` per cached model path after a successful
+  SHA256 verification, and skips re-hashing on subsequent requests for the same unchanged file
+  (any tampering changes size or mtime, forcing a fresh hash — the integrity guarantee holds).
+
+Verified: with this fix alone, GLiNER's `initialize()` + `inference()` completed successfully
+in-browser for the first time (previously silently stuck at "Processing…" indefinitely).
+
+## Bug 3: `appendIndex` hangs forever on the first document of every matter
+
+Already described above for the onnxruntime crash's era, but this is where it actually bit:
+once Bug 2 was fixed, ingestion reached `packages/wasm-pipeline/src/rag.ts`'s `appendIndex()`,
+which probed for an existing index by `try { EdgeVec.load(name) } catch { create fresh }`.
+**`EdgeVec.load()` does not reject when no index has been saved for `name` — its Promise never
+settles at all.** So the very first document ever ingested into any matter hung forever at this
+line, silently, no error, indistinguishable from Bug 2's symptom without step-by-step logging.
+
+**Fix:** `appendIndex(matterId, items, hasExistingIndex)` now takes an explicit boolean instead
+of probing. The caller (`apps/web/lib/engine/adapter.ts`) already knows whether a prior ingest
+persisted this matter (via the mirror accumulator's presence in `idb-keyval`, fetched once and
+reused for both `appendIndex` and `mergeIntoAccumulator`), so it passes that in directly —
+`load()` is only ever called when the caller is certain a saved index exists.
+
+## Bug 4: `EdgeVec.load()` cannot deserialize what `EdgeVec.save()` writes (edgevec@0.9.0)
+
+With Bug 3 fixed, the *second* document into any matter (`hasExistingIndex: true`, so `load()`
+now actually executes) failed fast with:
+
+```text
+corrupted data: Deserialization failed: This is a feature that PostCard will never implement
+```
+
+Investigated thoroughly before treating this as unfixable-in-app-code:
+- Ruled out **metadata value types**: reproduced identically with the exact mixed
+  string/number metadata (`doc_id`, `chunk_index`, `text`, ...), with ALL-STRING metadata
+  (every value coerced via `String(...)`), and with **zero metadata at all** (bare
+  `db.insert(vector)`, no `insertWithMetadata`). Same error every time — not a metadata-shape
+  issue on our side.
+- The error string is from Rust's `postcard` crate (`serde`-based binary format used by
+  edgevec's WASM core for `save()`/`load()`). "This is a feature that PostCard will never
+  implement" is postcard's own message for hitting `Deserializer::deserialize_any` /
+  self-describing-format requirements it structurally cannot support — i.e. this is a genuine
+  round-trip bug in edgevec 0.9.0's persistence layer, not something wrong with how this repo
+  calls its API (confirmed `insertWithMetadata`'s usage matches the documented API exactly).
+- `EdgeVec.save()` itself always succeeds (data reaches IndexedDB — verified the store/key
+  exist with `indexedDB.open("EdgeVecDB")`), and the SAME saved bytes fail to `load()` even
+  moments later in the identical browser session/wasm instance — ruling out cross-version or
+  cross-session skew.
+
+**Workaround (not an upstream fix — that would need an edgevec version bump/patch):**
+`rag.ts` now keeps a module-level `Map<matterId, EdgeVec>` (`liveIndexes`) of resident index
+instances. `appendIndex` checks this cache BEFORE ever touching disk; `EdgeVec.load()` is only
+attempted when the cache is empty for that matter (i.e., first access since a page
+load/reload). This fully covers the scenario `mirror-merge` (PR #24) originally set out to
+fix — several files dropped into the same folder in one sitting, all within one page session —
+since none of those uploads ever need to round-trip through the broken `save()`+`load()` cycle;
+the live Rust/WASM object is simply reused and re-saved after each append. **Caveat, clearly
+documented in code:** resuming an append to a matter's index *after a page reload* still goes
+through the broken `load()` and will fail — the matter's on-disk index remains correct and
+current (every `appendIndex` call ends with `save()`), it just cannot be loaded back into a
+live instance in a fresh page session. This is a known residual limitation, not silently
+swept under the rug — worth revisiting if/when edgevec ships a version without this bug.
+
+## Bug 5 (test-only): ambiguous Playwright locator, never previously exercised
+
+Once bugs 2–4 were fixed and the two-file e2e path actually ran end-to-end for the first
+time ever, it failed immediately on a **pre-existing latent bug in the test itself** (written
+during the original mirror-merge PR #24, but never actually executed until now — every prior
+run crashed earlier in the pipeline before reaching this line): `page.getByText(/contract-note-2\.csv/)`
+was unscoped and matched 3 DOM elements simultaneously (the FileDropzone's own upload preview
+row, the transient upload-progress row, and the final "Ingested documents" card) — a
+Playwright strict-mode violation, not a functional failure. Fixed by scoping the assertion to
+the "Ingested documents" list container specifically (`content.locator("div.mt-6.grid.gap-3")`).
+
+## Verification (this final round)
+
+- `pnpm --filter @xberg-io/wasm-pipeline typecheck` + `test` — 32/32 pass
+- `pnpm --filter mcp-server typecheck` + `test` — 85/85 pass
+- `pnpm --filter web typecheck` + `test` — 18/18 pass
+- `pnpm run build` (apps/web) — clean
+- Manual in-browser two-file test: both `status: "done"`, cumulative mirror accumulator
+  confirmed via IndexedDB inspection to hold both documents' PII (5 = 3+2) and chunks (2),
+  keyed by both distinct doc IDs — the exact guarantee PR #24 needed.
+- **Full Playwright e2e (`apps/web/e2e/critical-path.spec.ts`): `1 passed` (~53–57s).**
+
+## Files changed (this final round)
+
+- `services/mcp-server/src/index.ts` — `serveFile` streams instead of `readFileSync`.
+- `services/mcp-server/src/models.ts` — `ensureModel` caches the mtime+size stamp of the last
+  verified hash per cached model path, skipping redundant re-hashing.
+- `packages/wasm-pipeline/src/rag.ts` — `appendIndex` takes `hasExistingIndex: boolean`
+  instead of probing via a `load()` try/catch; added the `liveIndexes` in-memory cache.
+- `apps/web/lib/engine/adapter.ts` — hoists the matter-accumulator fetch above `appendIndex`
+  so its presence can be passed through as `hasExistingIndex` (and reused, unchanged, for
+  `mergeIntoAccumulator` below it — no behavior change there).
+- `apps/web/e2e/critical-path.spec.ts` — scopes the second-file-visible assertion to the
+  "Ingested documents" list to fix the strict-mode violation (Bug 5).

@@ -55,8 +55,13 @@ test("upload -> PII masked -> passphrase reveal -> forget", async ({ page }) => 
 
 	// Upload a second file into the SAME folder — the mirror must merge into the matter's
 	// cumulative state, not overwrite it (regression coverage for the multi-file upload bug).
+	// Scoped to the "Ingested documents" list specifically — the filename also renders in the
+	// FileDropzone's own upload preview and the transient upload-progress row, all within the same
+	// <main>, so an unscoped getByText() is ambiguous (Playwright strict-mode violation) as soon
+	// as the doc reaches this final list.
+	const ingestedDocs = content.locator("div.mt-6.grid.gap-3");
 	await page.locator('input[type="file"]').setInputFiles(FIXTURE_2);
-	await expect(page.getByText(/contract-note-2\.csv/)).toBeVisible({ timeout: 5 * 60_000 });
+	await expect(ingestedDocs.getByText(/contract-note-2\.csv/)).toBeVisible({ timeout: 5 * 60_000 });
 	await expect(page.getByText("Processing…")).not.toBeVisible();
 
 	// The redacted text (visible in the dual-pane view once we open the document) must never
