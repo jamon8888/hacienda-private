@@ -5,7 +5,12 @@ use rkyv::rancor::Error as RkyvError;
 const SNAPSHOT_MAGIC: [u8; 4] = *b"XRAG";
 /// On-disk snapshot format version. Bump on any layout change.
 pub const SNAPSHOT_VERSION: u16 = 1;
-const HEADER_LEN: usize = 6; // 4 magic + 2 version
+// 4 magic + 2 version + 10 reserved (zeroed) bytes. The reserved bytes pad
+// the header to a 16-byte boundary so the rkyv-archived body that follows
+// always starts 16-byte aligned. That keeps a future zero-copy `mmap` read
+// of the archive possible (no realignment copy needed on that path) and
+// leaves room for future format flags without another layout change.
+const HEADER_LEN: usize = 16;
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 struct SnapshotBody {
@@ -20,6 +25,7 @@ pub(crate) fn encode(dim: usize, chunks: &[IndexedChunk]) -> Result<Vec<u8>> {
     let mut out = Vec::with_capacity(HEADER_LEN + archived.len());
     out.extend_from_slice(&SNAPSHOT_MAGIC);
     out.extend_from_slice(&SNAPSHOT_VERSION.to_le_bytes());
+    out.extend_from_slice(&[0u8; HEADER_LEN - 6]); // reserved, must stay zero for now
     out.extend_from_slice(&archived);
     Ok(out)
 }
@@ -35,11 +41,14 @@ pub(crate) fn decode(bytes: &[u8]) -> Result<(usize, Vec<IndexedChunk>)> {
     if version != SNAPSHOT_VERSION {
         return Err(RagError::UnsupportedVersion(version));
     }
+    // Bytes [6..HEADER_LEN] are reserved for future flags and are not
+    // validated here: a future writer may set them, and this reader must
+    // not reject a snapshot just because they're non-zero.
     // The archived payload requires proper alignment for its root pointer,
     // but `bytes[HEADER_LEN..]` inherits whatever alignment the caller's
-    // buffer happened to have at offset `HEADER_LEN` (usually none, since
-    // the header is 6 bytes). Copy into a freshly-allocated aligned buffer
-    // before validating/deserializing.
+    // buffer happened to have at offset `HEADER_LEN`, which is not
+    // guaranteed by a plain `&[u8]`. Copy into a freshly-allocated aligned
+    // buffer before validating/deserializing.
     let mut aligned = rkyv::util::AlignedVec::<16>::new();
     aligned.extend_from_slice(&bytes[HEADER_LEN..]);
     let body: SnapshotBody = rkyv::from_bytes::<SnapshotBody, RkyvError>(&aligned)
@@ -83,5 +92,17 @@ mod tests {
     #[test]
     fn decode_rejects_short_input() {
         assert!(matches!(FlatStore::load(&[1, 2]).unwrap_err(), RagError::SnapshotTooShort(2)));
+    }
+
+    #[test]
+    fn body_starts_16_byte_aligned_for_future_zero_copy_mmap() {
+        use super::{HEADER_LEN, SNAPSHOT_VERSION};
+
+        assert_eq!(HEADER_LEN % 16, 0, "archive must begin on a 16-byte boundary");
+        let bytes = store_with_two().snapshot().unwrap();
+        assert!(bytes.len() > HEADER_LEN);
+        assert_eq!(&bytes[0..4], b"XRAG");
+        assert_eq!(u16::from_le_bytes([bytes[4], bytes[5]]), SNAPSHOT_VERSION);
+        assert!(bytes[6..HEADER_LEN].iter().all(|b| *b == 0), "reserved bytes must be zero");
     }
 }
