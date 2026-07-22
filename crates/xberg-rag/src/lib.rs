@@ -3,6 +3,7 @@
 mod embed;
 mod error;
 mod flat;
+mod paths;
 mod snapshot;
 mod store;
 #[cfg(feature = "testing")]
@@ -12,6 +13,7 @@ mod types;
 pub use embed::Embedder;
 pub use error::{RagError, Result};
 pub use flat::FlatStore;
+pub use paths::{default_mirrors_dir, encode_uri_component, MatterPaths};
 pub use snapshot::SNAPSHOT_VERSION;
 pub use store::SearchStore;
 #[cfg(feature = "testing")]
