@@ -13,6 +13,8 @@ pub enum RagError {
     Snapshot(String),
     #[error("embedding failed: {0}")]
     Embed(String),
+    #[error("legacy mirror bundle: {0}")]
+    Legacy(String),
 }
 
 /// Convenience alias for fallible RAG operations.

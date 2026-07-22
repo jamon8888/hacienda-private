@@ -11,12 +11,12 @@ homepage.workspace = true
 
 [dependencies]
 serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 rkyv = { workspace = true }
 edgevec = { workspace = true, optional = true }
 
 [dev-dependencies]
-serde_json = { workspace = true }
 tempfile = { workspace = true }
 
 [features]
