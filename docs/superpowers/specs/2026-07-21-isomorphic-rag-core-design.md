@@ -271,7 +271,13 @@ assertions:
   working (the e2e suite must stay green between phases).
 - **R6 — Supersedes a prior decision.** The perf spec said "Node MCP server stays
   `better-sqlite3` + EdgeVec bytes mirror." This spec consciously reverses that once the
-  native store lands; until P2 is green, the Node host remains the deployed one.
+  native store lands; until P2 is green, the Node host remains the deployed one. **Status
+  (2026-07-22):** P2's native store, `RagEngine`, the `xberg rag` CLI, and the default-off
+  `rag_query` MCP tool are implemented and code-reviewed on `feat/isomorphic-rag-core`, but
+  **not yet compiled or tested by a compiler** — see
+  `docs/superpowers/notes/2026-07-21-p2-native-rag-status.md` for the full status and the
+  outstanding `cargo build`/`cargo test` precondition. The Node host is untouched and remains
+  the deployed one until that verification runs and the branch merges.
 
 ## Out of scope (explicit)
 
