@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { basename, dirname, extname, join, normalize, resolve as resolvePath } from "node:path";
@@ -130,8 +130,21 @@ function serveFile(res: ServerResponse, filePath: string): void {
 		return;
 	}
 	const ct = CONTENT_TYPES[extname(filePath)] ?? "application/octet-stream";
-	res.writeHead(200, { "content-type": ct, ...ISOLATION_HEADERS });
-	res.end(readFileSync(filePath));
+	// Stream rather than readFileSync: model files are 200–800 MB, and reading one fully into a
+	// Buffer synchronously blocked the single Node event loop for the whole read (plus held the
+	// entire model in memory), serializing every other request behind it — enough back-to-back
+	// giant-model serves to look like a multi-minute stall. createReadStream().pipe() yields between
+	// chunks and streams straight to the socket.
+	const size = statSync(filePath).size;
+	res.writeHead(200, { "content-type": ct, "content-length": String(size), ...ISOLATION_HEADERS });
+	const stream = createReadStream(filePath);
+	stream.on("error", () => {
+		// Headers are already sent, so we can't switch to a 5xx — just tear the connection down so
+		// the client sees a truncated/failed transfer rather than hanging forever.
+		res.destroy();
+	});
+	res.on("close", () => stream.destroy());
+	stream.pipe(res);
 }
 
 function serveHtmlWithToken(res: ServerResponse, filePath: string, token: string, status = 200): void {

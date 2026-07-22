@@ -138,8 +138,14 @@ export async function ingestFolder(file: File, ctx: IngestContext): Promise<Inge
   }
   emit(ctx, name, name, "pii", 0.8);
 
+  // Fetch the matter accumulator up-front: its presence is the authoritative signal of whether a
+  // prior ingest already persisted this matter's EdgeVec index (index + accumulator are written
+  // together per matter). appendIndex must not probe via EdgeVec.load(), which hangs instead of
+  // rejecting when no index exists yet. Reused below for mergeIntoAccumulator (no second read).
+  const prior = await get<MatterMirrorAccumulator>(accumulatorKey(ctx.matter.id));
+
   // Additive retrieval index: augment the matter's existing EdgeVec index rather than replacing it.
-  const db = await appendIndex(ctx.matter.id, items);
+  const db = await appendIndex(ctx.matter.id, items, prior !== undefined);
   const indexBytes = await serializeIndex(db);
 
   const thisPii = mirrorPiiSpans(items, allEntries);
@@ -156,7 +162,6 @@ export async function ingestFolder(file: File, ctx: IngestContext): Promise<Inge
   // Cumulative server bundle: merge this document's tokenized pii/chunks + vault entries into the
   // matter accumulator, then push the FULL matter state (server saveMirror replaces the whole matter
   // dir, so every push must carry everything). Sequential upload (FolderView) makes this race-free.
-  const prior = await get<MatterMirrorAccumulator>(accumulatorKey(ctx.matter.id));
   const merged = await mergeIntoAccumulator(
     prior,
     { entries: allEntries, pii: thisPii, chunks: thisChunks },
