@@ -1,11 +1,11 @@
 export { initWasm, extractDocument, getWasm, firstDocument, extractText } from "./runtime";
 export type {
-	WasmExtractionConfig,
-	WasmExtractionResult,
-	WasmExtractedDocument,
-	WasmChunk,
-	WasmChunkingConfig,
-	WasmOcrConfig,
+  WasmExtractionConfig,
+  WasmExtractionResult,
+  WasmExtractedDocument,
+  WasmChunk,
+  WasmChunkingConfig,
+  WasmOcrConfig,
 } from "./runtime";
 
 export * from "./ocr";
@@ -26,13 +26,7 @@ export type { DeviceProfile } from "./capabilities";
 export { selectScenario, ModelScenarioSchema } from "./scenario";
 export type { ModelScenario } from "./scenario";
 
-export {
-	API_BASE,
-	E5_TOKENIZER_URL,
-	E5_TOKENIZER_CONFIG_URL,
-	GLINER_TOKENIZER_REPO_ID,
-	EMBED_DIM,
-} from "./constants";
+export { API_BASE, E5_TOKENIZER_URL, E5_TOKENIZER_CONFIG_URL, GLINER_TOKENIZER_REPO_ID, EMBED_DIM } from "./constants";
 
 export type { Matter, Folder, PiiEntity, RetrievedChunk, AuthScopes } from "@xberg-io/core";
 
