@@ -17,11 +17,14 @@ edgevec = { workspace = true, optional = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }
+tempfile = { workspace = true }
 
 [features]
 default = []
 # Compile-gate only in P1: proves edgevec builds for native + wasm (see examples/edgevec_smoke.rs).
 hnsw = ["dep:edgevec"]
+# Exposes MockEmbedder so downstream crates can test engine wiring without a model.
+testing = []
 
 [lints]
 workspace = true

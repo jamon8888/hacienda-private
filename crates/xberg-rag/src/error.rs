@@ -11,6 +11,8 @@ pub enum RagError {
     UnsupportedVersion(u16),
     #[error("snapshot (de)serialization failed: {0}")]
     Snapshot(String),
+    #[error("embedding failed: {0}")]
+    Embed(String),
 }
 
 /// Convenience alias for fallible RAG operations.
