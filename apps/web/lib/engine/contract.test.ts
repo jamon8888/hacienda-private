@@ -14,4 +14,7 @@ describe("engine adapter contract", () => {
   it("exposes redactDocument", () => {
     expect(typeof engine.redactDocument).toBe("function");
   });
+  it("exposes warmupModels", () => {
+    expect(typeof engine.warmupModels).toBe("function");
+  });
 });
