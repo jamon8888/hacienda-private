@@ -9,6 +9,7 @@ import {
   gliner2ArtifactPaths,
   parseGlinerChecksums,
   buildGlinerManifestEntries,
+  loadGliner2ManifestEntries,
 } from "./gliner-catalog.js";
 
 describe("gliner-catalog", () => {
@@ -68,5 +69,17 @@ describe("gliner-catalog", () => {
 
   it("throws when a declared model file has no checksum entry", () => {
     expect(() => buildGlinerManifestEntries({})).toThrow(/missing checksum/i);
+  });
+
+  it("ships the pinned GLiNER2 manifest entries for the native model cache", () => {
+    const entries = loadGliner2ManifestEntries();
+    expect(entries).toHaveLength(3);
+    expect(entries.map((entry) => entry.name)).toEqual([
+      "gliner2-base.weights",
+      "gliner2-base.tokenizer",
+      "gliner2-base.encoder-config",
+    ]);
+    expect(entries.every((entry) => entry.url.startsWith("https://huggingface.co/fastino/gliner2-base-v1/"))).toBe(true);
+    expect(entries.every((entry) => /^[a-f0-9]{64}$/.test(entry.sha256))).toBe(true);
   });
 });
