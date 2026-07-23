@@ -826,6 +826,7 @@ v_htmlescape = { version = "0.17", optional = true }
 whatlang = { version = "0.18.0", optional = true }
 xberg-gliner = { workspace = true, optional = true }
 xberg-libheif = { path = "../xberg-libheif", version = "1.0.0-rc.29", optional = true }
+xberg-rag = { workspace = true }
 # No `version` on this path-dep: xberg-tesseract carries `links =
 # "xberg_tesseract"`, and a versioned path-dep makes the maturin sdist
 # resolve two copies (path + registry) of a `links` crate, which cargo rejects

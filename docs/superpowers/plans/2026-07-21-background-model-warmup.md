@@ -6,12 +6,12 @@
 
 **Architecture:** A new `warmup.ts` orchestrator in `packages/wasm-pipeline` reuses the existing lazy-init functions in `embed.ts` (E5) and `ner.ts` (GLiNER), adding byte-progress + caching to each, plus retry-with-backoff. A module-level singleton store in `apps/web` (`warmup-store.ts`) kicks this off exactly once per tab from `AppShell`, and a `useModelWarmup()` hook lets the status pill, the search page, and the folder ingest view all read `{stage, progress, error}` without prop drilling.
 
-**Tech Stack:** TypeScript, Vitest, React 19 (`useSyncExternalStore`), `onnxruntime-web`, `gliner`, `@xenova/transformers`, Cache Storage API (browser), existing Base UI-derived `Badge`/`Button` components.
+**Tech Stack:** TypeScript, Vitest, React 18.3.1 (`useSyncExternalStore`), `onnxruntime-web`, `gliner`, `@xenova/transformers`, Cache Storage API (browser), existing Base UI-derived `Badge`/`Button` components.
 
 ## Global Constraints
 
 - Cache Storage bucket name is exactly `xberg-models-v1` (used for E5 model bytes, E5 tokenizer JSON, and the pre-fetched GLiNER model bytes).
-- Retry policy is 3 attempts per model with backoff `1000 * 2^attempt` ms (1s / 2s / 4s), matching the approved design spec.
+- Retry policy is 3 total attempts per model (the initial attempt plus 2 automatic retries) with backoff `1000 * 2^attempt` ms between failures (1s, then 2s), matching the approved design spec.
 - `ner.ts`'s `transformersSettings.useBrowserCache` must be flipped from `false` to `true` (fixes the pre-existing every-session-redownload bug for the GLiNER tokenizer).
 - No Web Worker or Service Worker — approved design spec explicitly rejected both as out of scope for this feature.
 - **Testing scope correction:** the approved spec calls for a Playwright e2e smoke test. There is no `playwright.config.*` at the repo root today, despite `@playwright/test` being a devDependency (a `services/mcp-server`-level e2e harness exists but nothing for `apps/web`) — standing up Playwright for the web app from scratch is out of scope for this plan; every task below instead gets a Vitest + Testing Library test at the store/component level (jsdom environment, per `apps/web/vitest.config.ts`), which covers the same "loading → ready → search/ingest enabled" behavior without inventing new test infrastructure.
@@ -26,10 +26,12 @@
 ### Task 1: Model caching + scoped-fetch-override utilities
 
 **Files:**
+
 - Create: `packages/wasm-pipeline/src/model-cache.ts`
 - Test: `packages/wasm-pipeline/src/model-cache.test.ts`
 
 **Interfaces:**
+
 - Produces: `cachedFetchBuffer(url: string, onProgress?: (p: FetchProgress) => void): Promise<ArrayBuffer>`, `cachedFetchJson(url: string): Promise<unknown>`, `withScopedFetchOverride<T>(matchUrl: string, cachedBuffer: ArrayBuffer, fn: () => Promise<T>): Promise<T>`, and `export interface FetchProgress { bytesLoaded: number; bytesTotal: number }`. Tasks 2–4 import all three functions and the type from this file.
 
 This package's Vitest tests run under the default **Node** environment (no `vitest.config.ts` in `packages/wasm-pipeline`, confirmed by the existing `capabilities.test.ts` which manually stubs `navigator` with `vi.stubGlobal`) — there is no real `fetch` or `caches` global, so every test must stub both explicitly.
@@ -310,10 +312,12 @@ git commit -m "feat(wasm-pipeline): add Cache Storage helpers and scoped fetch o
 ### Task 2: Wire caching + progress into the E5 embedding loader
 
 **Files:**
+
 - Modify: `packages/wasm-pipeline/src/embed.ts`
 - Test: `packages/wasm-pipeline/src/embed.test.ts` (new)
 
 **Interfaces:**
+
 - Consumes: `cachedFetchBuffer`, `cachedFetchJson`, `FetchProgress` from `./model-cache` (Task 1).
 - Produces: `ensureEmbedSession(scenario?: ModelScenario, onProgress?: (p: FetchProgress) => void): Promise<OrtSessionHandle>` (renamed + exported from the former private `getSession`) and `resetEmbedSession(): void`. Task 4 (`warmup.ts`) imports both.
 
@@ -495,10 +499,12 @@ git commit -m "feat(wasm-pipeline): cache E5 model/tokenizer fetches and expose 
 ### Task 3: Wire caching + progress into the GLiNER PII loader
 
 **Files:**
+
 - Modify: `packages/wasm-pipeline/src/ner.ts`
 - Test: `packages/wasm-pipeline/src/ner.test.ts` (new)
 
 **Interfaces:**
+
 - Consumes: `cachedFetchBuffer`, `withScopedFetchOverride`, `FetchProgress` from `./model-cache` (Task 1).
 - Produces: `ensurePiiModel(scenario: ModelScenario, onProgress?: (p: FetchProgress) => void): Promise<Gliner>` (renamed + exported from the former private `getModel`) and `resetPiiModel(): void`. Task 4 (`warmup.ts`) imports both. `detectPii`'s existing signature is unchanged — it now calls `ensurePiiModel` internally instead of the old private `getModel`.
 
@@ -708,11 +714,13 @@ git commit -m "fix(wasm-pipeline): cache GLiNER model+tokenizer fetches and expo
 ### Task 4: Warmup orchestrator with retry/backoff
 
 **Files:**
+
 - Modify: `packages/wasm-pipeline/src/runtime.ts`
 - Create: `packages/wasm-pipeline/src/warmup.ts`
 - Test: `packages/wasm-pipeline/src/warmup.test.ts`
 
 **Interfaces:**
+
 - Consumes: `initWasm` (existing) + new `resetWasm` from `./runtime`; `ensureEmbedSession`, `resetEmbedSession` from `./embed` (Task 2); `ensurePiiModel`, `resetPiiModel` from `./ner` (Task 3); `detectCapabilities` from `./capabilities`; `selectScenario`, `ModelScenario` from `./scenario`.
 - Produces: `warmupModels(onProgress?: (p: WarmupProgress) => void): Promise<WarmupResult>`, `interface WarmupProgress { stage: "engine" | "e5" | "gliner"; overall: number }`, `interface WarmupResult { scenario: ModelScenario }`, `type WarmupStage = "engine" | "e5" | "gliner"`. Task 5 exports these from the package; Task 6 (`warmup-store.ts`) consumes `warmupModels` and `WarmupProgress`.
 
@@ -823,7 +831,7 @@ describe("warmupModels", () => {
 		vi.useRealTimers();
 	});
 
-	it("throws after exhausting retries on both attempts", async () => {
+	it("throws after exhausting all three attempts", async () => {
 		vi.useFakeTimers();
 		ensureEmbedSessionMock.mockRejectedValue(new Error("permanent failure"));
 		ensurePiiModelMock.mockResolvedValue({});
@@ -946,12 +954,14 @@ git commit -m "feat(wasm-pipeline): add warmupModels orchestrator with per-model
 ### Task 5: Export warmup from the package and thread it through the web app's adapter layer
 
 **Files:**
+
 - Modify: `packages/wasm-pipeline/src/index.ts`
 - Modify: `apps/web/lib/engine/adapter.ts`
 - Modify: `apps/web/lib/engine/index.ts`
 - Modify: `apps/web/lib/engine/contract.test.ts`
 
 **Interfaces:**
+
 - Consumes: `warmupModels`, `WarmupProgress`, `WarmupResult`, `WarmupStage` from `./warmup` (Task 4).
 - Produces: `warmupModels` importable from `@xberg-io/wasm-pipeline` (the alias apps/web code actually imports — see `apps/web/tsconfig.json:24-27` and `apps/web/vitest.config.ts:12`, which point that specifier at `apps/web/lib/engine/index.ts`, not the raw package). Task 6 imports `warmupModels` and `WarmupProgress` from `@xberg-io/wasm-pipeline`.
 
@@ -1043,10 +1053,12 @@ git commit -m "feat: export warmupModels through the wasm-pipeline package and w
 ### Task 6: Client-side warmup store + hook
 
 **Files:**
+
 - Create: `apps/web/lib/engine/warmup-store.ts`
 - Test: `apps/web/lib/engine/warmup-store.test.ts`
 
 **Interfaces:**
+
 - Consumes: `warmupModels`, `WarmupProgress` from `@xberg-io/wasm-pipeline` (Task 5).
 - Produces: `useModelWarmup(): WarmupState & { retry: () => void }`, `startModelWarmup(): void`, `retryModelWarmup(): void`, `type WarmupStage = "idle" | "loading" | "ready" | "error"`, `interface WarmupState { stage: WarmupStage; progress: number; error: string | null; attempt: number }`. Task 7 (`app-shell.tsx`, `model-warmup-status.tsx`) and Task 8 (`search/page.tsx`) import `useModelWarmup` and `startModelWarmup`.
 
@@ -1212,11 +1224,13 @@ git commit -m "feat(web): add module-singleton model warmup store and useModelWa
 ### Task 7: Status pill component + app-shell wiring
 
 **Files:**
+
 - Create: `apps/web/components/model-warmup-status.tsx`
 - Test: `apps/web/components/model-warmup-status.test.tsx`
 - Modify: `apps/web/components/app-shell.tsx`
 
 **Interfaces:**
+
 - Consumes: `useModelWarmup`, `startModelWarmup` from `@/lib/engine/warmup-store` (Task 6); existing `Badge` (`@/components/ui/badge`, variants `success`/`info`/`error` etc. — confirmed in `badge.tsx`) and `Button` (`@/components/ui/button`, `variant="ghost"`, `size="sm"` — confirmed in `button.tsx`).
 - Produces: `<ModelWarmupStatus />` component, rendered in `AppShell`'s header next to the existing `<VaultStatus />`.
 
@@ -1378,6 +1392,7 @@ git commit -m "feat(web): add model warmup status pill and kick off warmup from 
 ### Task 8: Gate search and ingest on model readiness
 
 **Files:**
+
 - Modify: `apps/web/app/search/page.tsx`
 - Modify: `apps/web/app/folders/[id]/FolderView.tsx`
 - Create: `apps/web/app/search/SearchPageInner.tsx`
@@ -1385,6 +1400,7 @@ git commit -m "feat(web): add model warmup status pill and kick off warmup from 
 - Test: `apps/web/app/folders/[id]/FolderView.test.tsx` (new)
 
 **Interfaces:**
+
 - Consumes: `useModelWarmup` from `@/lib/engine/warmup-store` (Task 6).
 - Produces: `SearchPageInner` exported from its own file (`apps/web/app/search/SearchPageInner.tsx`), imported by both `page.tsx` (as the default export's render target) and `page.test.tsx` (directly, no `<Suspense>` needed).
 

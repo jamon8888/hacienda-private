@@ -101,6 +101,7 @@ tracing = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 tree-sitter-language-pack = { workspace = true, features = ["dynamic-loading", "download", "serde"], optional = true }
 xberg = { workspace = true, features = ["formats", "analysis", "tokio-runtime", "simd-utf8", "cli"] }
+xberg-rag = { workspace = true, features = ["testing"] }
 
 [dev-dependencies]
 bytes = { workspace = true }

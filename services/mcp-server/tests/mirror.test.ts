@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { AppError } from "../src/error.js";
 import { MirrorStore } from "../src/mirror.js";
 
 describe("MirrorStore", () => {
@@ -26,6 +27,39 @@ describe("MirrorStore", () => {
   it("rejects empty payloads", () => {
     const store = new MirrorStore(dir);
     expect(() => store.saveMirror("m", Buffer.alloc(0))).toThrow();
+  });
+
+  it.each(["", ".", ".."])("rejects unsafe matter ID %j without filesystem side effects", (matterId) => {
+    const mirrorsDir = join(dir, "mirrors");
+    const store = new MirrorStore(mirrorsDir);
+    const mirrorsEntries = readdirSync(mirrorsDir);
+    const parentEntries = readdirSync(dir);
+
+    expect(() => store.saveMirror(matterId, Buffer.from("bytes"))).toThrowError(
+      expect.objectContaining<Partial<AppError>>({
+        code: "bad_request",
+      }),
+    );
+    expect(readdirSync(mirrorsDir)).toEqual(mirrorsEntries);
+    expect(readdirSync(dir)).toEqual(parentEntries);
+  });
+
+  it.each(["", ".", ".."])("rejects unsafe matter ID %j in every operation", async (matterId) => {
+    const store = new MirrorStore(dir);
+    const isBadRequest = (error: unknown): boolean => error instanceof AppError && error.code === "bad_request";
+    const additions = { pii: [], chunks: [] };
+
+    expect(() => store.appendMirror(matterId, additions)).toThrowError(
+      expect.objectContaining({ code: "bad_request" }),
+    );
+    expect(() => store.status(matterId)).toThrowError(expect.objectContaining({ code: "bad_request" }));
+    await expect(store.loadMirror(matterId)).rejects.toSatisfy(isBadRequest);
+    expect(() => store.listPii(matterId, "doc")).toThrowError(expect.objectContaining({ code: "bad_request" }));
+    expect(() => store.retrieve(matterId, "query")).toThrowError(expect.objectContaining({ code: "bad_request" }));
+    expect(() => store.loadCipher(matterId, "doc:token")).toThrowError(
+      expect.objectContaining({ code: "bad_request" }),
+    );
+    expect(() => store.forget(matterId)).toThrowError(expect.objectContaining({ code: "bad_request" }));
   });
 
   it("loadMirror never throws even if edgevec is unavailable", async () => {
