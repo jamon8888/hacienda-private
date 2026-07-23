@@ -2,9 +2,40 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { GLINER_MODEL_DEFINITIONS, parseGlinerChecksums, buildGlinerManifestEntries } from "./gliner-catalog.js";
+import {
+  GLINER2_ARTIFACT_FILES,
+  buildGliner2ManifestEntries,
+  GLINER_MODEL_DEFINITIONS,
+  gliner2ArtifactPaths,
+  parseGlinerChecksums,
+  buildGlinerManifestEntries,
+} from "./gliner-catalog.js";
 
 describe("gliner-catalog", () => {
+  it("keeps the native GLiNER2 artifact layout explicit without requiring model bytes", () => {
+    expect(gliner2ArtifactPaths("/cache/gliner2/base")).toEqual({
+      modelDir: "/cache/gliner2/base",
+      weightsPath: "/cache/gliner2/base/model.safetensors",
+      tokenizerPath: "/cache/gliner2/base/tokenizer.json",
+      encoderConfigPath: "/cache/gliner2/base/encoder_config/config.json",
+    });
+    expect(GLINER2_ARTIFACT_FILES.encoderConfig).toBe("encoder_config/config.json");
+  });
+
+  it("builds three pinned Candle entries from deployment-provided checksums", () => {
+    const entries = buildGliner2ManifestEntries({
+      [GLINER2_ARTIFACT_FILES.weights]: "a".repeat(64),
+      [GLINER2_ARTIFACT_FILES.tokenizer]: "b".repeat(64),
+      [GLINER2_ARTIFACT_FILES.encoderConfig]: "c".repeat(64),
+    });
+    expect(entries.map((entry) => entry.name)).toEqual([
+      "gliner2-base.weights",
+      "gliner2-base.tokenizer",
+      "gliner2-base.encoder-config",
+    ]);
+    expect(entries[2]?.file).toBe("gliner2/gliner2-base/encoder_config/config.json");
+  });
+
   it("parses the copied checksum manifest and finds every declared model file", () => {
     const text = readFileSync(join(import.meta.dirname, "gliner-models.sha256"), "utf8");
     const checksums = parseGlinerChecksums(text);

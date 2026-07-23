@@ -36,6 +36,55 @@ export const GLINER_MODEL_DEFINITIONS: GlinerModelDefinition[] = [
 
 export const DEFAULT_GLINER_MODEL = "gliner_medium-v2.5";
 
+/** Files required by the native Candle GLiNER2 façade inside one model directory. */
+export const GLINER2_ARTIFACT_FILES = {
+  weights: "model.safetensors",
+  tokenizer: "tokenizer.json",
+  encoderConfig: "encoder_config/config.json",
+} as const;
+export const GLINER2_MODEL_ID = "gliner2-base";
+export const GLINER2_MANIFEST_NAMES = {
+  weights: `${GLINER2_MODEL_ID}.weights`,
+  tokenizer: `${GLINER2_MODEL_ID}.tokenizer`,
+  encoderConfig: `${GLINER2_MODEL_ID}.encoder-config`,
+} as const;
+
+export interface Gliner2ArtifactPaths {
+  modelDir: string;
+  weightsPath: string;
+  tokenizerPath: string;
+  encoderConfigPath: string;
+}
+
+/** Build pinned cache entries once the deployment supplies checksums for its Candle artifacts. */
+export function buildGliner2ManifestEntries(
+  checksums: Record<string, string>,
+  repo = GLINER_MODELS_REPO,
+): ModelManifestEntry[] {
+  return (Object.entries(GLINER2_ARTIFACT_FILES) as [keyof typeof GLINER2_ARTIFACT_FILES, string][]).map(
+    ([kind, relativePath]) => {
+      const sha256 = checksums[relativePath];
+      if (!sha256) throw new Error(`missing checksum for ${relativePath} (GLiNER2)`);
+      return {
+        name: GLINER2_MANIFEST_NAMES[kind],
+        url: `https://huggingface.co/${repo}/resolve/main/${relativePath}`,
+        file: `gliner2/${GLINER2_MODEL_ID}/${relativePath}`,
+        sha256,
+      };
+    },
+  );
+}
+
+/** Resolve verified cache files into the directory-shaped contract expected by Candle. */
+export function gliner2ArtifactPaths(modelDir: string): Gliner2ArtifactPaths {
+  return {
+    modelDir,
+    weightsPath: `${modelDir}/${GLINER2_ARTIFACT_FILES.weights}`,
+    tokenizerPath: `${modelDir}/${GLINER2_ARTIFACT_FILES.tokenizer}`,
+    encoderConfigPath: `${modelDir}/${GLINER2_ARTIFACT_FILES.encoderConfig}`,
+  };
+}
+
 export function parseGlinerChecksums(text: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const rawLine of text.split("\n")) {

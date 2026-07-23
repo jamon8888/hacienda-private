@@ -3,7 +3,7 @@ import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeF
 import { chmodSync } from "node:fs";
 import { dirname } from "node:path";
 import type { ModelManifest, ModelManifestEntry } from "@xberg-io/core";
-import { loadGlinerManifestEntries } from "@xberg-io/node-pipeline";
+import { loadGlinerManifestEntries, type Gliner2ArtifactPaths } from "@xberg-io/node-pipeline";
 import { PLACEHOLDER_SHA } from "./config.js";
 import { AppError } from "./error.js";
 
@@ -64,6 +64,29 @@ export class ModelCache {
 
   resolveByFile(file: string): ModelManifestEntry | undefined {
     return this.manifestByFile.get(file);
+  }
+
+  /**
+   * Verify and resolve the three files required by the native GLiNER2 Candle
+   * façade. The names are manifest identities, so deployments can pin their
+   * own artifact host/layout without making the cache download policy aware of
+   * the model implementation.
+   */
+  async ensureGliner2Artifacts(names: {
+    weights: string;
+    tokenizer: string;
+    encoderConfig: string;
+  }): Promise<Gliner2ArtifactPaths> {
+    const [weightsPath, tokenizerPath, encoderConfigPath] = await Promise.all([
+      this.ensureModel(names.weights),
+      this.ensureModel(names.tokenizer),
+      this.ensureModel(names.encoderConfig),
+    ]);
+    const modelDir = dirname(weightsPath);
+    if (dirname(tokenizerPath) !== modelDir || dirname(dirname(encoderConfigPath)) !== modelDir) {
+      throw new AppError("model", "GLiNER2 artifacts must resolve beneath one model directory");
+    }
+    return { modelDir, weightsPath, tokenizerPath, encoderConfigPath };
   }
 
   async ensureModel(name: string): Promise<string> {

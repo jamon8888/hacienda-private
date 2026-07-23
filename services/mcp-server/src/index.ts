@@ -14,7 +14,14 @@ import { KeyVault } from "./vault.js";
 import { PLACEHOLDER_HTML, resolveUiDir, resolveWasmPackageDir, resolveEmbedPdfiumDir, injectToken } from "./static.js";
 import { runMcp } from "./mcp/mod.js";
 import type { IngestDeps } from "@xberg-io/node-pipeline";
-import { DEFAULT_GLINER_MODEL, RUST_ALIGNED_PII_TYPES, detectPii, embedText } from "@xberg-io/node-pipeline";
+import {
+	DEFAULT_GLINER_MODEL,
+	GLINER2_MANIFEST_NAMES,
+	RUST_ALIGNED_PII_TYPES,
+	detectPii,
+	embedText,
+	type Gliner2ArtifactPaths,
+} from "@xberg-io/node-pipeline";
 import { loadOrCreateSessionToken, resolveLaunchScopes, authenticateHttp, ownerPrincipal } from "./auth.js";
 import type { Principal } from "./principal.js";
 import { authorize } from "./mcp/scopes.js";
@@ -33,6 +40,20 @@ export interface AppContext {
 	vault: KeyVault;
 	httpAuth: HttpAuth;
 	pipeline: Omit<IngestDeps, "store" | "mirror">;
+}
+
+/**
+ * Verify and resolve a native GLiNER2 artifact set through the same pinned
+ * ModelCache used by the legacy ONNX pipeline. The generated xberg-node
+ * façade should consume the returned `modelDir`; keeping this seam explicit
+ * avoids accidentally falling back to an unverified download or inventing a
+ * JS implementation of Candle inference.
+ */
+export function ensureGliner2ModelArtifacts(
+	ctx: AppContext,
+	names: { weights: string; tokenizer: string; encoderConfig: string } = GLINER2_MANIFEST_NAMES,
+): Promise<Gliner2ArtifactPaths> {
+	return ctx.models.ensureGliner2Artifacts(names);
 }
 
 // Extensions walkFolder() will hand us — kept in sync with node-pipeline's own

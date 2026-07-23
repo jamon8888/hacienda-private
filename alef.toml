@@ -647,6 +647,7 @@ package_name = "@xberg-io/xberg-wasm"
 # bundlers, Deno (npm:), and Node 22+.
 targets = ["web"]
 features = ["wasm-target", "url-ingestion"]
+custom_rust_modules = ["gliner2"]
 exclude_types = ["OcrFallbackDecision", "OcrProcessor", "OcrCacheStats", "TessdataManager", "PageLayoutResult"]
 exclude_functions = [
     "embed_texts",
@@ -718,6 +719,7 @@ exclude_functions = [
 
 [crates.wasm.extra_dependencies]
 async-trait = "0.1"
+xberg-gliner = { path = "../xberg-gliner", version = "1.0.0-rc.29", default-features = false, features = ["candle"] }
 
 [crates.ffi]
 prefix = "xberg"

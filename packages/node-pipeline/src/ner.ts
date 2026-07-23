@@ -25,6 +25,45 @@ export interface DetectedEntity {
 	text: string;
 }
 
+/**
+ * Native GLiNER2 bridge contract.
+ *
+ * The implementation is supplied by the generated xberg-node façade once its
+ * Candle entry point is exposed. Keeping the contract here lets the MCP
+ * lifecycle (artifact verification and path wiring) be tested without loading
+ * the multi-gigabyte model or importing an unavailable native module.
+ */
+export interface Gliner2NativeFacade {
+	detectGliner2(
+		text: string,
+		modelDir: string,
+		labels: readonly string[],
+		threshold: number,
+	): Promise<DetectedEntity[]> | DetectedEntity[];
+}
+
+let gliner2NativeFacade: Gliner2NativeFacade | undefined;
+
+/** Install the generated native façade at application startup. */
+export function configureGliner2NativeFacade(facade: Gliner2NativeFacade | undefined): void {
+	gliner2NativeFacade = facade;
+}
+
+/** Run native GLiNER2 inference through the configured generated façade. */
+export async function detectGliner2(
+	text: string,
+	modelDir: string,
+	labels: readonly string[] = RUST_ALIGNED_PII_TYPES,
+	threshold = 0.5,
+): Promise<DetectedEntity[]> {
+	if (!gliner2NativeFacade) {
+		throw new Error(
+			"native GLiNER2 façade is unavailable; regenerate xberg-node and configureGliner2NativeFacade() before inference",
+		);
+	}
+	return gliner2NativeFacade.detectGliner2(text, modelDir, labels, threshold);
+}
+
 async function disableRemoteModels(): Promise<void> {
 	try {
 		const { env } = await import("@xenova/transformers");

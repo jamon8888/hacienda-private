@@ -2,7 +2,13 @@ import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { detectPii, resolveLocalOnnxWasmPaths, RUST_ALIGNED_PII_TYPES } from "./ner.js";
+import {
+	configureGliner2NativeFacade,
+	detectGliner2,
+	detectPii,
+	resolveLocalOnnxWasmPaths,
+	RUST_ALIGNED_PII_TYPES,
+} from "./ner.js";
 
 /**
  * Walks up from a starting directory to the nearest ancestor directory
@@ -44,6 +50,29 @@ describe("RUST_ALIGNED_PII_TYPES", () => {
 			"ssn",
 			"financial",
 		]);
+	});
+});
+
+describe("native GLiNER2 façade contract", () => {
+	it("passes verified model directory, labels, and threshold to the injected façade", async () => {
+		const calls: unknown[][] = [];
+		configureGliner2NativeFacade({
+			detectGliner2: (...args) => {
+				calls.push(args);
+				return [{ kind: "person", start: 0, end: 4, text: "Ada" }];
+			},
+		});
+
+		await expect(detectGliner2("Ada", "/cache/gliner2", ["person"], 0.7)).resolves.toEqual([
+			{ kind: "person", start: 0, end: 4, text: "Ada" },
+		]);
+		expect(calls).toEqual([["Ada", "/cache/gliner2", ["person"], 0.7]]);
+		configureGliner2NativeFacade(undefined);
+	});
+
+	it("fails clearly when the generated façade has not been installed", async () => {
+		configureGliner2NativeFacade(undefined);
+		await expect(detectGliner2("Ada", "/cache/gliner2")).rejects.toThrow(/façade is unavailable/);
 	});
 });
 
