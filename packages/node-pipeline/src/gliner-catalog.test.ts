@@ -30,11 +30,11 @@ describe("gliner-catalog", () => {
       [GLINER2_ARTIFACT_FILES.encoderConfig]: "c".repeat(64),
     });
     expect(entries.map((entry) => entry.name)).toEqual([
-      "gliner2-base.weights",
-      "gliner2-base.tokenizer",
-      "gliner2-base.encoder-config",
+      "gliner2-guardrails-pii-multi.weights",
+      "gliner2-guardrails-pii-multi.tokenizer",
+      "gliner2-guardrails-pii-multi.encoder-config",
     ]);
-    expect(entries[2]?.file).toBe("gliner2/gliner2-base/encoder_config/config.json");
+    expect(entries[2]?.file).toBe("gliner2/gliner2-guardrails-pii-multi/encoder_config/config.json");
   });
 
   it("parses the copied checksum manifest and finds every declared model file", () => {
@@ -75,11 +75,11 @@ describe("gliner-catalog", () => {
     const entries = loadGliner2ManifestEntries();
     expect(entries).toHaveLength(3);
     expect(entries.map((entry) => entry.name)).toEqual([
-      "gliner2-base.weights",
-      "gliner2-base.tokenizer",
-      "gliner2-base.encoder-config",
+      "gliner2-guardrails-pii-multi.weights",
+      "gliner2-guardrails-pii-multi.tokenizer",
+      "gliner2-guardrails-pii-multi.encoder-config",
     ]);
-    expect(entries.every((entry) => entry.url.startsWith("https://huggingface.co/fastino/gliner2-base-v1/"))).toBe(true);
+    expect(entries.every((entry) => entry.url.startsWith("https://huggingface.co/fastino/GLiNER2-Guardrails-PII-Multi/"))).toBe(true);
     expect(entries.every((entry) => /^[a-f0-9]{64}$/.test(entry.sha256))).toBe(true);
   });
 });

@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import type { ModelManifestEntry } from "@xberg-io/core";
 
 export const GLINER_MODELS_REPO = "xberg-io/gliner-models";
-export const GLINER2_MODELS_REPO = "fastino/gliner2-base-v1";
+export const GLINER2_MODELS_REPO = "fastino/GLiNER2-Guardrails-PII-Multi";
 
 export interface GlinerModelDefinition {
   id: string;
@@ -43,7 +43,7 @@ export const GLINER2_ARTIFACT_FILES = {
   tokenizer: "tokenizer.json",
   encoderConfig: "encoder_config/config.json",
 } as const;
-export const GLINER2_MODEL_ID = "gliner2-base";
+export const GLINER2_MODEL_ID = "gliner2-guardrails-pii-multi";
 export const GLINER2_MANIFEST_NAMES = {
   weights: `${GLINER2_MODEL_ID}.weights`,
   tokenizer: `${GLINER2_MODEL_ID}.tokenizer`,

@@ -1,7 +1,7 @@
 import { API_BASE } from "./constants";
 import { cachedFetchBuffer, type FetchProgress } from "./model-cache";
 
-const MODEL_BASE = `${API_BASE}/models/gliner2/gliner2-base`;
+const MODEL_BASE = `${API_BASE}/models/gliner2/gliner2-guardrails-pii-multi`;
 const MODEL_URLS = {
 	weights: `${MODEL_BASE}/model.safetensors`,
 	tokenizer: `${MODEL_BASE}/tokenizer.json`,

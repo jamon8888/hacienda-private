@@ -35,21 +35,11 @@ function findOwnPackageJson(startDir: string, packageName: string): Record<strin
 }
 
 describe("RUST_ALIGNED_PII_TYPES", () => {
-	it("matches the Rust EntityCategory taxonomy plus the two custom labels", () => {
-		expect(RUST_ALIGNED_PII_TYPES).toEqual([
-			"person",
-			"organization",
-			"location",
-			"date",
-			"time",
-			"money",
-			"percent",
-			"email",
-			"phone",
-			"url",
-			"ssn",
-			"financial",
-		]);
+	it("uses the GLiNER2-PII taxonomy", () => {
+		expect(RUST_ALIGNED_PII_TYPES).toHaveLength(42);
+		expect(RUST_ALIGNED_PII_TYPES).toContain("iban");
+		expect(RUST_ALIGNED_PII_TYPES).toContain("national_id_number");
+		expect(RUST_ALIGNED_PII_TYPES).toContain("api_key");
 	});
 });
 

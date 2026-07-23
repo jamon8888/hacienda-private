@@ -10,16 +10,16 @@ interface Gliner2WasmModule {
 	Gliner2Model: new () => Gliner2Model;
 }
 
-const BASE = `${API_BASE}/models/gliner2/gliner2-base`;
+const BASE = `${API_BASE}/models/gliner2/gliner2-guardrails-pii-multi`;
 const urls = [
 	`${BASE}/model.safetensors`,
 	`${BASE}/tokenizer.json`,
 	`${BASE}/encoder_config/config.json`,
 ];
 const expectedSha256 = [
-	"845fc4bd93c525b86124c58ab4f56c9eacf8587953086b14c501fab25957c007",
-	"1b7fbabfb4c690bed84c6793bfecae9b8dfe205751b04f9ffd1e76a1e7df9c16",
-	"9840a4db70bc007e6b65d336ebe2bddc53bc2ce210dc5757e50d5bb17122f7cd",
+	"82ee0ed2483aa7eae3483e95b8622139f5bc7697de3294aec4d0d7088bdb7658",
+	"f6df10ec83bea993035b2dd7c39345a3d4fcf23421c2adb6cb4ffc1e6d1bc4b5",
+	"f27dd63cc43a248d2566f0b6ad7a115db353676ce0561dcbca45bac766464c1a",
 ];
 let model: Gliner2Model | undefined;
 

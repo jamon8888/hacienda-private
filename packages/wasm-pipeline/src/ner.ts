@@ -31,7 +31,14 @@ async function disableRemoteModels(): Promise<void> {
   }
 }
 
-const PII_TYPES = ["person", "organization", "location", "email", "phone", "date", "ssn", "financial"] as const;
+const PII_TYPES = [
+  "person", "full_name", "first_name", "middle_name", "last_name", "date_of_birth",
+  "email", "phone_number", "address", "street_address", "city", "state_or_region", "postal_code", "country",
+  "government_id", "national_id_number", "passport_number", "drivers_license_number", "license_number", "tax_id", "tax_number",
+  "bank_account", "account_number", "routing_number", "iban", "payment_card", "card_number", "card_expiry", "card_cvv",
+  "username", "ip_address", "account_id", "sensitive_account_id", "password", "secret", "api_key", "access_token", "recovery_code",
+  "sensitive_date", "document_date", "expiration_date", "transaction_date",
+] as const;
 
 export function listPiiTypes(): readonly string[] {
   return PII_TYPES;
