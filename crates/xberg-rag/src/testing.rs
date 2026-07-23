@@ -15,6 +15,7 @@ pub struct MockEmbedder {
 impl MockEmbedder {
     /// Create a mock embedder producing `dim`-dimensional vectors.
     pub fn new(dim: usize) -> Self {
+        assert!(dim > 0, "mock embedding dimension must be greater than zero");
         Self { dim }
     }
 
@@ -67,5 +68,11 @@ mod tests {
         let a = e.embed_query("hello").unwrap();
         let b = e.embed_query("goodbye").unwrap();
         assert_ne!(a, b);
+    }
+
+    #[test]
+    #[should_panic(expected = "mock embedding dimension must be greater than zero")]
+    fn zero_dimension_is_rejected() {
+        let _ = MockEmbedder::new(0);
     }
 }

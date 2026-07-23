@@ -11,6 +11,10 @@ use xberg_rag::{RagEngine, RagError, default_mirrors_dir};
 /// gate in `XbergMcp::with_config`. Keep the two in sync via this constant.
 pub(crate) const RAG_QUERY_TOOL: &str = "rag_query";
 
+fn enabled_from_value(value: Option<&str>) -> bool {
+    matches!(value, Some("1" | "true" | "TRUE"))
+}
+
 /// Whether this host should expose the RAG tool at all.
 ///
 /// Default **off**: `xberg-cli` is distributed on its own (crates.io, the
@@ -18,10 +22,11 @@ pub(crate) const RAG_QUERY_TOOL: &str = "rag_query";
 /// `~/.xberg/mirrors` — an always-listed `rag_query` would be a tool that only
 /// ever errors for them. Opt in with `XBERG_RAG_ENABLED=1`.
 pub(crate) fn is_enabled() -> bool {
-    matches!(
-        std::env::var("XBERG_RAG_ENABLED").as_deref(),
-        Ok("1") | Ok("true") | Ok("TRUE")
-    )
+    enabled_from_value(std::env::var("XBERG_RAG_ENABLED").ok().as_deref())
+}
+
+fn preset_from_value(value: Option<String>) -> String {
+    value.unwrap_or_else(|| "lightweight".to_string())
 }
 
 /// Embedding preset used by the MCP host.
@@ -30,7 +35,7 @@ pub(crate) fn is_enabled() -> bool {
 /// hard-requires a bundled ONNX Runtime — the spec's R3 mitigation. Override
 /// with `XBERG_RAG_PRESET`.
 fn preset_name() -> String {
-    std::env::var("XBERG_RAG_PRESET").unwrap_or_else(|_| "lightweight".to_string())
+    preset_from_value(std::env::var("XBERG_RAG_PRESET").ok())
 }
 
 /// Build an engine over the mirrors root this host is configured for.
@@ -134,21 +139,24 @@ mod tests {
 
     #[test]
     fn not_found_maps_to_invalid_params_naming_the_matter() {
-        // No model is loaded for this path only if build_engine fails first, so
-        // assert on whichever error surfaces: both are user-facing and must
-        // mention the cause rather than panicking.
-        let err = query(&params("definitely-not-a-real-matter", "hello")).unwrap_err();
-        assert!(!err.message.is_empty());
+        let err = to_mcp_error(RagError::MatterNotFound("missing-matter".to_string()));
+        assert_eq!(err.code.0, -32602);
+        assert!(err.message.contains("missing-matter"), "got {}", err.message);
     }
 
     #[test]
-    fn defaults_are_off_and_lightweight() {
-        // Neither env var is set in the test process, so both defaults apply.
-        // Note: `std::env::set_var` is `unsafe` on edition 2024 and this
-        // workspace denies `unsafe_code`, so these assert the unset-default
-        // rather than mutating the environment. The enabled path is covered by
-        // Step 4's manual check.
-        assert!(!is_enabled(), "RAG must be opt-in, never on by default");
-        assert_eq!(preset_name(), "lightweight");
+    fn enabled_value_parser_is_opt_in() {
+        assert!(!enabled_from_value(None));
+        assert!(!enabled_from_value(Some("false")));
+        assert!(!enabled_from_value(Some("TRUE ")));
+        for enabled in ["1", "true", "TRUE"] {
+            assert!(enabled_from_value(Some(enabled)), "{enabled} should enable RAG");
+        }
+    }
+
+    #[test]
+    fn preset_value_parser_defaults_only_when_absent() {
+        assert_eq!(preset_from_value(None), "lightweight");
+        assert_eq!(preset_from_value(Some("balanced".to_string())), "balanced");
     }
 }

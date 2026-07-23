@@ -369,6 +369,24 @@ mod tests {
     }
 
     #[test]
+    fn empty_legacy_import_preserves_existing_snapshot() {
+        let tmp = tempfile::tempdir().unwrap();
+        let e = engine(tmp.path());
+        e.index_documents("m1", &[doc("current", &["preserve me"])]).unwrap();
+        let paths = MatterPaths::new(tmp.path(), "m1").unwrap();
+        let before = std::fs::read(paths.snapshot()).unwrap();
+        std::fs::write(
+            paths.legacy_bundle(),
+            r#"{"version":1,"index":[],"vault":[],"pii":[],"chunks":[]}"#,
+        )
+        .unwrap();
+
+        assert_eq!(e.import_legacy("m1").unwrap(), 0);
+        assert_eq!(std::fs::read(paths.snapshot()).unwrap(), before);
+        assert_eq!(e.query("m1", "preserve me", 1).unwrap()[0].text, "preserve me");
+    }
+
+    #[test]
     fn import_legacy_on_missing_bundle_is_not_found() {
         let tmp = tempfile::tempdir().unwrap();
         let e = engine(tmp.path());

@@ -5,15 +5,22 @@
 //! RAG core dependency-light and wasm-clean.
 
 use crate::core::config::{EmbeddingConfig, EmbeddingModelType};
+use std::{
+    collections::HashMap,
+    sync::{LazyLock, Mutex},
+};
 use xberg_rag::{Embedder, RagError};
 
 /// Probe text used once at construction to measure the model's output width.
 const DIM_PROBE: &str = "dimension probe";
 
+static PRESET_CACHE: LazyLock<Mutex<HashMap<String, XbergEmbedder>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+
 /// A [`xberg_rag::Embedder`] backed by [`crate::embed_texts`].
 ///
 /// Holds only the config — the underlying model engine is owned and cached by
-/// `embed_texts` itself, so this type is cheap to clone and `Send + Sync`.
+/// `embed_texts` itself. Preset adapters are cached too, avoiding a redundant
+/// dimension probe for each request.
 #[derive(Debug, Clone)]
 pub struct XbergEmbedder {
     config: EmbeddingConfig,
@@ -45,10 +52,17 @@ impl XbergEmbedder {
     /// spec's R3 mitigation says not to hard-require a bundled ONNX Runtime on
     /// the server target.
     pub fn from_preset(name: &str) -> xberg_rag::Result<Self> {
-        Self::new(EmbeddingConfig {
+        let mut cache = PRESET_CACHE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(embedder) = cache.get(name) {
+            return Ok(embedder.clone());
+        }
+
+        let embedder = Self::new(EmbeddingConfig {
             model: EmbeddingModelType::Preset { name: name.to_string() },
             ..EmbeddingConfig::default()
-        })
+        })?;
+        cache.insert(name.to_string(), embedder.clone());
+        Ok(embedder)
     }
 }
 

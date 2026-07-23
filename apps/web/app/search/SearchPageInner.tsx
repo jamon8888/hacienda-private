@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,11 +20,11 @@ import type { Matter, RetrievedChunk } from "@xberg-io/core";
 const TOKEN_PATTERN = /\{\{(?:C\d+_)?([A-Z0-9_]+?)_\d+\}\}/g;
 
 function piiKindsInChunk(text: string): Set<string> {
-	const kinds = new Set<string>();
-	for (const match of text.matchAll(TOKEN_PATTERN)) {
-		if (match[1]) kinds.add(match[1]);
-	}
-	return kinds;
+  const kinds = new Set<string>();
+  for (const match of text.matchAll(TOKEN_PATTERN)) {
+    if (match[1]) kinds.add(match[1]);
+  }
+  return kinds;
 }
 
 export function SearchPageInner() {
@@ -39,6 +39,7 @@ export function SearchPageInner() {
   const [error, setError] = useState<string | null>(null);
   const [activePiiFilters, setActivePiiFilters] = useState<Set<string>>(new Set());
   const [minScore, setMinScore] = useState(0);
+  const searchInFlight = useRef(false);
 
   useEffect(() => {
     if (!matterId) return;
@@ -52,11 +53,13 @@ export function SearchPageInner() {
 
   const search = async () => {
     if (!query.trim() || !matter) return;
+    if (searchInFlight.current) return;
     if (modelStage !== "ready") {
       setError("On-device AI models are still loading — try again in a moment.");
       return;
     }
     ensureAuth();
+    searchInFlight.current = true;
     setLoading(true);
     setError(null);
     try {
@@ -69,6 +72,7 @@ export function SearchPageInner() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Search failed");
     } finally {
+      searchInFlight.current = false;
       setLoading(false);
     }
   };

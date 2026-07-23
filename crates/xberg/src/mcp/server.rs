@@ -59,6 +59,15 @@ impl Clone for XbergMcp {
     }
 }
 
+fn serialize_rag_response<T: serde::Serialize>(dto: &T) -> Result<(String, serde_json::Value), rmcp::ErrorData> {
+    let map_error = |error: serde_json::Error| {
+        rmcp::ErrorData::internal_error(format!("Failed to serialize RAG query response: {error}"), None)
+    };
+    let response = serde_json::to_string_pretty(dto).map_err(map_error)?;
+    let structured_content = serde_json::to_value(dto).map_err(map_error)?;
+    Ok((response, structured_content))
+}
+
 #[tool_router]
 impl XbergMcp {
     /// Create a new Xberg MCP server instance with default config.
@@ -90,12 +99,16 @@ impl XbergMcp {
     ///
     /// * `config` - Default extraction configuration for all tool calls
     pub(crate) fn with_config(config: ExtractionConfig) -> Self {
+        Self::with_config_and_rag_enabled(config, super::rag::is_enabled())
+    }
+
+    fn with_config_and_rag_enabled(config: ExtractionConfig, rag_enabled: bool) -> Self {
         let extraction_service = ExtractionServiceBuilder::new().with_tracing().with_metrics().build();
 
         // RAG is opt-in: a disabled route is absent from `tools/list` and
         // rejected on call, so a default `xberg mcp` install is unchanged.
         let mut tool_router = Self::tool_router();
-        if !super::rag::is_enabled() {
+        if !rag_enabled {
             tool_router = tool_router.with_disabled(super::rag::RAG_QUERY_TOOL);
         }
 
@@ -287,9 +300,9 @@ impl XbergMcp {
         Parameters(params): Parameters<super::params::RagQueryParams>,
     ) -> Result<CallToolResult, rmcp::ErrorData> {
         let dto = super::rag::query(&params)?;
-        let response = serde_json::to_string_pretty(&dto).unwrap_or_default();
+        let (response, structured_content) = serialize_rag_response(&dto)?;
         let mut tool_result = CallToolResult::success(vec![ContentBlock::text(response)]);
-        tool_result.structured_content = serde_json::to_value(&dto).ok();
+        tool_result.structured_content = Some(structured_content);
         Ok(tool_result)
     }
 
@@ -994,6 +1007,25 @@ pub async fn start_mcp_server_http_with_config(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde::Serializer;
+
+    struct FailingSerialize;
+
+    impl serde::Serialize for FailingSerialize {
+        fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            Err(serde::ser::Error::custom("intentional test failure"))
+        }
+    }
+
+    #[test]
+    fn rag_serialization_failure_is_an_internal_error() {
+        let error = serialize_rag_response(&FailingSerialize).unwrap_err();
+        assert_eq!(error.code.0, -32603);
+        assert!(error.message.contains("Failed to serialize RAG query response"));
+    }
 
     #[tokio::test]
     async fn test_tool_router_has_routes() {
@@ -1494,15 +1526,13 @@ mod rag_gate_tests {
 
     #[test]
     fn rag_query_route_exists_but_is_disabled_by_default() {
-        // XBERG_RAG_ENABLED is unset in the test process.
-        //
         // NOTE: `ToolRouter::has_route` returns `registered && !disabled`
         // (rmcp 2.2.0, src/handler/server/router/tool.rs:463-465), so it
         // cannot be used to prove "registered" for a route we expect to be
         // disabled — it would return `false` and contradict `is_disabled`.
         // `ToolRouter::map` is a public field, so we check registration
         // directly against it instead.
-        let server = XbergMcp::with_config(ExtractionConfig::default());
+        let server = XbergMcp::with_config_and_rag_enabled(ExtractionConfig::default(), false);
         assert!(
             server.tool_router.map.contains_key(super::super::rag::RAG_QUERY_TOOL),
             "the route must be registered so it can be enabled at runtime"
@@ -1515,5 +1545,12 @@ mod rag_gate_tests {
             !server.tool_router.has_route(super::super::rag::RAG_QUERY_TOOL),
             "has_route is registered && !disabled, so a disabled route must report false"
         );
+    }
+
+    #[test]
+    fn rag_query_route_can_be_enabled() {
+        let server = XbergMcp::with_config_and_rag_enabled(ExtractionConfig::default(), true);
+        assert!(!server.tool_router.is_disabled(super::super::rag::RAG_QUERY_TOOL));
+        assert!(server.tool_router.has_route(super::super::rag::RAG_QUERY_TOOL));
     }
 }

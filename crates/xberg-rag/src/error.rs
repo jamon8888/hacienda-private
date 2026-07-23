@@ -5,6 +5,8 @@ pub enum RagError {
     InvalidMatterId { matter_id: String },
     #[error("dimension mismatch: expected {expected}, got {got}")]
     DimMismatch { expected: usize, got: usize },
+    #[error("{operation} vector contains a non-finite value")]
+    NonFiniteVector { operation: &'static str },
     #[error("snapshot too short: {0} bytes")]
     SnapshotTooShort(usize),
     #[error("bad snapshot magic")]

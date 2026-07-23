@@ -19,9 +19,13 @@ struct SnapshotBody {
 }
 
 pub(crate) fn encode(dim: usize, chunks: &[IndexedChunk]) -> Result<Vec<u8>> {
-    let body = SnapshotBody { dim: dim as u32, chunks: chunks.to_vec() };
-    let archived = rkyv::to_bytes::<RkyvError>(&body)
-        .map_err(|e| RagError::Snapshot(e.to_string()))?;
+    let dim =
+        u32::try_from(dim).map_err(|_| RagError::Snapshot(format!("embedding dimension {dim} exceeds u32::MAX")))?;
+    let body = SnapshotBody {
+        dim,
+        chunks: chunks.to_vec(),
+    };
+    let archived = rkyv::to_bytes::<RkyvError>(&body).map_err(|e| RagError::Snapshot(e.to_string()))?;
     let mut out = Vec::with_capacity(HEADER_LEN + archived.len());
     out.extend_from_slice(&SNAPSHOT_MAGIC);
     out.extend_from_slice(&SNAPSHOT_VERSION.to_le_bytes());
@@ -51,8 +55,8 @@ pub(crate) fn decode(bytes: &[u8]) -> Result<(usize, Vec<IndexedChunk>)> {
     // buffer before validating/deserializing.
     let mut aligned = rkyv::util::AlignedVec::<16>::new();
     aligned.extend_from_slice(&bytes[HEADER_LEN..]);
-    let body: SnapshotBody = rkyv::from_bytes::<SnapshotBody, RkyvError>(&aligned)
-        .map_err(|e| RagError::Snapshot(e.to_string()))?;
+    let body: SnapshotBody =
+        rkyv::from_bytes::<SnapshotBody, RkyvError>(&aligned).map_err(|e| RagError::Snapshot(e.to_string()))?;
     Ok((body.dim as usize, body.chunks))
 }
 
@@ -60,14 +64,29 @@ pub(crate) fn decode(bytes: &[u8]) -> Result<(usize, Vec<IndexedChunk>)> {
 mod tests {
     use crate::{FlatStore, IndexedChunk, RagError, SearchStore};
 
+    use super::encode;
+
     fn store_with_two() -> FlatStore {
         let mut s = FlatStore::new(3);
         s.ingest(&[
-            IndexedChunk { doc_id: "d".into(), chunk_index: 0, text: "a".into(),
-                page: Some(1), citation: Some("d:0".into()), vector: vec![1.0, 0.0, 0.0] },
-            IndexedChunk { doc_id: "d".into(), chunk_index: 1, text: "b".into(),
-                page: None, citation: None, vector: vec![0.0, 1.0, 0.0] },
-        ]).unwrap();
+            IndexedChunk {
+                doc_id: "d".into(),
+                chunk_index: 0,
+                text: "a".into(),
+                page: Some(1),
+                citation: Some("d:0".into()),
+                vector: vec![1.0, 0.0, 0.0],
+            },
+            IndexedChunk {
+                doc_id: "d".into(),
+                chunk_index: 1,
+                text: "b".into(),
+                page: None,
+                citation: None,
+                vector: vec![0.0, 1.0, 0.0],
+            },
+        ])
+        .unwrap();
         s
     }
 
@@ -91,7 +110,10 @@ mod tests {
 
     #[test]
     fn decode_rejects_short_input() {
-        assert!(matches!(FlatStore::load(&[1, 2]).unwrap_err(), RagError::SnapshotTooShort(2)));
+        assert!(matches!(
+            FlatStore::load(&[1, 2]).unwrap_err(),
+            RagError::SnapshotTooShort(2)
+        ));
     }
 
     #[test]
@@ -103,6 +125,17 @@ mod tests {
         assert!(bytes.len() > HEADER_LEN);
         assert_eq!(&bytes[0..4], b"XRAG");
         assert_eq!(u16::from_le_bytes([bytes[4], bytes[5]]), SNAPSHOT_VERSION);
-        assert!(bytes[6..HEADER_LEN].iter().all(|b| *b == 0), "reserved bytes must be zero");
+        assert!(
+            bytes[6..HEADER_LEN].iter().all(|b| *b == 0),
+            "reserved bytes must be zero"
+        );
+    }
+
+    #[test]
+    #[cfg(target_pointer_width = "64")]
+    fn encode_rejects_dimensions_larger_than_snapshot_format() {
+        let dim = usize::try_from(u64::from(u32::MAX) + 1).unwrap();
+        let err = encode(dim, &[]).unwrap_err();
+        assert!(matches!(err, RagError::Snapshot(message) if message.contains("exceeds u32::MAX")));
     }
 }

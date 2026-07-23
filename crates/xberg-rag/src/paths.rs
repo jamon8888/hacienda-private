@@ -63,10 +63,17 @@ impl MatterPaths {
 /// — the same layout `services/mcp-server/src/config.ts` `buildConfig` produces.
 /// Falls back to a relative `.xberg/mirrors` when no home directory is known.
 pub fn default_mirrors_dir() -> PathBuf {
-    if let Ok(data_dir) = std::env::var("XBERG_DATA_DIR") {
-        return PathBuf::from(data_dir).join("mirrors");
+    default_mirrors_dir_from(
+        std::env::var_os("XBERG_DATA_DIR").map(PathBuf::from),
+        std::env::home_dir(),
+    )
+}
+
+fn default_mirrors_dir_from(data_dir: Option<PathBuf>, home_dir: Option<PathBuf>) -> PathBuf {
+    if let Some(data_dir) = data_dir {
+        return data_dir.join("mirrors");
     }
-    match std::env::home_dir() {
+    match home_dir {
         Some(home) => home.join(".xberg").join("mirrors"),
         None => PathBuf::from(".xberg").join("mirrors"),
     }
@@ -113,12 +120,17 @@ mod tests {
     }
 
     #[test]
-    fn default_mirrors_dir_ends_with_mirrors() {
-        // Only the unset-default path is asserted: overriding XBERG_DATA_DIR would
-        // require `std::env::set_var`, which is `unsafe` on edition 2024 and barred
-        // by the workspace's `unsafe_code = "deny"` lint. The env-override branch is
-        // covered by the CLI integration tests, which set the variable per-process.
-        let dir = default_mirrors_dir();
-        assert!(dir.ends_with("mirrors"), "got {dir:?}");
+    fn data_dir_override_is_used_as_the_mirrors_root() {
+        let dir = default_mirrors_dir_from(Some(PathBuf::from("/data/xberg")), None);
+        assert_eq!(dir, PathBuf::from("/data/xberg/mirrors"));
+    }
+
+    #[test]
+    fn home_and_relative_fallbacks_match_the_node_layout() {
+        assert_eq!(
+            default_mirrors_dir_from(None, Some(PathBuf::from("/home/user"))),
+            PathBuf::from("/home/user/.xberg/mirrors")
+        );
+        assert_eq!(default_mirrors_dir_from(None, None), PathBuf::from(".xberg/mirrors"));
     }
 }

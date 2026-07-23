@@ -344,10 +344,17 @@ impl MatterPaths {
 /// — the same layout `services/mcp-server/src/config.ts` `buildConfig` produces.
 /// Falls back to a relative `.xberg/mirrors` when no home directory is known.
 pub fn default_mirrors_dir() -> PathBuf {
-    if let Ok(data_dir) = std::env::var("XBERG_DATA_DIR") {
-        return PathBuf::from(data_dir).join("mirrors");
+    default_mirrors_dir_from(
+        std::env::var_os("XBERG_DATA_DIR").map(PathBuf::from),
+        std::env::home_dir(),
+    )
+}
+
+fn default_mirrors_dir_from(data_dir: Option<PathBuf>, home_dir: Option<PathBuf>) -> PathBuf {
+    if let Some(data_dir) = data_dir {
+        return data_dir.join("mirrors");
     }
-    match std::env::home_dir() {
+    match home_dir {
         Some(home) => home.join(".xberg").join("mirrors"),
         None => PathBuf::from(".xberg").join("mirrors"),
     }
@@ -386,12 +393,9 @@ mod tests {
     }
 
     #[test]
-    fn default_mirrors_dir_honours_data_dir_env() {
-        // SAFETY-free: set_var is safe on the 2024 edition's std API surface used here
-        // only via a serialised test; this test does not run concurrently with another
-        // that reads XBERG_DATA_DIR.
-        let dir = default_mirrors_dir();
-        assert!(dir.ends_with("mirrors"), "got {dir:?}");
+    fn data_dir_override_is_used_as_the_mirrors_root() {
+        let dir = default_mirrors_dir_from(Some(PathBuf::from("/data/xberg")), None);
+        assert_eq!(dir, PathBuf::from("/data/xberg/mirrors"));
     }
 }
 ```
@@ -816,9 +820,9 @@ impl<E: Embedder> RagEngine<E> {
         store.search(&q, top_k)
     }
 
-    /// Rebuild a matter's snapshot from a legacy JSON `MirrorBundle` by
-    /// re-embedding its chunk texts. Replaces any existing snapshot; returns the
-    /// number of chunks imported.
+    /// Rebuild a matter's snapshot from a non-empty legacy JSON `MirrorBundle`
+    /// by re-embedding its chunk texts. An empty bundle is a no-op so it cannot
+    /// erase an existing native snapshot. Returns the number of chunks imported.
     pub fn import_legacy(&self, matter_id: &str) -> Result<usize> {
         let paths = self.paths(matter_id)?;
         let _write_lock = self.acquire_write_lock(&paths)?;
@@ -967,6 +971,25 @@ mod tests {
             e.import_legacy("m1").unwrap_err(),
             RagError::MatterNotFound(_)
         ));
+    }
+
+    #[test]
+    fn empty_legacy_bundle_preserves_an_existing_snapshot() {
+        let tmp = tempfile::tempdir().unwrap();
+        let e = engine(tmp.path());
+        e.index_documents("m1", &[doc("native", &["keep me"])])
+            .unwrap();
+
+        let paths = MatterPaths::new(tmp.path(), "m1").unwrap();
+        std::fs::write(
+            paths.legacy_bundle(),
+            r#"{"version":1,"index":[],"vault":[],"pii":[],"chunks":[]}"#,
+        )
+        .unwrap();
+
+        assert_eq!(e.import_legacy("m1").unwrap(), 0);
+        let hits = e.query("m1", "keep me", 1).unwrap();
+        assert_eq!(hits[0].text, "keep me");
     }
 
     #[test]
@@ -1693,6 +1716,10 @@ use xberg_rag::{RagEngine, RagError, default_mirrors_dir};
 /// gate in `XbergMcp::with_config`. Keep the two in sync via this constant.
 pub(crate) const RAG_QUERY_TOOL: &str = "rag_query";
 
+fn enabled_from_value(value: Option<&str>) -> bool {
+    matches!(value, Some("1" | "true" | "TRUE"))
+}
+
 /// Whether this host should expose the RAG tool at all.
 ///
 /// Default **off**: `xberg-cli` is distributed on its own (crates.io, the
@@ -1700,10 +1727,11 @@ pub(crate) const RAG_QUERY_TOOL: &str = "rag_query";
 /// `~/.xberg/mirrors` — an always-listed `rag_query` would be a tool that only
 /// ever errors for them. Opt in with `XBERG_RAG_ENABLED=1`.
 pub(crate) fn is_enabled() -> bool {
-    matches!(
-        std::env::var("XBERG_RAG_ENABLED").as_deref(),
-        Ok("1") | Ok("true") | Ok("TRUE")
-    )
+    enabled_from_value(std::env::var("XBERG_RAG_ENABLED").ok().as_deref())
+}
+
+fn preset_from_value(value: Option<String>) -> String {
+    value.unwrap_or_else(|| "lightweight".to_string())
 }
 
 /// Embedding preset used by the MCP host.
@@ -1712,7 +1740,7 @@ pub(crate) fn is_enabled() -> bool {
 /// hard-requires a bundled ONNX Runtime — the spec's R3 mitigation. Override
 /// with `XBERG_RAG_PRESET`.
 fn preset_name() -> String {
-    std::env::var("XBERG_RAG_PRESET").unwrap_or_else(|_| "lightweight".to_string())
+    preset_from_value(std::env::var("XBERG_RAG_PRESET").ok())
 }
 
 /// Build an engine over the mirrors root this host is configured for.
@@ -1792,22 +1820,23 @@ mod tests {
 
     #[test]
     fn not_found_maps_to_invalid_params_naming_the_matter() {
-        // No model is loaded for this path only if build_engine fails first, so
-        // assert on whichever error surfaces: both are user-facing and must
-        // mention the cause rather than panicking.
-        let err = query(&params("definitely-not-a-real-matter", "hello")).unwrap_err();
-        assert!(!err.message.is_empty());
+        let err = to_mcp_error(RagError::MatterNotFound("missing-matter".to_string()));
+        assert!(err.message.contains("missing-matter"), "got {}", err.message);
     }
 
     #[test]
-    fn defaults_are_off_and_lightweight() {
-        // Neither env var is set in the test process, so both defaults apply.
-        // Note: `std::env::set_var` is `unsafe` on edition 2024 and this
-        // workspace denies `unsafe_code`, so these assert the unset-default
-        // rather than mutating the environment. The enabled path is covered by
-        // Step 4's manual check.
-        assert!(!is_enabled(), "RAG must be opt-in, never on by default");
-        assert_eq!(preset_name(), "lightweight");
+    fn enabled_value_parser_is_opt_in() {
+        assert!(!enabled_from_value(None));
+        assert!(!enabled_from_value(Some("false")));
+        for enabled in ["1", "true", "TRUE"] {
+            assert!(enabled_from_value(Some(enabled)));
+        }
+    }
+
+    #[test]
+    fn preset_value_parser_defaults_only_when_absent() {
+        assert_eq!(preset_from_value(None), "lightweight");
+        assert_eq!(preset_from_value(Some("balanced".to_string())), "balanced");
     }
 }
 ```
@@ -1888,9 +1917,20 @@ Add the tool in `crates/xberg/src/mcp/server.rs`, inside the `#[tool_router] imp
         Parameters(params): Parameters<super::params::RagQueryParams>,
     ) -> Result<CallToolResult, rmcp::ErrorData> {
         let dto = super::rag::query(&params)?;
-        let response = serde_json::to_string_pretty(&dto).unwrap_or_default();
+        let response = serde_json::to_string_pretty(&dto).map_err(|err| {
+            rmcp::ErrorData::internal_error(
+                format!("failed to serialize rag_query text response: {err}"),
+                None,
+            )
+        })?;
+        let structured = serde_json::to_value(&dto).map_err(|err| {
+            rmcp::ErrorData::internal_error(
+                format!("failed to serialize rag_query structured response: {err}"),
+                None,
+            )
+        })?;
         let mut tool_result = CallToolResult::success(vec![ContentBlock::text(response)]);
-        tool_result.structured_content = serde_json::to_value(&dto).ok();
+        tool_result.structured_content = Some(structured);
         Ok(tool_result)
     }
 ```
@@ -1899,12 +1939,16 @@ Gate the route in `XbergMcp::with_config` — change **only** the `tool_router` 
 
 ```rust
     pub(crate) fn with_config(config: ExtractionConfig) -> Self {
+        Self::with_config_and_rag_enabled(config, super::rag::is_enabled())
+    }
+
+    fn with_config_and_rag_enabled(config: ExtractionConfig, rag_enabled: bool) -> Self {
         let extraction_service = ExtractionServiceBuilder::new().with_tracing().with_metrics().build();
 
         // RAG is opt-in: a disabled route is absent from `tools/list` and
         // rejected on call, so a default `xberg mcp` install is unchanged.
         let mut tool_router = Self::tool_router();
-        if !super::rag::is_enabled() {
+        if !rag_enabled {
             tool_router = tool_router.with_disabled(super::rag::RAG_QUERY_TOOL);
         }
 
@@ -1926,16 +1970,19 @@ mod rag_gate_tests {
 
     #[test]
     fn rag_query_route_exists_but_is_disabled_by_default() {
-        // XBERG_RAG_ENABLED is unset in the test process.
-        let server = XbergMcp::with_config(ExtractionConfig::default());
+        let server = XbergMcp::with_config_and_rag_enabled(
+            ExtractionConfig::default(),
+            false,
+        );
         assert!(
-            server.tool_router.has_route(super::super::rag::RAG_QUERY_TOOL),
+            server.tool_router.map.contains_key(super::super::rag::RAG_QUERY_TOOL),
             "the route must be registered so it can be enabled at runtime"
         );
         assert!(
             server.tool_router.is_disabled(super::super::rag::RAG_QUERY_TOOL),
             "rag_query must be opt-in — an extraction-only CLI user must not see it"
         );
+        assert!(!server.tool_router.has_route(super::super::rag::RAG_QUERY_TOOL));
     }
 }
 ```
@@ -1943,7 +1990,7 @@ mod rag_gate_tests {
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `cargo test -p xberg --features "mcp,embeddings" mcp::rag::tests`
-Expected: FAIL to compile before `rag.rs`, `RagQueryParams`, and `RagQueryOutput` exist; after, all four PASS.
+Expected: FAIL to compile before `rag.rs`, `RagQueryParams`, and `RagQueryOutput` exist; after, all five PASS.
 
 - [ ] **Step 3: Verify the route gate**
 

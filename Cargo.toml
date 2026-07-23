@@ -19,7 +19,7 @@ members = [
     "tools/benchmark-harness",
 ]
 exclude = ["e2e/rust", "packages/elixir/native/xberg_nif", "packages/ruby/ext/xberg_rb"]
-default-members = ["crates/xberg", "crates/xberg-cli"]
+default-members = ["crates/xberg", "crates/xberg-cli", "crates/xberg-rag"]
 resolver = "2"
 
 [workspace.package]
