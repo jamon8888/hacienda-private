@@ -390,6 +390,9 @@ importers:
       '@xberg-io/node-pipeline':
         specifier: workspace:*
         version: link:../../packages/node-pipeline
+      '@xberg-io/xberg':
+        specifier: workspace:*
+        version: link:../../crates/xberg-node
       '@xberg-io/xberg-wasm':
         specifier: 1.0.0-rc.26
         version: 1.0.0-rc.26
