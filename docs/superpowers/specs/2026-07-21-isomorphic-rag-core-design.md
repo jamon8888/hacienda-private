@@ -47,10 +47,11 @@ Consequences observed in the code:
 - **The pipeline is maintained twice in TypeScript** (`wasm-pipeline` +
   `node-pipeline`) on top of the Rust logic it wraps.
 
-Newly verified fact that makes the fix tractable: **`edgevec` is itself a native Rust
-crate on crates.io** (tags `#vector #wasm`, MIT/Apache-2.0). The browser's npm
-`edgevec` is the `wasm-bindgen` build of a crate that also compiles natively — so the
-MCP server can link the **same** HNSW index code the browser uses.
+`edgevec` is published as both an npm package and a Rust crate, but whether its
+browser-oriented dependency and persistence surface works for both native and
+`wasm32-unknown-unknown` remains unverified. The cross-target spike in Risk R1 is
+therefore still a blocking gate for adopting it. P2 uses `FlatStore`, an exact cosine
+backend, until that spike succeeds.
 
 ## Goals
 
@@ -58,10 +59,12 @@ MCP server can link the **same** HNSW index code the browser uses.
   `chunk → embed → index → search → hybrid-fuse → vault → MCP-tools`, compiled to
   **two targets from one source**: `wasm32-unknown-unknown` (browser host) and native
   (MCP/API server host).
-- **Real vector search on the MCP server**: `rag_query` runs live HNSW (+ hybrid RRF)
-  over the actual index, not a re-sorted snapshot.
-- **One model on disk, reused by both hosts** (extends the existing `ModelCache`,
-  [services/mcp-server/src/models.ts](../../../services/mcp-server/src/models.ts)).
+- **Real vector search on the MCP server**: `rag_query` runs live similarity search
+  over the actual index, not a re-sorted snapshot. P2 uses exact cosine via
+  `FlatStore`; HNSW/hybrid RRF remains a gated optimization.
+- **One embedding identity shared by both hosts** is the P3 target. P2 records the
+  current mismatch explicitly: native lightweight Model2Vec (256 dimensions) versus
+  browser e5-base (768 dimensions).
 - **One compact, versioned wire format** shared by both hosts, replacing the JSON
   `number[]` MirrorBundle.
 - **MCP tool definitions written once** (rmcp `#[tool]`), served natively.
@@ -83,8 +86,9 @@ MCP server can link the **same** HNSW index code the browser uses.
   (`2026-07-18-mcp-local-auth-solo-design.md`) is unchanged.
 - **Migrating browser storage to Turso/LanceDB** — proven impossible in browser-wasm
   by the perf spec's spike; out of scope.
-- **Changing embedding models or dimensions** (`EMBED_DIM` stays); this is a plumbing
-  unification, not a model change.
+- **Unifying embedding models or dimensions.** P2 keeps the native lightweight
+  Model2Vec preset at 256 dimensions while the browser remains on e5-base at 768.
+  Cross-host embedding-space and top-K equivalence is deferred to P3.
 
 ## Decisions (from this session's investigation)
 
@@ -94,17 +98,18 @@ MCP server can link the **same** HNSW index code the browser uses.
 2. **Native-on-server, wasm-in-browser.** The server compiles to native machine code
    (keeps `ort` e5 quality, threads, `mmap`, filesystem). The browser keeps running
    wasm natively in the JS engine. **No Wasmtime/Wasmer** (non-goal above).
-3. **`edgevec` as a shared crate dependency** for the vector index on both targets —
-   **gated behind a spike** (see Risk R1). Fallback: `rust-cv/hnsw` (serde-serializable,
-   pure-Rust, wasm-clean) if the native crate lags npm `0.9.0` or its persistence is
-   unusable natively.
+3. **`FlatStore` is the current shared store backend.** It provides exact cosine
+   search and is the correctness oracle for P2. Adopting `edgevec` for HNSW on both
+   targets is **gated behind the still-pending spike** in Risk R1; another
+   serde-serializable, wasm-clean HNSW implementation remains the fallback.
 4. **`rkyv` zero-copy snapshot** for the index+vector blob (server `mmap`s and searches
    without a full deserialize); small human/RAG metadata (PII token spans, chunk
    citations) stays `serde` (JSON today, MessagePack via the existing `rmp-serde` dep
    is a cheap upgrade). Snapshot is **versioned** with a magic header.
-5. **Embeddings backend split by target, one model catalog.** WASM: `model2vec_rs`
-   (`static_engine.rs`) and/or `onnxruntime-web`. Native: `ort` e5 (best quality).
-   Both resolve models through the existing on-disk `ModelCache` — **no re-download**.
+5. **Embeddings remain split in P2.** Native defaults to the pure-Rust lightweight
+   Model2Vec preset (256 dimensions); the browser continues to use e5-base through
+   `onnxruntime-web` (768 dimensions). P3 owns model/dimension unification and the
+   resulting cross-host equivalence guarantee.
 6. **MCP tools authored once** as rmcp `#[tool]` handlers in `xberg-rag`; the native
    host is `xberg-cli … mcp` (already exists,
    [crates/xberg-cli/src/commands/server.rs](../../../crates/xberg-cli/src/commands/server.rs)).
@@ -142,9 +147,9 @@ Alternatives rejected:
 crates/
 ├─ xberg/            (unchanged: extraction, ocr, chunking, embeddings, reranking, …)
 ├─ xberg-rag/        NEW — the isomorphic core
-│   ├─ store.rs      SearchStore trait + edgevec-backed impl (cfg: wasm32 | native)
-│   ├─ embed.rs      embed_query()/embed_chunks() — backend by target (model2vec | ort)
-│   ├─ index.rs      HNSW build/insert/search/hybrid-RRF over the shared store
+│   ├─ store.rs      SearchStore trait + FlatStore exact-cosine impl
+│   ├─ embed.rs      embed_query()/embed_chunks() — backend selected by host
+│   ├─ index.rs      exact-cosine search now; gated HNSW/hybrid-RRF later
 │   ├─ vault.rs      seal/open (aes-gcm + argon2/pbkdf2), owner-gated rehydrate
 │   ├─ snapshot.rs   rkyv (de)serialize of the versioned SearchStore snapshot
 │   └─ tools.rs      rmcp #[tool] rag_query / list_pii / rehydrate_chunk / ingest_folder / redact
@@ -180,27 +185,30 @@ Today `edgevec` is reached only from JS ([packages/wasm-pipeline/src/rag.ts](../
 `edgevec@0.9.0`'s `save`/`load` is **broken** (write-only byte export) and the old code
 worked around it by replaying `insert()` on every query.
 
-**Plan:** link `edgevec` as a Rust dependency of `xberg-rag` for both targets. The
-`SearchStore` impl wraps `edgevec`'s HNSW + hybrid RRF + BQ. Persistence is **owned by
-`snapshot.rs`** (rkyv), *not* by `edgevec`'s broken `save`/`load` — so the upstream bug
-is bypassed identically on both hosts. The server's `rag_query` becomes:
+**Current P2 backend:** `FlatStore` implements `SearchStore` with exact cosine search.
+It provides live query-dependent retrieval now and remains the correctness oracle for
+future approximate backends. Linking `edgevec` for HNSW + hybrid RRF + BQ is deferred
+until the Risk R1 native/wasm spike succeeds. Persistence remains owned by
+`snapshot.rs`, not by an index library's browser storage API. The P2 server's
+`rag_query` is therefore:
 
 ```rust
-let q = embed_query(&args.query)?;              // ort e5 natively, from ModelCache
-let hits = store.hybrid_search(&q, &sparse, opts)?;   // real HNSW + BM25 RRF
+let q = embed_query(&args.query)?;              // lightweight Model2Vec, 256 dims
+let hits = store.search(&q, args.top_k)?;        // exact cosine in FlatStore
 ```
 
 replacing `ctx.mirror.retrieve()`'s snapshot re-sort.
 
-## Section 3 — Model reuse (no re-download)
+## Section 3 — Embedding identity and model reuse
 
-The existing `ModelCache` ([services/mcp-server/src/models.ts](../../../services/mcp-server/src/models.ts))
-already serves one SHA256-verified on-disk copy to **both** the browser (`GET /models/*`)
-and the Node pipeline. Its responsibility moves to the Rust `api` host (which serves
-`/models/*` the same way) and to `xberg-rag::embed`, which calls the same
-`ensureModel("e5-fp32")` resolution. Net: the query embedder on the server reuses the
-exact model bytes the browser already downloaded — the answer to "réutiliser les mêmes
-modèles sans retélécharger" from this session, now structural.
+P2 does not yet reuse one embedding model across hosts. The native CLI/MCP path
+defaults to the pure-Rust lightweight Model2Vec preset at 256 dimensions, while the
+browser uses e5-base through `onnxruntime-web` at 768 dimensions. Each host may cache
+its own verified model bytes to avoid repeat downloads, but their vectors are not
+interchangeable and same-top-K behavior is not promised. P3 must choose one shared
+model identity and dimension, persist that identity in the snapshot, and define the
+migration before cross-host snapshot/query equivalence becomes an acceptance
+requirement.
 
 ## Section 4 — Wire format: MirrorBundle → rkyv snapshot
 
@@ -235,13 +243,15 @@ are preserved by the Rust `api` host.
 The `2026-07-17-wasm-web-ui-e2e-design.md` suite is the acceptance harness. New/changed
 assertions:
 
-- **Live-search equivalence:** the browser search result and a fresh MCP `rag_query`
-  over the same synced snapshot return the **same top-K chunk ids** (proves the shared
-  index, not a snapshot). This is a *new* guarantee — today the MCP path can't search.
+- **Live-search correctness in P2:** a fresh MCP `rag_query` changes its ranking when
+  the query changes, proving it searches stored vectors rather than re-sorting a
+  frozen mirror. Browser/MCP same-top-K equivalence is a P3 acceptance criterion,
+  after both hosts share one embedding model and dimension.
 - **Snapshot round-trip:** `snapshot()` → `load()` on both targets returns an index that
   answers an identical query identically; legacy JSON bundle still loads.
-- **Model reuse:** server `rag_query` runs with **no network fetch** (models resolved
-  from the cache the browser populated) — assert zero egress.
+- **Model cache behavior:** server `rag_query` runs with **no network fetch** after
+  its native lightweight model has been cached — assert zero egress. Reusing the
+  browser's model bytes is deferred with embedding unification to P3.
 - **GDPR loop preserved:** `DELETE /matters/:id` → fresh MCP process → `rag_query`
   errors `not_found` (unchanged from the e2e spec).
 - **Auth parity:** `/api/*` bearer + `Sec-Fetch-Site` behavior identical to the Node host.
@@ -250,11 +260,15 @@ assertions:
 
 ## Open risks / mitigations (gates)
 
-- **R1 — `edgevec` native crate parity (blocking gate).** crates.io shows an older
-  version than npm `0.9.0`; native persistence/hybrid API may differ. **Gate:** a spike
-  builds `xberg-rag` native + wasm against `edgevec`, round-trips an index through
-  `snapshot.rs`, and runs hybrid RRF on both. **Fallback:** `rust-cv/hnsw` (serde) — we
-  own persistence via rkyv regardless, so the swap is contained to `store.rs`.
+- **R1 — `edgevec` cross-target viability (blocking gate for HNSW, still pending).**
+  Version `0.9.0` exists on both crates.io and npm, but the Rust crate has
+  browser-oriented unconditional dependencies and its native behavior has not been
+  validated. **Gate:** build `xberg-rag` natively and for
+  `wasm32-unknown-unknown`, round-trip an index through `snapshot.rs`, and exercise
+  the required search API on both. Until that passes, `FlatStore` remains the current
+  backend. **Fallback:** another serde-serializable, wasm-clean HNSW implementation;
+  persistence ownership stays in `snapshot.rs`, so the swap remains contained to
+  `store.rs`.
 - **R2 — wasm binary size.** `xberg-wasm/lib.rs` is already ~983 KB; adding index + rayon
   grows it. **Mitigation:** strict feature-gating (`wasm-target` already excludes ORT),
   `wasm-opt`, measure gz before/after; budget assertion in CI.

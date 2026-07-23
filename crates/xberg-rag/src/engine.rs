@@ -1,4 +1,8 @@
-use std::path::{Path, PathBuf};
+use std::{
+    fs::{File, OpenOptions},
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 use crate::{
     Embedder, FlatStore, IndexedChunk, MatterPaths, RagError, Result, RetrievedChunk, SearchStore,
@@ -29,6 +33,10 @@ pub struct RagEngine<E: Embedder> {
     mirrors_dir: PathBuf,
 }
 
+struct MatterWriteLock {
+    _file: File,
+}
+
 impl<E: Embedder> RagEngine<E> {
     /// Build an engine writing under `mirrors_dir` (see [`crate::default_mirrors_dir`]).
     pub fn new(embedder: E, mirrors_dir: PathBuf) -> Self {
@@ -40,13 +48,13 @@ impl<E: Embedder> RagEngine<E> {
         &self.mirrors_dir
     }
 
-    fn paths(&self, matter_id: &str) -> MatterPaths {
+    fn paths(&self, matter_id: &str) -> Result<MatterPaths> {
         MatterPaths::new(&self.mirrors_dir, matter_id)
     }
 
     /// Load a matter's store, or an empty one when it has no snapshot yet.
-    fn load_or_empty(&self, matter_id: &str) -> Result<FlatStore> {
-        let path = self.paths(matter_id).snapshot();
+    fn load_or_empty(&self, paths: &MatterPaths) -> Result<FlatStore> {
+        let path = paths.snapshot();
         if !path.exists() {
             return Ok(FlatStore::new(self.embedder.dim()));
         }
@@ -54,25 +62,48 @@ impl<E: Embedder> RagEngine<E> {
         FlatStore::load(&bytes)
     }
 
+    fn acquire_write_lock(&self, paths: &MatterPaths) -> Result<MatterWriteLock> {
+        std::fs::create_dir_all(&paths.dir)
+            .map_err(|e| RagError::Io(format!("create {}: {e}", paths.dir.display())))?;
+        let lock_path = paths.write_lock();
+        let file = OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .open(&lock_path)
+            .map_err(|e| RagError::Io(format!("open lock {}: {e}", lock_path.display())))?;
+        file.lock()
+            .map_err(|e| RagError::Io(format!("lock {}: {e}", lock_path.display())))?;
+        Ok(MatterWriteLock { _file: file })
+    }
+
     /// Write a store's snapshot atomically: stage to a sibling temp file, then
     /// rename over the target. A crash never leaves a torn snapshot — the same
     /// guarantee the Node host gives for its mirror directory.
-    fn save(&self, matter_id: &str, store: &FlatStore) -> Result<()> {
-        let paths = self.paths(matter_id);
+    fn save(&self, paths: &MatterPaths, store: &FlatStore) -> Result<()> {
         std::fs::create_dir_all(&paths.dir)
             .map_err(|e| RagError::Io(format!("create {}: {e}", paths.dir.display())))?;
         let final_path = paths.snapshot();
-        let tmp_path = paths.dir.join("rag.snapshot.tmp");
         let bytes = store.snapshot()?;
-        std::fs::write(&tmp_path, &bytes).map_err(|e| RagError::Io(format!("write {}: {e}", tmp_path.display())))?;
-        std::fs::rename(&tmp_path, &final_path)
-            .map_err(|e| RagError::Io(format!("rename into {}: {e}", final_path.display())))?;
+        let mut staged = tempfile::Builder::new()
+            .prefix("rag.snapshot.")
+            .suffix(".tmp")
+            .tempfile_in(&paths.dir)
+            .map_err(|e| RagError::Io(format!("create temporary snapshot in {}: {e}", paths.dir.display())))?;
+        staged
+            .write_all(&bytes)
+            .map_err(|e| RagError::Io(format!("write temporary snapshot in {}: {e}", paths.dir.display())))?;
+        staged
+            .persist(&final_path)
+            .map_err(|e| RagError::Io(format!("persist snapshot as {}: {}", final_path.display(), e.error)))?;
         Ok(())
     }
 
     /// Embed and index `docs` into `matter_id`, adding to whatever is already
     /// indexed. Returns the matter's total chunk count after the write.
     pub fn index_documents(&self, matter_id: &str, docs: &[DocumentInput]) -> Result<usize> {
+        let paths = self.paths(matter_id)?;
         let mut texts: Vec<String> = Vec::new();
         let mut meta: Vec<(String, u32, Option<u32>)> = Vec::new();
         for doc in docs {
@@ -82,7 +113,7 @@ impl<E: Embedder> RagEngine<E> {
             }
         }
         if texts.is_empty() {
-            return Ok(self.load_or_empty(matter_id)?.len());
+            return Ok(self.load_or_empty(&paths)?.len());
         }
 
         let vectors = self.embedder.embed_documents(&texts)?;
@@ -108,9 +139,13 @@ impl<E: Embedder> RagEngine<E> {
             })
             .collect();
 
-        let mut store = self.load_or_empty(matter_id)?;
+        // Serialize the complete read-modify-write transaction. Locking only
+        // `save` still allows two writers to read the same old snapshot and
+        // overwrite one another's additions.
+        let _write_lock = self.acquire_write_lock(&paths)?;
+        let mut store = self.load_or_empty(&paths)?;
         store.ingest(&items)?;
-        self.save(matter_id, &store)?;
+        self.save(&paths, &store)?;
         Ok(store.len())
     }
 
@@ -120,11 +155,12 @@ impl<E: Embedder> RagEngine<E> {
     /// `MirrorStore.retrieve()` ignored the query and re-sorted mirrored chunks
     /// by a mirror-time placeholder score.
     pub fn query(&self, matter_id: &str, text: &str, top_k: usize) -> Result<Vec<RetrievedChunk>> {
-        let path = self.paths(matter_id).snapshot();
+        let paths = self.paths(matter_id)?;
+        let path = paths.snapshot();
         if !path.exists() {
             return Err(RagError::MatterNotFound(matter_id.to_string()));
         }
-        let store = self.load_or_empty(matter_id)?;
+        let store = self.load_or_empty(&paths)?;
         let q = self.embedder.embed_query(text)?;
         store.search(&q, top_k)
     }
@@ -134,7 +170,9 @@ impl<E: Embedder> RagEngine<E> {
     /// bundle is empty, in which case it is a no-op that leaves any existing
     /// snapshot untouched; returns the number of chunks imported.
     pub fn import_legacy(&self, matter_id: &str) -> Result<usize> {
-        let path = self.paths(matter_id).legacy_bundle();
+        let paths = self.paths(matter_id)?;
+        let _write_lock = self.acquire_write_lock(&paths)?;
+        let path = paths.legacy_bundle();
         if !path.exists() {
             return Err(RagError::MatterNotFound(matter_id.to_string()));
         }
@@ -170,7 +208,7 @@ impl<E: Embedder> RagEngine<E> {
         let mut store = FlatStore::new(self.embedder.dim());
         store.ingest(&items)?;
         let count = store.len();
-        self.save(matter_id, &store)?;
+        self.save(&paths, &store)?;
         Ok(count)
     }
 }
@@ -179,6 +217,7 @@ impl<E: Embedder> RagEngine<E> {
 mod tests {
     use super::*;
     use crate::MockEmbedder;
+    use std::sync::{Arc, Barrier};
 
     fn engine(dir: &Path) -> RagEngine<MockEmbedder> {
         RagEngine::new(MockEmbedder::new(16), dir.to_path_buf())
@@ -189,7 +228,10 @@ mod tests {
             doc_id: id.to_string(),
             chunks: texts
                 .iter()
-                .map(|t| ChunkInput { text: (*t).to_string(), page: None })
+                .map(|t| ChunkInput {
+                    text: (*t).to_string(),
+                    page: None,
+                })
                 .collect(),
         }
     }
@@ -213,7 +255,8 @@ mod tests {
     fn query_result_depends_on_the_query() {
         let tmp = tempfile::tempdir().unwrap();
         let e = engine(tmp.path());
-        e.index_documents("m1", &[doc("d1", &["alpha content", "beta content"])]).unwrap();
+        e.index_documents("m1", &[doc("d1", &["alpha content", "beta content"])])
+            .unwrap();
 
         let a = e.query("m1", "alpha content", 1).unwrap();
         let b = e.query("m1", "beta content", 1).unwrap();
@@ -229,6 +272,59 @@ mod tests {
         assert_eq!(e.index_documents("m1", &[doc("d1", &["one"])]).unwrap(), 1);
         assert_eq!(e.index_documents("m1", &[doc("d2", &["two", "three"])]).unwrap(), 3);
         assert_eq!(e.query("m1", "two", 10).unwrap().len(), 3);
+    }
+
+    #[derive(Clone)]
+    struct SynchronizedEmbedder {
+        inner: MockEmbedder,
+        barrier: Arc<Barrier>,
+    }
+
+    impl Embedder for SynchronizedEmbedder {
+        fn dim(&self) -> usize {
+            self.inner.dim()
+        }
+
+        fn embed_documents(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
+            let vectors = self.inner.embed_documents(texts)?;
+            // Align all writers immediately before they enter the protected
+            // read-modify-write section, maximizing contention deterministically.
+            self.barrier.wait();
+            Ok(vectors)
+        }
+
+        fn embed_query(&self, text: &str) -> Result<Vec<f32>> {
+            self.inner.embed_query(text)
+        }
+    }
+
+    #[test]
+    fn concurrent_indexing_preserves_every_writers_chunks() {
+        const WRITER_COUNT: usize = 12;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let mirrors_dir = tmp.path().to_path_buf();
+        let barrier = Arc::new(Barrier::new(WRITER_COUNT));
+        let handles: Vec<_> = (0..WRITER_COUNT)
+            .map(|writer| {
+                let embedder = SynchronizedEmbedder {
+                    inner: MockEmbedder::new(16),
+                    barrier: Arc::clone(&barrier),
+                };
+                let engine = RagEngine::new(embedder, mirrors_dir.clone());
+                std::thread::spawn(move || {
+                    let document = doc(&format!("doc-{writer}"), &[&format!("text-{writer}")]);
+                    engine.index_documents("shared", &[document])
+                })
+            })
+            .collect();
+
+        for handle in handles {
+            handle.join().unwrap().unwrap();
+        }
+
+        let hits = engine(&mirrors_dir).query("shared", "text", WRITER_COUNT).unwrap();
+        assert_eq!(hits.len(), WRITER_COUNT);
     }
 
     #[test]
@@ -255,7 +351,7 @@ mod tests {
     fn import_legacy_rebuilds_a_searchable_snapshot() {
         let tmp = tempfile::tempdir().unwrap();
         let e = engine(tmp.path());
-        let paths = MatterPaths::new(tmp.path(), "m1");
+        let paths = MatterPaths::new(tmp.path(), "m1").unwrap();
         std::fs::create_dir_all(&paths.dir).unwrap();
         std::fs::write(
             paths.legacy_bundle(),
@@ -314,7 +410,7 @@ mod tests {
     fn import_legacy_rejects_an_embedder_that_returns_too_few_vectors() {
         let tmp = tempfile::tempdir().unwrap();
         let e = RagEngine::new(ShortEmbedder, tmp.path().to_path_buf());
-        let paths = MatterPaths::new(tmp.path(), "m1");
+        let paths = MatterPaths::new(tmp.path(), "m1").unwrap();
         std::fs::create_dir_all(&paths.dir).unwrap();
         std::fs::write(
             paths.legacy_bundle(),

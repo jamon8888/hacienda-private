@@ -63,12 +63,14 @@ Two deliberate departures from a naive reading of the spec. Both are recorded he
 ### Task 1: `Embedder` seam + deterministic `MockEmbedder`
 
 **Files:**
+
 - Create: `crates/xberg-rag/src/embed.rs`
 - Create: `crates/xberg-rag/src/testing.rs`
 - Modify: `crates/xberg-rag/src/lib.rs`
 - Modify: `crates/xberg-rag/Cargo.toml`
 
 **Interfaces:**
+
 - Consumes: `RagError`, `Result` (P1 Task 2).
 - Produces:
   - `pub trait Embedder { fn dim(&self) -> usize; fn embed_documents(&self, texts: &[String]) -> Result<Vec<Vec<f32>>>; fn embed_query(&self, text: &str) -> Result<Vec<f32>> { /* default */ } }`
@@ -258,15 +260,19 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ### Task 2: On-disk matter layout with Node-compatible path encoding
 
 **Files:**
+
 - Create: `crates/xberg-rag/src/paths.rs`
 - Modify: `crates/xberg-rag/src/lib.rs`
+- Modify: `crates/xberg-rag/src/error.rs`
 
 **Interfaces:**
+
 - Consumes: nothing from earlier tasks (pure path logic).
 - Produces:
   - `pub fn encode_uri_component(s: &str) -> String`
-  - `pub struct MatterPaths { pub dir: PathBuf }` with `MatterPaths::new(mirrors_dir: &Path, matter_id: &str) -> Self`, `fn snapshot(&self) -> PathBuf` (`<dir>/rag.snapshot`), `fn legacy_bundle(&self) -> PathBuf` (`<dir>/bundle.json`).
+  - `pub struct MatterPaths { pub dir: PathBuf }` with `MatterPaths::new(mirrors_dir: &Path, matter_id: &str) -> Result<Self>`, `fn snapshot(&self) -> PathBuf` (`<dir>/rag.snapshot`), `fn legacy_bundle(&self) -> PathBuf` (`<dir>/bundle.json`), and private `fn write_lock(&self) -> PathBuf` (`<dir>/rag.snapshot.lock`). Empty, `.` and `..` matter ids return `RagError::InvalidMatterId` instead of aliasing the mirrors root or its parent.
   - `pub fn default_mirrors_dir() -> PathBuf` — `$XBERG_DATA_DIR/mirrors`, else `$HOME/.xberg/mirrors`.
+  - New `RagError::InvalidMatterId { matter_id: String }` variant.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -274,6 +280,8 @@ Create `crates/xberg-rag/src/paths.rs`:
 
 ```rust
 use std::path::{Path, PathBuf};
+
+use crate::{RagError, Result};
 
 /// Percent-encode exactly like JavaScript's `encodeURIComponent`, so a matter's
 /// directory name byte-matches the one the Node host writes
@@ -304,10 +312,16 @@ pub struct MatterPaths {
 
 impl MatterPaths {
     /// Resolve the directory for `matter_id` under `mirrors_dir`.
-    pub fn new(mirrors_dir: &Path, matter_id: &str) -> Self {
-        Self {
-            dir: mirrors_dir.join(encode_uri_component(matter_id)),
+    pub fn new(mirrors_dir: &Path, matter_id: &str) -> Result<Self> {
+        if matches!(matter_id, "" | "." | "..") {
+            return Err(RagError::InvalidMatterId {
+                matter_id: matter_id.to_string(),
+            });
         }
+
+        Ok(Self {
+            dir: mirrors_dir.join(encode_uri_component(matter_id)),
+        })
     }
 
     /// The xberg-rag snapshot written by [`crate::RagEngine`] (P1 `snapshot` format).
@@ -318,6 +332,11 @@ impl MatterPaths {
     /// The legacy JSON `MirrorBundle` written by the Node host / browser mirror push.
     pub fn legacy_bundle(&self) -> PathBuf {
         self.dir.join("bundle.json")
+    }
+
+    /// Cross-process lock serializing snapshot writes for this matter.
+    pub(crate) fn write_lock(&self) -> PathBuf {
+        self.dir.join("rag.snapshot.lock")
     }
 }
 
@@ -350,10 +369,20 @@ mod tests {
 
     #[test]
     fn matter_paths_compose_expected_files() {
-        let p = MatterPaths::new(Path::new("/data/mirrors"), "m 1");
+        let p = MatterPaths::new(Path::new("/data/mirrors"), "m 1").unwrap();
         assert!(p.dir.ends_with("m%201"));
         assert!(p.snapshot().ends_with("rag.snapshot"));
         assert!(p.legacy_bundle().ends_with("bundle.json"));
+    }
+
+    #[test]
+    fn rejects_matter_ids_that_escape_or_alias_the_mirrors_root() {
+        for matter_id in ["", ".", ".."] {
+            assert!(matches!(
+                MatterPaths::new(Path::new("/data/mirrors"), matter_id),
+                Err(RagError::InvalidMatterId { matter_id: rejected }) if rejected == matter_id
+            ));
+        }
     }
 
     #[test]
@@ -367,6 +396,13 @@ mod tests {
 }
 ```
 
+Add the typed validation error to `crates/xberg-rag/src/error.rs`:
+
+```rust
+    #[error("invalid matter id {matter_id:?}: matter ids cannot be empty, '.' or '..'")]
+    InvalidMatterId { matter_id: String },
+```
+
 Wire into `lib.rs` — add `mod paths;` and re-export:
 
 ```rust
@@ -376,7 +412,7 @@ pub use paths::{MatterPaths, default_mirrors_dir, encode_uri_component};
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `cargo test -p xberg-rag --features testing paths::tests`
-Expected: FAIL to compile before `paths.rs` exists; after, all three PASS.
+Expected: FAIL to compile before `paths.rs` exists; after, all four PASS.
 
 - [ ] **Step 3: Fix the `home_dir` call if the toolchain disagrees**
 
@@ -409,11 +445,13 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ### Task 3: Legacy `MirrorBundle` reader
 
 **Files:**
+
 - Create: `crates/xberg-rag/src/legacy.rs`
 - Modify: `crates/xberg-rag/src/lib.rs`
 - Modify: `crates/xberg-rag/Cargo.toml` (promote `serde_json` from dev-dep to dep)
 
 **Interfaces:**
+
 - Consumes: `RagError`, `Result`.
 - Produces: `pub struct LegacyChunk { pub doc_id: String, pub chunk_index: u32, pub text: String, pub page: Option<u32>, pub citation: Option<String> }` and `pub fn read_bundle_chunks(json: &[u8]) -> Result<Vec<LegacyChunk>>`.
 
@@ -530,7 +568,8 @@ Add the `Legacy` variant to `crates/xberg-rag/src/error.rs`:
     Legacy(String),
 ```
 
-Move `serde_json` into `[dependencies]` in `crates/xberg-rag/Cargo.toml` (it is now used by non-test code); leave `tempfile` in dev-dependencies:
+Move `serde_json` and `tempfile` into `[dependencies]` in
+`crates/xberg-rag/Cargo.toml` because both are now used by non-test code:
 
 ```toml
 [dependencies]
@@ -539,8 +578,6 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 rkyv = { workspace = true }
 edgevec = { workspace = true, optional = true }
-
-[dev-dependencies]
 tempfile = { workspace = true }
 ```
 
@@ -580,10 +617,12 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ### Task 4: `RagEngine` — index, query, import-legacy
 
 **Files:**
+
 - Create: `crates/xberg-rag/src/engine.rs`
 - Modify: `crates/xberg-rag/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `Embedder` (Task 1), `MatterPaths` (Task 2), `read_bundle_chunks`/`LegacyChunk` (Task 3), `FlatStore`/`SearchStore`/`IndexedChunk`/`RetrievedChunk` (P1).
 - Produces:
   - `pub struct RagEngine<E: Embedder>` with `RagEngine::new(embedder: E, mirrors_dir: PathBuf) -> Self`.
@@ -595,12 +634,25 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 **Design note for the implementer:** `query` loads the snapshot from disk on every call and holds no cached store. That is intentional for P2 — it makes `RagEngine` trivially `Send + Sync`, keeps the MCP host free of lifecycle state, and is correct by construction. An in-memory store cache is a later perf task, and the spec's own "rebuild once, not per query" fix targets the *browser*, which keeps its index in memory anyway.
 
+Every operation that can replace a matter snapshot must also acquire a
+**cross-process, per-matter exclusive lock** before loading the current snapshot and
+hold it through mutation and the final atomic rename. Locking only `save` is
+insufficient: two writers could both load the same old snapshot and the later rename
+would discard the earlier writer's additions. Matters may use different locks, so
+writes to unrelated matters remain independent. Each save stages bytes in a uniquely
+named temporary file in the matter directory; a shared `rag.snapshot.tmp` path is not
+safe when multiple engine instances or processes run concurrently.
+
 - [ ] **Step 1: Write the failing test**
 
 Create `crates/xberg-rag/src/engine.rs`:
 
 ```rust
-use std::path::{Path, PathBuf};
+use std::{
+    fs::{File, OpenOptions},
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 use crate::{
     Embedder, FlatStore, IndexedChunk, MatterPaths, RagError, Result, RetrievedChunk, SearchStore,
@@ -631,6 +683,10 @@ pub struct RagEngine<E: Embedder> {
     mirrors_dir: PathBuf,
 }
 
+struct MatterWriteLock {
+    _file: File,
+}
+
 impl<E: Embedder> RagEngine<E> {
     /// Build an engine writing under `mirrors_dir` (see [`crate::default_mirrors_dir`]).
     pub fn new(embedder: E, mirrors_dir: PathBuf) -> Self {
@@ -642,13 +698,13 @@ impl<E: Embedder> RagEngine<E> {
         &self.mirrors_dir
     }
 
-    fn paths(&self, matter_id: &str) -> MatterPaths {
+    fn paths(&self, matter_id: &str) -> Result<MatterPaths> {
         MatterPaths::new(&self.mirrors_dir, matter_id)
     }
 
     /// Load a matter's store, or an empty one when it has no snapshot yet.
-    fn load_or_empty(&self, matter_id: &str) -> Result<FlatStore> {
-        let path = self.paths(matter_id).snapshot();
+    fn load_or_empty(&self, paths: &MatterPaths) -> Result<FlatStore> {
+        let path = paths.snapshot();
         if !path.exists() {
             return Ok(FlatStore::new(self.embedder.dim()));
         }
@@ -656,25 +712,49 @@ impl<E: Embedder> RagEngine<E> {
         FlatStore::load(&bytes)
     }
 
-    /// Write a store's snapshot atomically: stage to a sibling temp file, then
+    fn acquire_write_lock(&self, paths: &MatterPaths) -> Result<MatterWriteLock> {
+        std::fs::create_dir_all(&paths.dir)
+            .map_err(|e| RagError::Io(format!("create {}: {e}", paths.dir.display())))?;
+        let lock_path = paths.write_lock();
+        let file = OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .open(&lock_path)
+            .map_err(|e| RagError::Io(format!("open lock {}: {e}", lock_path.display())))?;
+        file.lock()
+            .map_err(|e| RagError::Io(format!("lock {}: {e}", lock_path.display())))?;
+        Ok(MatterWriteLock { _file: file })
+    }
+
+    /// Write a store's snapshot atomically while the caller holds this matter's
+    /// exclusive writer lock. Stage to a uniquely named sibling temp file, then
     /// rename over the target. A crash never leaves a torn snapshot — the same
     /// guarantee the Node host gives for its mirror directory.
-    fn save(&self, matter_id: &str, store: &FlatStore) -> Result<()> {
-        let paths = self.paths(matter_id);
+    fn save(&self, paths: &MatterPaths, store: &FlatStore) -> Result<()> {
         std::fs::create_dir_all(&paths.dir)
             .map_err(|e| RagError::Io(format!("create {}: {e}", paths.dir.display())))?;
         let final_path = paths.snapshot();
-        let tmp_path = paths.dir.join("rag.snapshot.tmp");
         let bytes = store.snapshot()?;
-        std::fs::write(&tmp_path, &bytes).map_err(|e| RagError::Io(format!("write {}: {e}", tmp_path.display())))?;
-        std::fs::rename(&tmp_path, &final_path)
-            .map_err(|e| RagError::Io(format!("rename into {}: {e}", final_path.display())))?;
+        let mut staged = tempfile::Builder::new()
+            .prefix("rag.snapshot.")
+            .suffix(".tmp")
+            .tempfile_in(&paths.dir)
+            .map_err(|e| RagError::Io(format!("create temporary snapshot in {}: {e}", paths.dir.display())))?;
+        staged
+            .write_all(&bytes)
+            .map_err(|e| RagError::Io(format!("write temporary snapshot in {}: {e}", paths.dir.display())))?;
+        staged
+            .persist(&final_path)
+            .map_err(|e| RagError::Io(format!("persist snapshot as {}: {}", final_path.display(), e.error)))?;
         Ok(())
     }
 
     /// Embed and index `docs` into `matter_id`, adding to whatever is already
     /// indexed. Returns the matter's total chunk count after the write.
     pub fn index_documents(&self, matter_id: &str, docs: &[DocumentInput]) -> Result<usize> {
+        let paths = self.paths(matter_id)?;
         let mut texts: Vec<String> = Vec::new();
         let mut meta: Vec<(String, u32, Option<u32>)> = Vec::new();
         for doc in docs {
@@ -684,7 +764,7 @@ impl<E: Embedder> RagEngine<E> {
             }
         }
         if texts.is_empty() {
-            return Ok(self.load_or_empty(matter_id)?.len());
+            return Ok(self.load_or_empty(&paths)?.len());
         }
 
         let vectors = self.embedder.embed_documents(&texts)?;
@@ -710,9 +790,13 @@ impl<E: Embedder> RagEngine<E> {
             })
             .collect();
 
-        let mut store = self.load_or_empty(matter_id)?;
+        // Serialize the complete read-modify-write transaction. Locking only
+        // `save` still allows two writers to read the same old snapshot and
+        // overwrite one another's additions.
+        let _write_lock = self.acquire_write_lock(&paths)?;
+        let mut store = self.load_or_empty(&paths)?;
         store.ingest(&items)?;
-        self.save(matter_id, &store)?;
+        self.save(&paths, &store)?;
         Ok(store.len())
     }
 
@@ -722,11 +806,12 @@ impl<E: Embedder> RagEngine<E> {
     /// `MirrorStore.retrieve()` ignored the query and re-sorted mirrored chunks
     /// by a mirror-time placeholder score.
     pub fn query(&self, matter_id: &str, text: &str, top_k: usize) -> Result<Vec<RetrievedChunk>> {
-        let path = self.paths(matter_id).snapshot();
+        let paths = self.paths(matter_id)?;
+        let path = paths.snapshot();
         if !path.exists() {
             return Err(RagError::MatterNotFound(matter_id.to_string()));
         }
-        let store = self.load_or_empty(matter_id)?;
+        let store = self.load_or_empty(&paths)?;
         let q = self.embedder.embed_query(text)?;
         store.search(&q, top_k)
     }
@@ -735,7 +820,9 @@ impl<E: Embedder> RagEngine<E> {
     /// re-embedding its chunk texts. Replaces any existing snapshot; returns the
     /// number of chunks imported.
     pub fn import_legacy(&self, matter_id: &str) -> Result<usize> {
-        let path = self.paths(matter_id).legacy_bundle();
+        let paths = self.paths(matter_id)?;
+        let _write_lock = self.acquire_write_lock(&paths)?;
+        let path = paths.legacy_bundle();
         if !path.exists() {
             return Err(RagError::MatterNotFound(matter_id.to_string()));
         }
@@ -747,6 +834,13 @@ impl<E: Embedder> RagEngine<E> {
 
         let texts: Vec<String> = legacy.iter().map(|c| c.text.clone()).collect();
         let vectors = self.embedder.embed_documents(&texts)?;
+        if vectors.len() != texts.len() {
+            return Err(RagError::Embed(format!(
+                "embedder returned {} vectors for {} texts",
+                vectors.len(),
+                texts.len()
+            )));
+        }
         let items: Vec<IndexedChunk> = legacy
             .into_iter()
             .zip(vectors)
@@ -763,7 +857,7 @@ impl<E: Embedder> RagEngine<E> {
         let mut store = FlatStore::new(self.embedder.dim());
         store.ingest(&items)?;
         let count = store.len();
-        self.save(matter_id, &store)?;
+        self.save(&paths, &store)?;
         Ok(count)
     }
 }
@@ -848,7 +942,7 @@ mod tests {
     fn import_legacy_rebuilds_a_searchable_snapshot() {
         let tmp = tempfile::tempdir().unwrap();
         let e = engine(tmp.path());
-        let paths = MatterPaths::new(tmp.path(), "m1");
+        let paths = MatterPaths::new(tmp.path(), "m1").unwrap();
         std::fs::create_dir_all(&paths.dir).unwrap();
         std::fs::write(
             paths.legacy_bundle(),
@@ -934,11 +1028,13 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ### Task 5: `XbergEmbedder` — adapt the real engine to `Embedder`
 
 **Files:**
+
 - Create: `crates/xberg/src/rag_embed.rs`
 - Modify: `crates/xberg/src/lib.rs`
 - Modify: `crates/xberg/Cargo.toml`
 
 **Interfaces:**
+
 - Consumes: `xberg_rag::{Embedder, RagError, Result}`; `xberg::embed_texts`; `xberg::core::config::{EmbeddingConfig, EmbeddingModelType}`.
 - Produces: `pub struct XbergEmbedder` with `XbergEmbedder::from_preset(name: &str) -> xberg_rag::Result<Self>`, `XbergEmbedder::new(config: EmbeddingConfig) -> xberg_rag::Result<Self>`, and its `Embedder` impl. `dim()` is measured once at construction by embedding a probe string — correct for every `EmbeddingModelType` variant, including `Custom` and `Llm`, without consulting the preset table.
 
@@ -1113,12 +1209,14 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ### Task 6: `xberg rag` CLI — index, query, import-legacy
 
 **Files:**
+
 - Create: `crates/xberg-cli/src/commands/rag.rs`
 - Modify: `crates/xberg-cli/src/commands/mod.rs`
 - Modify: `crates/xberg-cli/src/main.rs`
 - Create: `crates/xberg-cli/tests/rag_test.rs`
 
 **Interfaces:**
+
 - Consumes: `xberg::XbergEmbedder` (Task 5), `xberg_rag::{RagEngine, DocumentInput, ChunkInput, MockEmbedder, default_mirrors_dir}` (Tasks 1, 2 & 4), `xberg::chunking::chunk_for_rag`.
 - Produces: `pub fn rag_index_command(...)`, `pub fn rag_query_command(...)`, `pub fn rag_import_legacy_command(...)`, and the `Commands::Rag { .. }` clap variant with a `RagAction` subcommand enum.
 - Note: `RagEngine<E>::{index_documents, query, import_legacy}` return `xberg_rag::Result<T>` (error type `RagError`, which derives `thiserror::Error`). `anyhow::Result`'s `?` converts any `std::error::Error + Send + Sync + 'static` automatically, so these calls use plain `?` — no `.map_err(anyhow::Error::from)` needed.
@@ -1488,15 +1586,20 @@ and the dispatch arm in `main.rs`'s `match` over `Commands` (place it next to `C
                 embedder,
                 preset,
                 format,
-            } => commands::rag_query_command(
-                &matter,
-                &text,
-                top_k,
-                mirrors_dir,
-                embedder,
-                &preset,
-                matches!(format, WireFormat::Json),
-            )?,
+            } => {
+                if matches!(format, WireFormat::Toon) {
+                    anyhow::bail!("TOON output is not supported for RAG queries");
+                }
+                commands::rag_query_command(
+                    &matter,
+                    &text,
+                    top_k,
+                    mirrors_dir,
+                    embedder,
+                    &preset,
+                    matches!(format, WireFormat::Json),
+                )?
+            }
             RagAction::ImportLegacy {
                 matter,
                 mirrors_dir,
@@ -1546,6 +1649,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ### Task 7: MCP `rag_query` tool — real search on the server
 
 **Files:**
+
 - Create: `crates/xberg/src/mcp/rag.rs`
 - Modify: `crates/xberg/src/mcp/mod.rs`
 - Modify: `crates/xberg/src/mcp/params.rs`
@@ -1553,6 +1657,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 - Modify: `crates/xberg/src/mcp/server.rs`
 
 **Interfaces:**
+
 - Consumes: `XbergEmbedder` (Task 5), `RagEngine`/`default_mirrors_dir` (Tasks 2 & 4), the existing rmcp `#[tool_router]` scaffolding.
 - Produces:
   - `params::RagQueryParams { matter_id: String, query: String, top_k: Option<usize> }`
@@ -1617,12 +1722,16 @@ fn build_engine() -> Result<RagEngine<XbergEmbedder>, RagError> {
 }
 
 /// Map a RAG error onto the MCP error surface, preserving the distinction
-/// between "this matter has nothing indexed" and a genuine internal failure.
+/// between invalid client input and a genuine internal failure.
 fn to_mcp_error(err: RagError) -> rmcp::ErrorData {
     match err {
         RagError::MatterNotFound(id) => {
             rmcp::ErrorData::invalid_params(format!("no indexed data for matter {id}"), None)
         }
+        RagError::InvalidMatterId { matter_id } => rmcp::ErrorData::invalid_params(
+            format!("invalid matter id {matter_id:?}: matter ids cannot be empty, '.' or '..'"),
+            None,
+        ),
         other => rmcp::ErrorData::internal_error(other.to_string(), None),
     }
 }
@@ -1876,10 +1985,12 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ### Task 8: Phase close-out — docs and the P2b handoff note
 
 **Files:**
+
 - Create: `docs/superpowers/notes/2026-07-21-p2-native-rag-status.md`
 - Modify: `docs/superpowers/specs/2026-07-21-isomorphic-rag-core-design.md` (R6 status line only)
 
 **Interfaces:**
+
 - Consumes: the outcome of Tasks 1–7.
 - Produces: the written record P3/P2b start from. No code.
 
@@ -1924,7 +2035,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 | Spec item | Task |
 |---|---|
-| Native store reading/writing the P1 snapshot | Task 4 (`load_or_empty` / `save`, atomic rename) |
+| Native store reading/writing the P1 snapshot | Task 4 (`load_or_empty` / `save`, per-matter cross-process serialization, unique staged file, atomic rename) |
 | Real `rag_query` — live search, not a re-sort (Section 2) | Task 4 `RagEngine::query`; asserted by `query_result_depends_on_the_query` |
 | Query embedded server-side from a resolved model (Section 3) | Task 5 `XbergEmbedder` |
 | Legacy JSON `MirrorBundle` compatibility reader (Section 4) | Task 3 + Task 4 `import_legacy` |
@@ -1940,10 +2051,11 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 **2. Placeholder scan:** No "TBD", "handle edge cases", or "similar to Task N". Every code step carries compilable code; every test step names the command and the expected result. Task 8 is documentation whose content is enumerated point-by-point rather than left to judgement. Task 7 Step 4 is a manual check with a stated expected observation and an instruction to record deviations.
 
 **3. Type consistency:**
+
 - `Embedder::{dim, embed_documents, embed_query}` — defined Task 1, implemented by `MockEmbedder` (Task 1) and `XbergEmbedder` (Task 5), consumed by `RagEngine`'s `E: Embedder` bound (Task 4). Task 6's CLI commands construct concrete `RagEngine<MockEmbedder>` / `RagEngine<XbergEmbedder>` values directly per `match` arm rather than through a trait-object bridge — simpler than the original draft's `EngineOps`/`with_engine` indirection for three call sites, with identical behavior. Identical spelling throughout.
 - `IndexedChunk` fields (`doc_id`, `chunk_index`, `text`, `page`, `citation`, `vector`) and `RetrievedChunk` fields (`doc_id`, `chunk_index`, `text`, `score`, `citation`, `page`) match P1 Task 2 exactly; `schema::RagHit` (Task 7) mirrors `RetrievedChunk` field-for-field.
-- `RagError` variants added across tasks — `Embed` (Task 1), `Legacy` (Task 3), `Io` + `MatterNotFound` (Task 4) — are each added once and matched on by their exact names in Tasks 4, 6, and 7.
-- `MatterPaths::{dir, snapshot, legacy_bundle}` (Task 2) used verbatim in Task 4's `paths`/`save`/`import_legacy` and Task 4's `import_legacy_rebuilds_a_searchable_snapshot` test.
+- `RagError` variants added across tasks — `Embed` (Task 1), `InvalidMatterId` (Task 2), `Legacy` (Task 3), `Io` + `MatterNotFound` (Task 4) — are each added once and matched on by their exact names where specialized handling is required, including Task 2's path tests and Task 7's invalid-params mapping.
+- `MatterPaths::{dir, snapshot, legacy_bundle, write_lock}` and fallible `MatterPaths::new` (Task 2) are used verbatim in Task 4's `paths`/`save`/`import_legacy` and Task 4's `import_legacy_rebuilds_a_searchable_snapshot` test.
 - `RagEngine::{index_documents, query, import_legacy}` (Task 4) are called by their exact names directly in Task 6's three CLI command functions and by `mcp::rag::query` (Task 7) — no intermediate trait renames them.
 - `EmbedderKind::{Preset, Mock}` (Task 6) is re-exported from `commands` and referenced as `commands::EmbedderKind` in `main.rs` — same path in both places.
 

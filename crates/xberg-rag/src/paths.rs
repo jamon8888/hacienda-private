@@ -1,5 +1,7 @@
 use std::path::{Path, PathBuf};
 
+use crate::{RagError, Result};
+
 /// Percent-encode exactly like JavaScript's `encodeURIComponent`, so a matter's
 /// directory name byte-matches the one the Node host writes
 /// (`services/mcp-server/src/mirror.ts` `matterDir`). Both hosts must address
@@ -29,10 +31,16 @@ pub struct MatterPaths {
 
 impl MatterPaths {
     /// Resolve the directory for `matter_id` under `mirrors_dir`.
-    pub fn new(mirrors_dir: &Path, matter_id: &str) -> Self {
-        Self {
-            dir: mirrors_dir.join(encode_uri_component(matter_id)),
+    pub fn new(mirrors_dir: &Path, matter_id: &str) -> Result<Self> {
+        if matches!(matter_id, "" | "." | "..") {
+            return Err(RagError::InvalidMatterId {
+                matter_id: matter_id.to_string(),
+            });
         }
+
+        Ok(Self {
+            dir: mirrors_dir.join(encode_uri_component(matter_id)),
+        })
     }
 
     /// The xberg-rag snapshot written by [`crate::RagEngine`] (P1 `snapshot` format).
@@ -43,6 +51,11 @@ impl MatterPaths {
     /// The legacy JSON `MirrorBundle` written by the Node host / browser mirror push.
     pub fn legacy_bundle(&self) -> PathBuf {
         self.dir.join("bundle.json")
+    }
+
+    /// Cross-process lock serializing snapshot writes for this matter.
+    pub(crate) fn write_lock(&self) -> PathBuf {
+        self.dir.join("rag.snapshot.lock")
     }
 }
 
@@ -83,10 +96,20 @@ mod tests {
 
     #[test]
     fn matter_paths_compose_expected_files() {
-        let p = MatterPaths::new(Path::new("/data/mirrors"), "m 1");
+        let p = MatterPaths::new(Path::new("/data/mirrors"), "m 1").unwrap();
         assert!(p.dir.ends_with("m%201"));
         assert!(p.snapshot().ends_with("rag.snapshot"));
         assert!(p.legacy_bundle().ends_with("bundle.json"));
+    }
+
+    #[test]
+    fn rejects_matter_ids_that_escape_or_alias_the_mirrors_root() {
+        for matter_id in ["", ".", ".."] {
+            assert!(matches!(
+                MatterPaths::new(Path::new("/data/mirrors"), matter_id),
+                Err(RagError::InvalidMatterId { matter_id: rejected }) if rejected == matter_id
+            ));
+        }
     }
 
     #[test]

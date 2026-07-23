@@ -43,6 +43,10 @@ fn build_engine() -> Result<RagEngine<XbergEmbedder>, RagError> {
 /// between "this matter has nothing indexed" and a genuine internal failure.
 fn to_mcp_error(err: RagError) -> rmcp::ErrorData {
     match err {
+        RagError::InvalidMatterId { matter_id } => rmcp::ErrorData::invalid_params(
+            format!("invalid matter_id {matter_id:?}: must not be empty, '.' or '..'"),
+            None,
+        ),
         RagError::MatterNotFound(id) => {
             rmcp::ErrorData::invalid_params(format!("no indexed data for matter {id}"), None)
         }
@@ -52,8 +56,11 @@ fn to_mcp_error(err: RagError) -> rmcp::ErrorData {
 
 /// Execute a live RAG query and shape it for MCP structured output.
 pub(crate) fn query(params: &super::params::RagQueryParams) -> Result<super::schema::RagQueryOutput, rmcp::ErrorData> {
-    if params.matter_id.trim().is_empty() {
-        return Err(rmcp::ErrorData::invalid_params("matter_id must not be empty", None));
+    if params.matter_id.trim().is_empty() || matches!(params.matter_id.as_str(), "." | "..") {
+        return Err(rmcp::ErrorData::invalid_params(
+            "matter_id must not be empty, '.' or '..'",
+            None,
+        ));
     }
     if params.query.trim().is_empty() {
         return Err(rmcp::ErrorData::invalid_params("query must not be empty", None));
@@ -61,7 +68,9 @@ pub(crate) fn query(params: &super::params::RagQueryParams) -> Result<super::sch
     let top_k = params.top_k.unwrap_or(8).clamp(1, 100);
 
     let engine = build_engine().map_err(to_mcp_error)?;
-    let hits = engine.query(&params.matter_id, &params.query, top_k).map_err(to_mcp_error)?;
+    let hits = engine
+        .query(&params.matter_id, &params.query, top_k)
+        .map_err(to_mcp_error)?;
 
     Ok(super::schema::RagQueryOutput {
         matter_id: params.matter_id.clone(),
@@ -99,9 +108,28 @@ mod tests {
     }
 
     #[test]
+    fn path_alias_matter_id_is_rejected_before_loading_the_model() {
+        for matter_id in [".", ".."] {
+            let err = query(&params(matter_id, "anything")).unwrap_err();
+            assert_eq!(err.code.0, -32602);
+            assert!(err.message.contains("matter_id"), "got {}", err.message);
+        }
+    }
+
+    #[test]
     fn empty_query_is_invalid_params() {
         let err = query(&params("m1", "   ")).unwrap_err();
         assert!(err.message.contains("query"), "got {}", err.message);
+    }
+
+    #[test]
+    fn invalid_matter_id_maps_to_invalid_params() {
+        let err = to_mcp_error(RagError::InvalidMatterId {
+            matter_id: "..".to_string(),
+        });
+        assert_eq!(err.code.0, -32602);
+        assert!(err.message.contains("matter_id"), "got {}", err.message);
+        assert!(err.message.contains(".."), "got {}", err.message);
     }
 
     #[test]

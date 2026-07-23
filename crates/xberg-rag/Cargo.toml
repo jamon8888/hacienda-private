@@ -14,10 +14,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 rkyv = { workspace = true }
-edgevec = { workspace = true, optional = true }
-
-[dev-dependencies]
 tempfile = { workspace = true }
+edgevec = { workspace = true, optional = true }
 
 [features]
 default = []

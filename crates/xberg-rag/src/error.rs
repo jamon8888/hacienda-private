@@ -1,6 +1,8 @@
 /// Errors returned by the RAG core.
 #[derive(Debug, thiserror::Error)]
 pub enum RagError {
+    #[error("invalid matter id {matter_id:?}: matter ids cannot be empty, '.' or '..'")]
+    InvalidMatterId { matter_id: String },
     #[error("dimension mismatch: expected {expected}, got {got}")]
     DimMismatch { expected: usize, got: usize },
     #[error("snapshot too short: {0} bytes")]

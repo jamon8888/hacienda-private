@@ -965,15 +965,20 @@ fn main() -> Result<()> {
                 embedder,
                 preset,
                 format,
-            } => commands::rag_query_command(
-                &matter,
-                &text,
-                top_k,
-                mirrors_dir,
-                embedder,
-                &preset,
-                matches!(format, WireFormat::Json),
-            )?,
+            } => {
+                if matches!(format, WireFormat::Toon) {
+                    anyhow::bail!("TOON output is not supported for 'xberg rag query'; use 'text' or 'json'");
+                }
+                commands::rag_query_command(
+                    &matter,
+                    &text,
+                    top_k,
+                    mirrors_dir,
+                    embedder,
+                    &preset,
+                    matches!(format, WireFormat::Json),
+                )?;
+            }
             RagAction::ImportLegacy {
                 matter,
                 mirrors_dir,

@@ -11585,6 +11585,7 @@ dependencies = [
  "tree-sitter-language-pack",
  "ureq 3.3.0",
  "xberg",
+ "xberg-rag",
 ]
 
 [[package]]
