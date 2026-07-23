@@ -78,7 +78,7 @@ impl CandleBackend {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn from_local(model_dir: &Path, lora_adapter_dir: Option<&Path>) -> crate::Result<Self> {
         let mut model = Gliner2Candle::from_local(model_dir).map_err(|e| crate::XbergError::Plugin {
-            message: format!("CandleBackend load: {e}"),
+            message: format!("CandleBackend load failed: {e}"),
             plugin_name: "ner-candle".to_string(),
         })?;
         if let Some(adapter_dir) = lora_adapter_dir {
@@ -86,7 +86,7 @@ impl CandleBackend {
             model
                 .load_adapter(adapter_name, adapter_dir)
                 .map_err(|e| crate::XbergError::Plugin {
-                    message: format!("CandleBackend load_adapter: {e}"),
+                    message: format!("CandleBackend adapter load failed: {e}"),
                     plugin_name: "ner-candle".to_string(),
                 })?;
         }
