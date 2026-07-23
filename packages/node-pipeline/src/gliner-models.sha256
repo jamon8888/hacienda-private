@@ -11,3 +11,8 @@
 91cf35efa9ec3549c6c52a415cdd7531fd172858d7d9eecef720bc4a3f1f8699  models/gliner_medium-v2.5/span/fp32/tokenizer.json
 59147616a660fe09215d911727870d80387adee125ca6df4e4446ad0cad65946  models/gliner_large-v2.5/span/fp32/model.onnx
 91cf35efa9ec3549c6c52a415cdd7531fd172858d7d9eecef720bc4a3f1f8699  models/gliner_large-v2.5/span/fp32/tokenizer.json
+
+# GLiNER2 Fastino Candle artifacts.
+845fc4bd93c525b86124c58ab4f56c9eacf8587953086b14c501fab25957c007  model.safetensors
+1b7fbabfb4c690bed84c6793bfecae9b8dfe205751b04f9ffd1e76a1e7df9c16  tokenizer.json
+9840a4db70bc007e6b65d336ebe2bddc53bc2ce210dc5757e50d5bb17122f7cd  encoder_config/config.json

@@ -3,6 +3,7 @@ import type { Gliner, IEntityResult, InitConfig, IONNXWebSettings, ITransformers
 import { API_BASE, GLINER_TOKENIZER_REPO_ID, glinerModelUrl } from "./constants";
 import { cachedFetchBuffer, withScopedFetchOverride, type FetchProgress } from "./model-cache";
 import type { ModelScenario } from "./scenario";
+import { detectGliner2 as detectGliner2Native } from "./gliner2";
 
 // DEFAULT_SCENARIO is a defensive fallback; ingest.ts and query.ts now pass a real selectScenario() output.
 const DEFAULT_SCENARIO: ModelScenario = {
@@ -122,6 +123,17 @@ export async function detectPii(
     console.warn(
       "[wasm-pipeline] detectPii called without a ModelScenario — using DEFAULT_SCENARIO; callers should pass selectScenario() output (see plan task 4-5)",
     );
+  }
+  const backend = (typeof import.meta !== "undefined" && (import.meta as unknown as { env?: Record<string, string> }).env?.["VITE_NER_BACKEND"])
+    ?? (typeof process !== "undefined" ? process.env["NER_BACKEND"] : undefined)
+    ?? "auto";
+  if (backend !== "legacy") {
+    try {
+      return await detectGliner2Native(text, types);
+    } catch (error) {
+      if (backend === "gliner2") throw error;
+      console.warn("[wasm-pipeline] GLiNER2 unavailable; falling back to legacy GLiNER", error);
+    }
   }
   const model = await ensurePiiModel(scenario);
   const result = await model.inference({

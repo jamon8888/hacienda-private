@@ -3,7 +3,7 @@ import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeF
 import { chmodSync } from "node:fs";
 import { dirname } from "node:path";
 import type { ModelManifest, ModelManifestEntry } from "@xberg-io/core";
-import { loadGlinerManifestEntries, type Gliner2ArtifactPaths } from "@xberg-io/node-pipeline";
+import { loadGliner2ManifestEntries, loadGlinerManifestEntries, type Gliner2ArtifactPaths } from "@xberg-io/node-pipeline";
 import { PLACEHOLDER_SHA } from "./config.js";
 import { AppError } from "./error.js";
 
@@ -45,8 +45,9 @@ export class ModelCache {
     }
     try {
       const glinerEntries = loadGlinerManifestEntries();
+      const gliner2Entries = loadGliner2ManifestEntries();
       const existingNames = new Set(parsed.models.map((m) => m.name));
-      for (const entry of glinerEntries) {
+      for (const entry of [...glinerEntries, ...gliner2Entries]) {
         if (!existingNames.has(entry.name)) parsed.models.push(entry);
       }
     } catch {

@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import type { ModelManifestEntry } from "@xberg-io/core";
 
 export const GLINER_MODELS_REPO = "xberg-io/gliner-models";
+export const GLINER2_MODELS_REPO = "fastino/gliner2-base-v1";
 
 export interface GlinerModelDefinition {
   id: string;
@@ -59,7 +60,7 @@ export interface Gliner2ArtifactPaths {
 /** Build pinned cache entries once the deployment supplies checksums for its Candle artifacts. */
 export function buildGliner2ManifestEntries(
   checksums: Record<string, string>,
-  repo = GLINER_MODELS_REPO,
+  repo = GLINER2_MODELS_REPO,
 ): ModelManifestEntry[] {
   return (Object.entries(GLINER2_ARTIFACT_FILES) as [keyof typeof GLINER2_ARTIFACT_FILES, string][]).map(
     ([kind, relativePath]) => {
@@ -129,4 +130,9 @@ const CHECKSUM_FILE_PATH = fileURLToPath(new URL("./gliner-models.sha256", impor
 export function loadGlinerManifestEntries(): ModelManifestEntry[] {
   const text = readFileSync(CHECKSUM_FILE_PATH, "utf8");
   return buildGlinerManifestEntries(parseGlinerChecksums(text));
+}
+
+export function loadGliner2ManifestEntries(): ModelManifestEntry[] {
+  const text = readFileSync(CHECKSUM_FILE_PATH, "utf8");
+  return buildGliner2ManifestEntries(parseGlinerChecksums(text));
 }

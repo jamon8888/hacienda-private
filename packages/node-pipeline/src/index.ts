@@ -2,6 +2,7 @@ export { walkFolder, hashBytes } from "./walk.js";
 export type { WalkedFile } from "./walk.js";
 export {
 	loadGlinerManifestEntries,
+	loadGliner2ManifestEntries,
 	DEFAULT_GLINER_MODEL,
 	GLINER2_ARTIFACT_FILES,
 	GLINER2_MODEL_ID,

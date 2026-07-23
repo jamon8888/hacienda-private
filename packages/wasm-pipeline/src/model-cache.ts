@@ -72,7 +72,7 @@ export async function cachedFetchBuffer(url: string, onProgress?: (p: FetchProgr
     // Caching is best-effort: a full Cache Storage (e.g. Safari/iOS quota limits) must
     // never fail an otherwise-successful download.
   }
-  return bytes.buffer;
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }
 
 export async function cachedFetchJson(url: string): Promise<unknown> {
