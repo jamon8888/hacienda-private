@@ -55,10 +55,11 @@ backend, until that spike succeeds.
 
 ## Goals
 
-- **One source of truth for the RAG pipeline**: a single `xberg-rag` crate owns
-  `chunk → embed → index → search → hybrid-fuse → vault → MCP-tools`, compiled to
-  **two targets from one source**: `wasm32-unknown-unknown` (browser host) and native
-  (MCP/API server host).
+- **One source of truth for the RAG engine**: a single `xberg-rag` crate owns the
+  host-independent embedding contract, index, search, snapshot, and migration logic,
+  compiled to **two targets from one source**: `wasm32-unknown-unknown` (browser host)
+  and native (MCP/API server host). Host adapters remain outside the core:
+  `xberg::mcp` owns rmcp tools and calls `xberg-rag`.
 - **Real vector search on the MCP server**: `rag_query` runs live similarity search
   over the actual index, not a re-sorted snapshot. P2 uses exact cosine via
   `FlatStore`; HNSW/hybrid RRF remains a gated optimization.
@@ -67,7 +68,8 @@ backend, until that spike succeeds.
   browser e5-base (768 dimensions).
 - **One compact, versioned wire format** shared by both hosts, replacing the JSON
   `number[]` MirrorBundle.
-- **MCP tool definitions written once** (rmcp `#[tool]`), served natively.
+- **MCP tool definitions written once** as thin rmcp `#[tool]` adapters in
+  `xberg::mcp`, served natively and delegating RAG behavior to `xberg-rag`.
 - **Collapse the TS orchestration** (`wasm-pipeline` + `node-pipeline`) to thin host
   glue.
 - **Preserve every existing invariant**: local-first compute, single-owner auth
@@ -110,8 +112,9 @@ backend, until that spike succeeds.
    Model2Vec preset (256 dimensions); the browser continues to use e5-base through
    `onnxruntime-web` (768 dimensions). P3 owns model/dimension unification and the
    resulting cross-host equivalence guarantee.
-6. **MCP tools authored once** as rmcp `#[tool]` handlers in `xberg-rag`; the native
-   host is `xberg-cli … mcp` (already exists,
+6. **MCP tools authored once** as thin rmcp `#[tool]` handlers in `xberg::mcp`; they
+   adapt MCP parameters/results/errors and delegate engine behavior to `xberg-rag`.
+   The native host is `xberg-cli … mcp` (already exists,
    [crates/xberg-cli/src/commands/server.rs](../../../crates/xberg-cli/src/commands/server.rs)).
    The Node `services/mcp-server` is retired (its static-file + auth + audit
    responsibilities move to the Rust `api` host, which already has them).
@@ -145,14 +148,13 @@ Alternatives rejected:
 
 ```text
 crates/
-├─ xberg/            (unchanged: extraction, ocr, chunking, embeddings, reranking, …)
+├─ xberg/            extraction, embeddings, and xberg::mcp host adapters/tools
 ├─ xberg-rag/        NEW — the isomorphic core
 │   ├─ store.rs      SearchStore trait + FlatStore exact-cosine impl
 │   ├─ embed.rs      embed_query()/embed_chunks() — backend selected by host
 │   ├─ index.rs      exact-cosine search now; gated HNSW/hybrid-RRF later
 │   ├─ vault.rs      seal/open (aes-gcm + argon2/pbkdf2), owner-gated rehydrate
-│   ├─ snapshot.rs   rkyv (de)serialize of the versioned SearchStore snapshot
-│   └─ tools.rs      rmcp #[tool] rag_query / list_pii / rehydrate_chunk / ingest_folder / redact
+│   └─ snapshot.rs   rkyv (de)serialize of the versioned SearchStore snapshot
 ├─ xberg-wasm/       host: adds wasm-bindgen exports that call xberg-rag (cfg wasm32)
 └─ xberg-cli/        host: `mcp` + `serve` already call xberg::mcp / xberg::api
 ```
@@ -171,7 +173,7 @@ pub trait SearchStore {
 }
 // snapshot.rs — versioned; magic b"XRAG" + u16 version, then rkyv archive
 pub const SNAPSHOT_MAGIC: [u8; 4] = *b"XRAG";
-pub const SNAPSHOT_VERSION: u16 = 1;
+pub const SNAPSHOT_VERSION: u16 = 2;
 ```
 
 The native host may `mmap` the snapshot and read the `rkyv` archive zero-copy; the wasm
@@ -205,10 +207,19 @@ P2 does not yet reuse one embedding model across hosts. The native CLI/MCP path
 defaults to the pure-Rust lightweight Model2Vec preset at 256 dimensions, while the
 browser uses e5-base through `onnxruntime-web` at 768 dimensions. Each host may cache
 its own verified model bytes to avoid repeat downloads, but their vectors are not
-interchangeable and same-top-K behavior is not promised. P3 must choose one shared
-model identity and dimension, persist that identity in the snapshot, and define the
-migration before cross-host snapshot/query equivalence becomes an acceptance
-requirement.
+interchangeable and same-top-K behavior is not promised.
+
+Every snapshot carries an immutable `EmbeddingIdentity`, not merely a model label or
+dimension. Its compatibility fields are `artifact_digest` (content digest of the exact
+weights), `tokenizer_revision` (digest of the tokenizer/config artifacts plus the
+effective maximum sequence length), `pooling` (encoded as
+`<strategy>;normalize=<bool>`), `instruction` (the exact prefixes encoded as
+`documents=<prefix>;queries=<prefix>`), `quantization`, `dimension`, and
+`pipeline_version` (the fixed preprocessing-semantics version). Loading, appending to,
+or querying a snapshot requires exact identity equality; a mismatch fails with an
+actionable re-embedding error instead of comparing vectors from different spaces. P3
+must choose one identity shared by both hosts and define its migration before
+cross-host snapshot/query equivalence becomes an acceptance requirement.
 
 ## Section 4 — Wire format: MirrorBundle → rkyv snapshot
 
@@ -225,8 +236,11 @@ are preserved by the Rust `api` host.
 ## Section 5 — Host collapse & MCP tools
 
 - **MCP tools** (`rag_query`, `list_pii`, `rehydrate_chunk`, `ingest_folder`, `redact`)
-  are authored once as rmcp `#[tool]` in `xberg-rag::tools`, replacing the hand-written
-  Node handlers ([services/mcp-server/src/mcp/tools.ts](../../../services/mcp-server/src/mcp/tools.ts)).
+  are authored once as thin rmcp `#[tool]` adapters in `xberg::mcp`, replacing the
+  hand-written Node handlers
+  ([services/mcp-server/src/mcp/tools.ts](../../../services/mcp-server/src/mcp/tools.ts)).
+  The adapters own protocol validation, result shaping, and MCP error mapping;
+  `xberg-rag` remains protocol-agnostic and owns the RAG engine behavior they invoke.
 - **Native MCP host** is `xberg-cli mcp` (stdio) / streamable-HTTP — both already wired
   ([crates/xberg-cli/src/commands/server.rs](../../../crates/xberg-cli/src/commands/server.rs)).
 - **Static UI + `/models` + auth + audit** move to the Rust `api` host. The single-owner
@@ -248,7 +262,9 @@ assertions:
   frozen mirror. Browser/MCP same-top-K equivalence is a P3 acceptance criterion,
   after both hosts share one embedding model and dimension.
 - **Snapshot round-trip:** `snapshot()` → `load()` on both targets returns an index that
-  answers an identical query identically; legacy JSON bundle still loads.
+  answers an identical query identically; legacy JSON bundle still loads. Opening,
+  appending, or querying with any differing `EmbeddingIdentity` field is rejected with
+  an actionable error instructing the caller to re-embed.
 - **Model cache behavior:** server `rag_query` runs with **no network fetch** after
   its native lightweight model has been cached — assert zero egress. Reusing the
   browser's model bytes is deferred with embedding unification to P3.

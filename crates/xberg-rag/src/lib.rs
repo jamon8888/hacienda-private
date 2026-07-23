@@ -16,13 +16,13 @@ pub use embed::Embedder;
 pub use engine::{ChunkInput, DocumentInput, RagEngine};
 pub use error::{RagError, Result};
 pub use flat::FlatStore;
-pub use legacy::{read_bundle_chunks, LegacyChunk};
-pub use paths::{default_mirrors_dir, encode_uri_component, MatterPaths};
+pub use legacy::{LegacyChunk, read_bundle_chunks};
+pub use paths::{MatterPaths, default_mirrors_dir, encode_uri_component};
 pub use snapshot::SNAPSHOT_VERSION;
 pub use store::SearchStore;
 #[cfg(feature = "testing")]
 pub use testing::MockEmbedder;
-pub use types::{IndexedChunk, RetrievedChunk};
+pub use types::{EmbeddingIdentity, IndexedChunk, RetrievedChunk};
 
 /// Dense embedding dimension (e5). Mirrors `EMBED_DIM` in the TS pipeline.
 pub const EMBED_DIM: usize = 768;

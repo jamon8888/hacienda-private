@@ -1,27 +1,39 @@
-use crate::{IndexedChunk, RagError, Result, RetrievedChunk, SearchStore};
+use crate::{EmbeddingIdentity, IndexedChunk, RagError, Result, RetrievedChunk, SearchStore};
 
 /// Exact (brute-force cosine) vector store. O(n) search — correct for any n,
 /// fast enough for small matters, and the correctness oracle for P2's HNSW
 /// backend.
 #[derive(Debug)]
 pub struct FlatStore {
-    dim: usize,
+    identity: EmbeddingIdentity,
     chunks: Vec<IndexedChunk>,
 }
 
-impl SearchStore for FlatStore {
-    fn new(dim: usize) -> Self {
+impl FlatStore {
+    /// Create an empty store bound to a complete embedding-space identity.
+    pub fn with_identity(identity: EmbeddingIdentity) -> Self {
         Self {
-            dim,
+            identity,
             chunks: Vec::new(),
         }
     }
 
+    /// Identity persisted with this store's snapshot.
+    pub fn identity(&self) -> &EmbeddingIdentity {
+        &self.identity
+    }
+}
+
+impl SearchStore for FlatStore {
+    fn new(dim: usize) -> Self {
+        Self::with_identity(manual_identity(dim))
+    }
+
     fn ingest(&mut self, items: &[IndexedChunk]) -> Result<()> {
         for it in items {
-            if it.vector.len() != self.dim {
+            if it.vector.len() != self.identity.dimension {
                 return Err(RagError::DimMismatch {
-                    expected: self.dim,
+                    expected: self.identity.dimension,
                     got: it.vector.len(),
                 });
             }
@@ -34,9 +46,9 @@ impl SearchStore for FlatStore {
     }
 
     fn search(&self, query: &[f32], top_k: usize) -> Result<Vec<RetrievedChunk>> {
-        if query.len() != self.dim {
+        if query.len() != self.identity.dimension {
             return Err(RagError::DimMismatch {
-                expected: self.dim,
+                expected: self.identity.dimension,
                 got: query.len(),
             });
         }
@@ -65,14 +77,26 @@ impl SearchStore for FlatStore {
     }
 
     fn snapshot(&self) -> Result<Vec<u8>> {
-        crate::snapshot::encode(self.dim, &self.chunks)
+        crate::snapshot::encode(&self.identity, &self.chunks)
     }
 
     fn load(bytes: &[u8]) -> Result<Self> {
-        let (dim, chunks) = crate::snapshot::decode(bytes)?;
-        let mut store = Self::new(dim);
+        let (identity, chunks) = crate::snapshot::decode(bytes)?;
+        let mut store = Self::with_identity(identity);
         store.ingest(&chunks)?;
         Ok(store)
+    }
+}
+
+fn manual_identity(dim: usize) -> EmbeddingIdentity {
+    EmbeddingIdentity {
+        artifact_digest: "manual-flat-store".to_string(),
+        tokenizer_revision: "manual-flat-store".to_string(),
+        pooling: "caller-defined".to_string(),
+        instruction: "caller-defined".to_string(),
+        quantization: "caller-defined".to_string(),
+        dimension: dim,
+        pipeline_version: "manual-flat-store-v1".to_string(),
     }
 }
 
@@ -142,7 +166,7 @@ mod tests {
 
     #[test]
     fn load_revalidates_archived_vectors() {
-        let bytes = crate::snapshot::encode(2, &[chunk("d", 0, vec![f32::NAN, 0.0])]).unwrap();
+        let bytes = crate::snapshot::encode(&manual_identity(2), &[chunk("d", 0, vec![f32::NAN, 0.0])]).unwrap();
         let err = FlatStore::load(&bytes).unwrap_err();
         assert!(matches!(err, RagError::NonFiniteVector { operation: "ingest" }));
     }

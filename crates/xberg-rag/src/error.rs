@@ -7,6 +7,13 @@ pub enum RagError {
     DimMismatch { expected: usize, got: usize },
     #[error("{operation} vector contains a non-finite value")]
     NonFiniteVector { operation: &'static str },
+    #[error(
+        "embedding identity mismatch: snapshot={snapshot:?}, embedder={embedder:?}; re-index the matter with the current embedder"
+    )]
+    EmbeddingIdentityMismatch {
+        snapshot: Box<crate::EmbeddingIdentity>,
+        embedder: Box<crate::EmbeddingIdentity>,
+    },
     #[error("snapshot too short: {0} bytes")]
     SnapshotTooShort(usize),
     #[error("bad snapshot magic")]

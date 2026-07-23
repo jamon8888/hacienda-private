@@ -56,10 +56,17 @@ impl<E: Embedder> RagEngine<E> {
     fn load_or_empty(&self, paths: &MatterPaths) -> Result<FlatStore> {
         let path = paths.snapshot();
         if !path.exists() {
-            return Ok(FlatStore::new(self.embedder.dim()));
+            return Ok(FlatStore::with_identity(self.embedder.identity().clone()));
         }
         let bytes = std::fs::read(&path).map_err(|e| RagError::Io(format!("read {}: {e}", path.display())))?;
-        FlatStore::load(&bytes)
+        let store = FlatStore::load(&bytes)?;
+        if store.identity() != self.embedder.identity() {
+            return Err(RagError::EmbeddingIdentityMismatch {
+                snapshot: Box::new(store.identity().clone()),
+                embedder: Box::new(self.embedder.identity().clone()),
+            });
+        }
+        Ok(store)
     }
 
     fn acquire_write_lock(&self, paths: &MatterPaths) -> Result<MatterWriteLock> {
@@ -205,7 +212,7 @@ impl<E: Embedder> RagEngine<E> {
             })
             .collect();
 
-        let mut store = FlatStore::new(self.embedder.dim());
+        let mut store = FlatStore::with_identity(self.embedder.identity().clone());
         store.ingest(&items)?;
         let count = store.len();
         self.save(&paths, &store)?;
@@ -281,8 +288,8 @@ mod tests {
     }
 
     impl Embedder for SynchronizedEmbedder {
-        fn dim(&self) -> usize {
-            self.inner.dim()
+        fn identity(&self) -> &crate::EmbeddingIdentity {
+            self.inner.identity()
         }
 
         fn embed_documents(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
@@ -409,11 +416,13 @@ mod tests {
 
     /// Returns fewer vectors than it was given texts — the failure mode that
     /// `zip` would otherwise swallow as silent data loss.
-    struct ShortEmbedder;
+    struct ShortEmbedder {
+        identity: crate::EmbeddingIdentity,
+    }
 
     impl Embedder for ShortEmbedder {
-        fn dim(&self) -> usize {
-            4
+        fn identity(&self) -> &crate::EmbeddingIdentity {
+            &self.identity
         }
         fn embed_documents(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
             // One fewer vector than requested.
@@ -427,7 +436,12 @@ mod tests {
     #[test]
     fn import_legacy_rejects_an_embedder_that_returns_too_few_vectors() {
         let tmp = tempfile::tempdir().unwrap();
-        let e = RagEngine::new(ShortEmbedder, tmp.path().to_path_buf());
+        let e = RagEngine::new(
+            ShortEmbedder {
+                identity: MockEmbedder::new(4).identity().clone(),
+            },
+            tmp.path().to_path_buf(),
+        );
         let paths = MatterPaths::new(tmp.path(), "m1").unwrap();
         std::fs::create_dir_all(&paths.dir).unwrap();
         std::fs::write(
@@ -441,5 +455,22 @@ mod tests {
 
         // Must error, not silently import only one of the two chunks.
         assert!(matches!(e.import_legacy("m1").unwrap_err(), RagError::Embed(_)));
+    }
+
+    #[test]
+    fn same_dimension_different_embedding_identity_cannot_query_or_append() {
+        let tmp = tempfile::tempdir().unwrap();
+        let first = RagEngine::new(MockEmbedder::with_artifact(16, "artifact-a"), tmp.path().to_path_buf());
+        first.index_documents("m1", &[doc("d1", &["original"])]).unwrap();
+
+        let incompatible = RagEngine::new(MockEmbedder::with_artifact(16, "artifact-b"), tmp.path().to_path_buf());
+        assert!(matches!(
+            incompatible.query("m1", "original", 1).unwrap_err(),
+            RagError::EmbeddingIdentityMismatch { .. }
+        ));
+        assert!(matches!(
+            incompatible.index_documents("m1", &[doc("d2", &["new"])]).unwrap_err(),
+            RagError::EmbeddingIdentityMismatch { .. }
+        ));
     }
 }

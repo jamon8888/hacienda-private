@@ -2,21 +2,37 @@
 //! crates (`xberg-cli` integration tests) can build an engine with no model on
 //! disk and no network — the CI constraint from the spec.
 
-use crate::{Embedder, Result};
+use crate::{Embedder, EmbeddingIdentity, Result};
 
 /// Deterministic hash-based embedder: same text always yields the same vector,
 /// different texts yield different directions. Not semantically meaningful —
 /// it exists so engine/store behaviour can be asserted exactly.
 #[derive(Debug, Clone)]
 pub struct MockEmbedder {
-    dim: usize,
+    identity: EmbeddingIdentity,
 }
 
 impl MockEmbedder {
     /// Create a mock embedder producing `dim`-dimensional vectors.
     pub fn new(dim: usize) -> Self {
         assert!(dim > 0, "mock embedding dimension must be greater than zero");
-        Self { dim }
+        Self::with_artifact(dim, "mock-fnv1a-v1")
+    }
+
+    /// Create a mock embedder with a distinct artifact identity.
+    pub fn with_artifact(dim: usize, artifact_digest: impl Into<String>) -> Self {
+        assert!(dim > 0, "mock embedding dimension must be greater than zero");
+        Self {
+            identity: EmbeddingIdentity {
+                artifact_digest: artifact_digest.into(),
+                tokenizer_revision: "none".to_string(),
+                pooling: "none".to_string(),
+                instruction: "documents=raw;queries=raw;normalize=false".to_string(),
+                quantization: "none".to_string(),
+                dimension: dim,
+                pipeline_version: "xberg-rag-mock-v1".to_string(),
+            },
+        }
     }
 
     /// FNV-1a over the bytes, then one f32 per dimension derived by re-mixing
@@ -27,7 +43,7 @@ impl MockEmbedder {
             hash ^= u64::from(*b);
             hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
         }
-        (0..self.dim)
+        (0..self.identity.dimension)
             .map(|i| {
                 let mut h = hash ^ (i as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15);
                 h = h.wrapping_mul(0xff51_afd7_ed55_8ccd);
@@ -40,8 +56,8 @@ impl MockEmbedder {
 }
 
 impl Embedder for MockEmbedder {
-    fn dim(&self) -> usize {
-        self.dim
+    fn identity(&self) -> &EmbeddingIdentity {
+        &self.identity
     }
 
     fn embed_documents(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {

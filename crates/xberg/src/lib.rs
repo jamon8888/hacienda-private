@@ -437,11 +437,7 @@ pub fn embed_texts(texts: Vec<String>, config: &core::config::EmbeddingConfig) -
 /// Stub for builds without the `embeddings` or `static-embeddings` feature —
 /// keeps the symbol available so language bindings that mirror the public API
 /// compile; the runtime call returns an unsupported error.
-#[cfg(all(
-    feature = "embedding-presets",
-    not(feature = "embeddings"),
-    not(feature = "static-embeddings")
-))]
+#[cfg(not(any(feature = "embeddings", feature = "static-embeddings")))]
 #[cfg_attr(alef, alef(skip))]
 pub fn embed_texts(_texts: Vec<String>, _config: &core::config::EmbeddingConfig) -> crate::Result<Vec<Vec<f32>>> {
     Err(XbergError::validation(

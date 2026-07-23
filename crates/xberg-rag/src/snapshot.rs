@@ -1,10 +1,10 @@
-use crate::{IndexedChunk, RagError, Result};
+use crate::{EmbeddingIdentity, IndexedChunk, RagError, Result};
 use rkyv::rancor::Error as RkyvError;
 
 /// Magic prefix identifying an xberg-rag snapshot blob.
 const SNAPSHOT_MAGIC: [u8; 4] = *b"XRAG";
 /// On-disk snapshot format version. Bump on any layout change.
-pub const SNAPSHOT_VERSION: u16 = 1;
+pub const SNAPSHOT_VERSION: u16 = 2;
 // 4 magic + 2 version + 10 reserved (zeroed) bytes. The reserved bytes pad
 // the header to a 16-byte boundary so the rkyv-archived body that follows
 // always starts 16-byte aligned. That keeps a future zero-copy `mmap` read
@@ -14,15 +14,34 @@ const HEADER_LEN: usize = 16;
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 struct SnapshotBody {
-    dim: u32,
+    identity: SnapshotIdentity,
     chunks: Vec<IndexedChunk>,
 }
 
-pub(crate) fn encode(dim: usize, chunks: &[IndexedChunk]) -> Result<Vec<u8>> {
-    let dim =
-        u32::try_from(dim).map_err(|_| RagError::Snapshot(format!("embedding dimension {dim} exceeds u32::MAX")))?;
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
+struct SnapshotIdentity {
+    artifact_digest: String,
+    tokenizer_revision: String,
+    pooling: String,
+    instruction: String,
+    quantization: String,
+    dimension: u32,
+    pipeline_version: String,
+}
+
+pub(crate) fn encode(identity: &EmbeddingIdentity, chunks: &[IndexedChunk]) -> Result<Vec<u8>> {
+    let dimension = u32::try_from(identity.dimension)
+        .map_err(|_| RagError::Snapshot(format!("embedding dimension {} exceeds u32::MAX", identity.dimension)))?;
     let body = SnapshotBody {
-        dim,
+        identity: SnapshotIdentity {
+            artifact_digest: identity.artifact_digest.clone(),
+            tokenizer_revision: identity.tokenizer_revision.clone(),
+            pooling: identity.pooling.clone(),
+            instruction: identity.instruction.clone(),
+            quantization: identity.quantization.clone(),
+            dimension,
+            pipeline_version: identity.pipeline_version.clone(),
+        },
         chunks: chunks.to_vec(),
     };
     let archived = rkyv::to_bytes::<RkyvError>(&body).map_err(|e| RagError::Snapshot(e.to_string()))?;
@@ -34,7 +53,7 @@ pub(crate) fn encode(dim: usize, chunks: &[IndexedChunk]) -> Result<Vec<u8>> {
     Ok(out)
 }
 
-pub(crate) fn decode(bytes: &[u8]) -> Result<(usize, Vec<IndexedChunk>)> {
+pub(crate) fn decode(bytes: &[u8]) -> Result<(EmbeddingIdentity, Vec<IndexedChunk>)> {
     if bytes.len() < HEADER_LEN {
         return Err(RagError::SnapshotTooShort(bytes.len()));
     }
@@ -57,7 +76,18 @@ pub(crate) fn decode(bytes: &[u8]) -> Result<(usize, Vec<IndexedChunk>)> {
     aligned.extend_from_slice(&bytes[HEADER_LEN..]);
     let body: SnapshotBody =
         rkyv::from_bytes::<SnapshotBody, RkyvError>(&aligned).map_err(|e| RagError::Snapshot(e.to_string()))?;
-    Ok((body.dim as usize, body.chunks))
+    Ok((
+        EmbeddingIdentity {
+            artifact_digest: body.identity.artifact_digest,
+            tokenizer_revision: body.identity.tokenizer_revision,
+            pooling: body.identity.pooling,
+            instruction: body.identity.instruction,
+            quantization: body.identity.quantization,
+            dimension: body.identity.dimension as usize,
+            pipeline_version: body.identity.pipeline_version,
+        },
+        body.chunks,
+    ))
 }
 
 #[cfg(test)]
@@ -96,6 +126,7 @@ mod tests {
         let bytes = s.snapshot().unwrap();
         let restored = FlatStore::load(&bytes).unwrap();
         assert_eq!(restored.len(), 2);
+        assert_eq!(restored.identity(), s.identity());
         let a = s.search(&[1.0, 0.0, 0.0], 1).unwrap();
         let b = restored.search(&[1.0, 0.0, 0.0], 1).unwrap();
         assert_eq!(a, b);
@@ -113,6 +144,16 @@ mod tests {
         assert!(matches!(
             FlatStore::load(&[1, 2]).unwrap_err(),
             RagError::SnapshotTooShort(2)
+        ));
+    }
+
+    #[test]
+    fn decode_rejects_the_pre_identity_snapshot_version() {
+        let mut bytes = store_with_two().snapshot().unwrap();
+        bytes[4..6].copy_from_slice(&1_u16.to_le_bytes());
+        assert!(matches!(
+            FlatStore::load(&bytes).unwrap_err(),
+            RagError::UnsupportedVersion(1)
         ));
     }
 
@@ -135,7 +176,9 @@ mod tests {
     #[cfg(target_pointer_width = "64")]
     fn encode_rejects_dimensions_larger_than_snapshot_format() {
         let dim = usize::try_from(u64::from(u32::MAX) + 1).unwrap();
-        let err = encode(dim, &[]).unwrap_err();
+        let mut identity = store_with_two().identity().clone();
+        identity.dimension = dim;
+        let err = encode(&identity, &[]).unwrap_err();
         assert!(matches!(err, RagError::Snapshot(message) if message.contains("exceeds u32::MAX")));
     }
 }

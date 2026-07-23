@@ -1,12 +1,12 @@
 //! End-to-end tests for `xberg rag`. Uses `--embedder mock` so no model is
 //! downloaded — the workspace forbids model egress in CI.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::tempdir;
 
-fn binary() -> String {
-    format!("{}/../../target/debug/xberg", env!("CARGO_MANIFEST_DIR"))
+fn binary() -> &'static Path {
+    Path::new(env!("CARGO_BIN_EXE_xberg"))
 }
 
 fn write(dir: &std::path::Path, name: &str, body: &str) -> PathBuf {

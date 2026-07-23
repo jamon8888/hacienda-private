@@ -25,6 +25,16 @@ fn mirrors_root(explicit: Option<PathBuf>) -> PathBuf {
     explicit.unwrap_or_else(default_mirrors_dir)
 }
 
+fn read_utf8_text(path: &Path) -> Result<Option<String>> {
+    match std::fs::read_to_string(path) {
+        Ok(text) => Ok(Some(text)),
+        // Binary/non-UTF-8 input is outside this command's text-only contract,
+        // so it is the sole read failure we skip.
+        Err(error) if error.kind() == std::io::ErrorKind::InvalidData => Ok(None),
+        Err(error) => Err(error).with_context(|| format!("failed to read text file {}", path.display())),
+    }
+}
+
 /// Read every UTF-8 text file directly under `input` (or `input` itself if it is
 /// a file) and chunk it for indexing. Binary formats are P4's `ingest_folder`
 /// tool, which routes through the full extraction pipeline; this command is
@@ -38,12 +48,11 @@ fn collect_documents(input: &Path, chunk_size: usize) -> Result<Vec<DocumentInpu
     let files: Vec<PathBuf> = if input.is_file() {
         vec![input.to_path_buf()]
     } else {
-        let mut v: Vec<PathBuf> = std::fs::read_dir(input)
+        let entries = std::fs::read_dir(input)
             .with_context(|| format!("failed to read directory {}", input.display()))?
-            .filter_map(|e| e.ok())
-            .map(|e| e.path())
-            .filter(|p| p.is_file())
-            .collect();
+            .collect::<std::io::Result<Vec<_>>>()
+            .with_context(|| format!("failed to read an entry in {}", input.display()))?;
+        let mut v: Vec<PathBuf> = entries.into_iter().map(|e| e.path()).filter(|p| p.is_file()).collect();
         // Deterministic order so a re-index assigns the same chunk indices.
         v.sort();
         v
@@ -51,8 +60,7 @@ fn collect_documents(input: &Path, chunk_size: usize) -> Result<Vec<DocumentInpu
 
     let mut docs = Vec::new();
     for path in files {
-        let Ok(text) = std::fs::read_to_string(&path) else {
-            // Not UTF-8 text — skip rather than fail the whole run.
+        let Some(text) = read_utf8_text(&path)? else {
             continue;
         };
         if text.trim().is_empty() {
@@ -67,7 +75,10 @@ fn collect_documents(input: &Path, chunk_size: usize) -> Result<Vec<DocumentInpu
             .chunks
             .into_iter()
             .filter(|c| !c.content.trim().is_empty())
-            .map(|c| ChunkInput { text: c.content, page: None })
+            .map(|c| ChunkInput {
+                text: c.content,
+                page: None,
+            })
             .collect();
         if !chunks.is_empty() {
             docs.push(DocumentInput { doc_id, chunks });
@@ -112,7 +123,10 @@ pub fn rag_index_command(
         }
         EmbedderKind::Preset => RagEngine::new(preset_embedder(preset)?, mirrors_dir).index_documents(matter, &docs)?,
     };
-    println!("indexed {} document(s); matter {matter} now holds {total} chunk(s)", docs.len());
+    println!(
+        "indexed {} document(s); matter {matter} now holds {total} chunk(s)",
+        docs.len()
+    );
     Ok(())
 }
 
@@ -129,11 +143,16 @@ pub fn rag_query_command(
     let mirrors_dir = mirrors_root(mirrors_dir);
 
     let hits = match embedder {
-        EmbedderKind::Mock => RagEngine::new(xberg_rag::MockEmbedder::new(64), mirrors_dir).query(matter, text, top_k)?,
+        EmbedderKind::Mock => {
+            RagEngine::new(xberg_rag::MockEmbedder::new(64), mirrors_dir).query(matter, text, top_k)?
+        }
         EmbedderKind::Preset => RagEngine::new(preset_embedder(preset)?, mirrors_dir).query(matter, text, top_k)?,
     };
     if json {
-        println!("{}", serde_json::to_string_pretty(&hits).context("failed to serialize hits")?);
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&hits).context("failed to serialize hits")?
+        );
     } else if hits.is_empty() {
         println!("no matches");
     } else {
@@ -159,4 +178,30 @@ pub fn rag_import_legacy_command(
     };
     println!("imported {count} chunk(s) from the legacy bundle for matter {matter}");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn collect_documents_skips_only_invalid_utf8() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("binary.bin"), [0xff, 0xfe]).unwrap();
+        std::fs::write(dir.path().join("text.txt"), "index me").unwrap();
+
+        let docs = collect_documents(dir.path(), 128).unwrap();
+        assert_eq!(docs.len(), 1);
+        assert_eq!(docs[0].doc_id, "text.txt");
+    }
+
+    #[test]
+    fn read_utf8_text_reports_other_io_errors_with_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("missing.txt");
+        let error = read_utf8_text(&missing).unwrap_err();
+        let message = format!("{error:#}");
+        assert!(message.contains("failed to read text file"));
+        assert!(message.contains("missing.txt"), "got {message}");
+    }
 }

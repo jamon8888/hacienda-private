@@ -2,8 +2,8 @@
 
 **Date:** 2026-07-22
 **Status:** Draft (pending user review of this document)
-**Resolves:** GitHub issue #30 ("RAG: browser (e5-base, 768-dim) and native host (model2vec,
-256-dim) embeddings are incompatible")
+**Tracks / proposes a resolution for:** GitHub issue #30 ("RAG: browser (e5-base, 768-dim)
+and native host (model2vec, 256-dim) embeddings are incompatible")
 **Depends on / extends:**
 
 - `docs/superpowers/specs/2026-07-21-isomorphic-rag-core-design.md` (R5 phase list, R6 status,
@@ -29,9 +29,10 @@ Confirmed directly in code, not assumed:
   `crates/xberg-rag/src/flat.rs:20` (ingest) and `:29` (query), both `RagError::DimMismatch`.
   Clean hard failure, not silent wrong-ranking, but a matter indexed by one host is unusable by
   the other.
-- No reconciliation exists: the snapshot format stores a single scalar `dim` per matter
-  (`crates/xberg-rag/src/engine.rs`, `FlatStore::new(self.embedder.dim())`), no embedder-identity
-  field, no re-embed path.
+- The original v1 snapshot stored only a scalar `dim` per matter
+  (`crates/xberg-rag/src/engine.rs`, `FlatStore::new(self.embedder.dim())`). Snapshot v2 adds
+  the complete `EmbeddingIdentity` compatibility guard defined below, but no shared cross-host
+  model or automatic re-embed path exists yet.
 
 Two more facts, found investigating this spec, change what "fix" means here:
 
@@ -104,10 +105,16 @@ Non-goals.
 
 **D3 — Strict identity, not per-host tuning.**
 The MCP native host must not run a "fuller" or differently-quantized variant than the browser.
-Both hosts serve the exact same quantized weight artifact, at the same dimension. This is the
-direct fix for the problem statement: choosing "the best model per host" independently is what
-produced the current incompatibility, and repeating that pattern with better models still
-reproduces the bug.
+Both hosts serve the exact same immutable `EmbeddingIdentity`: `artifact_digest` (content
+digest of the exact weights), `tokenizer_revision` (digest of the tokenizer/config artifacts
+plus the effective maximum sequence length), `pooling` (encoded as
+`<strategy>;normalize=<bool>`), `instruction` (the exact prefixes encoded as
+`documents=<prefix>;queries=<prefix>`), `quantization`, `dimension`, and `pipeline_version`
+(the fixed preprocessing-semantics version). Compatibility requires exact equality across
+every field; model names and dimensions alone are insufficient. This is the direct fix for the
+problem statement: choosing "the best model per host" independently is what produced the
+current incompatibility, and repeating that pattern with better models still reproduces the
+bug.
 
 **D4 — BM25 lexical hybrid, independent of the dense-model decision.**
 No lexical scoring exists today — `crates/xberg` has YAKE/RAKE keyword extraction
@@ -145,10 +152,10 @@ support. Same crate compiles for native and `wasm32` — that identity is the en
 - Browser: `xberg-wasm` exposes the same embedder via wasm-bindgen, replacing
   `packages/wasm-pipeline/src/embed.ts`'s `onnxruntime-web` call. `wasm-pipeline`'s `rag.ts`
   calls into it instead of the TS/ORT path.
-- Migration safety net: tag each `FlatStore` snapshot with an embedder identity (model name +
-  quantization + dim), not just the raw `dim` it has today. On a foreign-identity open, surface
-  an actionable error or trigger re-embedding — re-embedding is cheap because chunk text is
-  already persisted; it is not a re-extraction.
+- Migration safety net: persist the complete `EmbeddingIdentity` in every `FlatStore` snapshot,
+  not just the raw `dim` it has today. Loading, appending to, or querying with a foreign identity
+  must surface an actionable re-embedding error; it must never compare or combine the vectors.
+  Re-embedding is cheap because chunk text is already persisted; it is not a re-extraction.
 
 ### Section 4 — BM25 (D4, independent track)
 
