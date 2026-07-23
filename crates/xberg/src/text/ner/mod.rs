@@ -126,9 +126,12 @@ pub async fn detect_candle_entities(
     model_dir: std::path::PathBuf,
     adapter_dir: Option<std::path::PathBuf>,
     categories: &[crate::types::entity::EntityCategory],
-    custom_labels: &[String],
+    custom_labels: Option<Vec<String>>,
 ) -> Result<Vec<Entity>> {
     let adapter = adapter_dir.as_deref();
     let backend = candle::CandleBackend::get_or_init(&model_dir, adapter)?;
-    backend.detect_with_custom(text, categories, custom_labels).await
+    let custom_labels = custom_labels.unwrap_or_default();
+    backend
+        .detect_with_custom(text, categories, &custom_labels)
+        .await
 }

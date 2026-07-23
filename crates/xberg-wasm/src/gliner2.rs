@@ -51,12 +51,7 @@ impl Gliner2Model {
 
     /// Extract zero-shot entities from one text using the supplied labels.
     #[wasm_bindgen(js_name = extractNer)]
-    pub fn extract_ner(
-        &self,
-        text: &str,
-        labels: Vec<String>,
-        threshold: Option<f32>,
-    ) -> Result<JsValue, JsValue> {
+    pub fn extract_ner(&self, text: &str, labels: Vec<String>, threshold: Option<f32>) -> Result<JsValue, JsValue> {
         let model = self
             .model
             .as_ref()

@@ -163,7 +163,7 @@ impl NerBackend for CandleBackend {
         // signals tokio to move other tasks off this thread for the duration without
         // requiring Send. wasm32 has no multi-threaded tokio runtime (and is single-threaded
         // regardless), so extract_ner is called directly; it is already synchronous.
-        #[cfg(not(target_arch = "wasm32"))]
+        #[cfg(all(not(target_arch = "wasm32"), feature = "tokio-runtime"))]
         let spans =
             tokio::task::block_in_place(|| model.extract_ner(text, &labels, DEFAULT_THRESHOLD)).map_err(|e| {
                 crate::XbergError::Plugin {
@@ -172,7 +172,7 @@ impl NerBackend for CandleBackend {
                 }
             })?;
 
-        #[cfg(target_arch = "wasm32")]
+        #[cfg(any(target_arch = "wasm32", not(feature = "tokio-runtime")))]
         let spans = model
             .extract_ner(text, &labels, DEFAULT_THRESHOLD)
             .map_err(|e| crate::XbergError::Plugin {
