@@ -366,6 +366,7 @@ sources = [
     "crates/xberg/src/plugins/validator/mod.rs",
     "crates/xberg/src/plugins/processor/trait.rs",
     "crates/xberg/src/plugins/processor/mod.rs",
+    "crates/xberg/src/text/ner/mod.rs",
 ]
 
 features = [
@@ -408,6 +409,7 @@ features = [
     "transcription-types",
     "classification",
     "captioning",
+    "ner-candle",
     "ner-onnx",
     "ner-llm",
     "diff",
