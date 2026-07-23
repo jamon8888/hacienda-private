@@ -77,6 +77,24 @@
       "url": "https://huggingface.co/fastino/GLiNER2-Guardrails-PII-Multi/resolve/main/encoder_config/config.json",
       "file": "gliner2/gliner2-guardrails-pii-multi/encoder_config/config.json",
       "sha256": "f27dd63cc43a248d2566f0b6ad7a115db353676ce0561dcbca45bac766464c1a"
+    },
+    {
+      "name": "granite-embedding-97m-multilingual-r2.weights",
+      "url": "https://huggingface.co/ibm-granite/granite-embedding-97m-multilingual-r2/resolve/835ad14087e140460703cf0fae09f97d469d65c2/model.safetensors",
+      "file": "granite/granite-embedding-97m-multilingual-r2/model.safetensors",
+      "sha256": "f3ea88b230492811046145513710e76b4cc8c2ad49e8708da0e7247e548903be"
+    },
+    {
+      "name": "granite-embedding-97m-multilingual-r2.tokenizer",
+      "url": "https://huggingface.co/ibm-granite/granite-embedding-97m-multilingual-r2/resolve/835ad14087e140460703cf0fae09f97d469d65c2/tokenizer.json",
+      "file": "granite/granite-embedding-97m-multilingual-r2/tokenizer.json",
+      "sha256": "4f2842d568e2724370aec203652a42ac783c7937f8347a1a2cc7506d71f1582f"
+    },
+    {
+      "name": "granite-embedding-97m-multilingual-r2.config",
+      "url": "https://huggingface.co/ibm-granite/granite-embedding-97m-multilingual-r2/resolve/835ad14087e140460703cf0fae09f97d469d65c2/config.json",
+      "file": "granite/granite-embedding-97m-multilingual-r2/config.json",
+      "sha256": "de948b0bdc6f356afad7a84b276d8dd7e7fe10fb9add1bb5e610621c28e41ebc"
     }
   ]
 }

@@ -3,6 +3,9 @@ import { randomUUID } from "node:crypto";
 import type { PiiEntity, RetrievedChunk } from "@xberg-io/core";
 import { AppError } from "./error.js";
 
+export const SHARED_EMBEDDING_IDENTITY =
+  "ibm-granite/granite-embedding-97m-multilingual-r2@835ad14087e140460703cf0fae09f97d469d65c2;bf16->f32;modernbert-384;cls;normalize=true";
+
 // Wire format written by the browser engine (`@xberg-io/wasm-pipeline` `serializeMirrorToBytes`):
 // a JSON `MirrorBundle` wrapping the raw EdgeVec index bytes + the curtain-privacy vault bytes plus
 // the light metadata the server needs to answer MCP tools without running any engine: PII spans
@@ -28,9 +31,11 @@ interface MirrorChunk {
 }
 
 interface MirrorBundle {
-  version: number;
+	version: number;
+	embedding_identity: string;
   index: number[];
   vault: number[];
+  vaultSalt: number[];
   pii: MirrorPiiSpan[];
   chunks: MirrorChunk[];
 }
@@ -157,12 +162,14 @@ export class MirrorStore {
     const bundleFile = this.bundlePath(matterId);
     const existing: MirrorBundle = existsSync(bundleFile)
       ? this.parseBundle(matterId, readFileSync(bundleFile))
-      : { version: 1, index: [], vault: [], pii: [], chunks: [] };
+      : { version: 2, embedding_identity: SHARED_EMBEDDING_IDENTITY, index: [], vault: [], vaultSalt: [], pii: [], chunks: [] };
 
     const merged: MirrorBundle = {
-      version: 1,
+	  version: 2,
+	  embedding_identity: existing.embedding_identity,
       index: existing.index,
       vault: existing.vault,
+      vaultSalt: existing.vaultSalt,
       pii: [...existing.pii, ...additions.pii],
       chunks: [...existing.chunks, ...additions.chunks],
     };
@@ -191,9 +198,11 @@ export class MirrorStore {
       typeof parsed !== "object" ||
       parsed === null ||
       !("version" in parsed) ||
-      (parsed as MirrorBundle).version !== 1 ||
+      (parsed as MirrorBundle).version !== 2 ||
+      (parsed as MirrorBundle).embedding_identity !== SHARED_EMBEDDING_IDENTITY ||
       !Array.isArray((parsed as MirrorBundle).index) ||
       !Array.isArray((parsed as MirrorBundle).vault) ||
+      !Array.isArray((parsed as MirrorBundle).vaultSalt) ||
       !Array.isArray((parsed as MirrorBundle).pii) ||
       !Array.isArray((parsed as MirrorBundle).chunks)
     ) {

@@ -63,7 +63,6 @@ export async function ingestFolder(
 	const chunks = chunkExtraction(doc);
 	const vectors = await embedChunks(
 		chunks.map((c) => ({ text: c.content })),
-		scenario,
 	);
 
 	const items: IndexedChunk[] = [];

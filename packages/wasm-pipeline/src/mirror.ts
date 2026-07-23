@@ -1,5 +1,6 @@
 import type { Matter } from "@xberg-io/core";
 import { API_BASE } from "./constants";
+import { graniteEmbeddingIdentity } from "./embed";
 
 // The Plan 1 server (`services/mcp-server/src/mirror.ts`) stores the *entire raw request body* as
 // the mirror payload: `saveMirror(matterId, await readBody(req))` writes `<matterId>.bin` +
@@ -30,7 +31,8 @@ export interface MirrorChunk {
 }
 
 export interface MirrorBundle {
-	version: 1;
+	version: 2;
+	embedding_identity: string;
 	index: number[]; // raw EdgeVec bytes (browser uses)
 	vault: number[]; // raw curtain-vault bytes (browser uses)
 	// PBKDF2 salt used to seal `vault` (see redact.ts sealVault/openVault). Required to re-derive
@@ -49,7 +51,8 @@ export function serializeMirror(
 	chunks: MirrorChunk[] = [],
 ): MirrorBundle {
 	return {
-		version: 1,
+		version: 2,
+		embedding_identity: graniteEmbeddingIdentity(),
 		index: Array.from(index),
 		vault: Array.from(vault),
 		vaultSalt: Array.from(vaultSalt),

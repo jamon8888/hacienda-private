@@ -61,14 +61,15 @@ export interface RedactArgs {
 	entity_ids?: string[];
 }
 
+const NODE_RAG_QUERY_UNAVAILABLE_MESSAGE =
+	"live rag_query is only supported by the native Rust MCP host; the Node mirror only stores metadata bundles";
+
 export function ragQuery(ctx: AppContext, principal: Principal, args: RagQueryArgs): ToolResult {
 	return wrap(() => {
 		const matter = getMatter(ctx, args.matter_id);
 		authorize(principal.scopes, "read");
 		requireConsent(ctx.store, matter, "pii_read", principal.subject);
-		const chunks = ctx.mirror.retrieve(args.matter_id, args.query, args.top_k ?? 8);
-		ctx.store.recordAudit(principal.subject, "read", "rag_query", args.matter_id);
-		return jsonResult(chunks);
+		throw new AppError("model", NODE_RAG_QUERY_UNAVAILABLE_MESSAGE);
 	});
 }
 

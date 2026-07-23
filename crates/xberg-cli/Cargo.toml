@@ -22,6 +22,7 @@ path = "src/main.rs"
 [features]
 default = [
     "embeddings",
+    "candle-embeddings",
     "html",
     "url-ingestion",
     "liter-llm",
@@ -54,6 +55,7 @@ api = ["xberg/api"]
 mcp = ["xberg/mcp"]
 mcp-http = ["xberg/mcp-http"]
 embeddings = ["xberg/embeddings"]
+candle-embeddings = ["xberg/candle-embeddings"]
 paddle-ocr = ["xberg/paddle-ocr"]
 candle-ocr = ["xberg/candle-ocr"]
 candle-trocr = ["xberg/candle-trocr"]

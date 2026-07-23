@@ -3,7 +3,7 @@ import { mkdtempSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openStore, type MetadataStore } from "../src/store.js";
-import { MirrorStore } from "../src/mirror.js";
+import { MirrorStore, SHARED_EMBEDDING_IDENTITY } from "../src/mirror.js";
 
 describe("forget lifecycle", () => {
   let dir: string;
@@ -34,9 +34,11 @@ describe("forget lifecycle", () => {
     store.recordRedaction("d1", matter.id, ["e1"]);
 
     const bundle = {
-      version: 1,
+      version: 2,
+      embedding_identity: SHARED_EMBEDDING_IDENTITY,
       index: [1, 2, 3],
       vault: [4, 5, 6],
+      vaultSalt: [7, 8],
       pii: [{ doc_id: "d1", kind: "PER", start: 0, end: 3, token: "t1" }],
       chunks: [{ doc_id: "d1", chunk_index: 0, text: "redacted", score: 0.9, citation: "d1#0" }],
     };

@@ -400,7 +400,7 @@ enum RagAction {
         #[arg(long)]
         mirrors_dir: Option<PathBuf>,
         /// Embedding backend: preset (real model) or mock (tests only)
-        #[arg(long, value_enum, default_value = "preset")]
+        #[arg(long, value_enum, default_value = "shared")]
         embedder: commands::EmbedderKind,
         /// Embedding preset name when --embedder preset
         #[arg(long, default_value = "lightweight")]
@@ -424,7 +424,7 @@ enum RagAction {
         #[arg(long)]
         mirrors_dir: Option<PathBuf>,
         /// Embedding backend: preset (real model) or mock (tests only)
-        #[arg(long, value_enum, default_value = "preset")]
+        #[arg(long, value_enum, default_value = "shared")]
         embedder: commands::EmbedderKind,
         /// Embedding preset name when --embedder preset
         #[arg(long, default_value = "lightweight")]
@@ -442,7 +442,7 @@ enum RagAction {
         #[arg(long)]
         mirrors_dir: Option<PathBuf>,
         /// Embedding backend: preset (real model) or mock (tests only)
-        #[arg(long, value_enum, default_value = "preset")]
+        #[arg(long, value_enum, default_value = "shared")]
         embedder: commands::EmbedderKind,
         /// Embedding preset name when --embedder preset
         #[arg(long, default_value = "lightweight")]
