@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.36.2"
+alef_version = "0.42.0"
 # -D warnings (emitted into every generated Rust binding as #![allow(...)]).
 extra_clippy_allows = ["redundant_field_names"]
 languages = [
@@ -366,6 +366,7 @@ sources = [
     "crates/xberg/src/plugins/validator/mod.rs",
     "crates/xberg/src/plugins/processor/trait.rs",
     "crates/xberg/src/plugins/processor/mod.rs",
+    "crates/xberg/src/text/ner/mod.rs",
 ]
 
 features = [
@@ -408,6 +409,7 @@ features = [
     "transcription-types",
     "classification",
     "captioning",
+    "ner-candle",
     "ner-onnx",
     "ner-llm",
     "diff",
@@ -477,6 +479,7 @@ default_features = false
 
 [crates.node]
 package_name = "@xberg-io/xberg"
+features = ["full", "pdf", "ocr", "paddle-ocr", "paddle-ocr-types", "layout-detection", "layout-types", "embeddings", "embedding-presets", "reranker", "reranker-presets", "sparse-embeddings", "sparse-embedding-presets", "late-interaction", "late-interaction-presets", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "auto-rotate-types", "tokio-runtime", "api", "api-types", "mcp", "liter-llm", "quality", "svg", "transcription", "transcription-types", "classification", "captioning", "ner-candle", "ner-onnx", "ner-llm", "diff", "markdown-footnotes", "redaction", "enrichment", "heuristics", "presets", "structured", "url-ingestion"]
 # Intel macOS (darwin-x64) is dropped: Microsoft ships no x86_64-macOS ONNX
 # Runtime prebuilt, so CI provisions ORT via Homebrew, whose bottle links a
 # non-relocatable abseil closure that cannot be vendored into a portable .node.
@@ -647,6 +650,7 @@ package_name = "@xberg-io/xberg-wasm"
 # bundlers, Deno (npm:), and Node 22+.
 targets = ["web"]
 features = ["wasm-target", "url-ingestion"]
+custom_rust_modules = ["gliner2", "granite_embed"]
 exclude_types = ["OcrFallbackDecision", "OcrProcessor", "OcrCacheStats", "TessdataManager", "PageLayoutResult"]
 exclude_functions = [
     "embed_texts",
@@ -718,6 +722,8 @@ exclude_functions = [
 
 [crates.wasm.extra_dependencies]
 async-trait = "0.1"
+xberg-gliner = { path = "../xberg-gliner", version = "1.0.0-rc.29", default-features = false, features = ["candle"] }
+xberg-candle-embed = { path = "../xberg-candle-embed", version = "1.0.0-rc.29", default-features = false, features = ["candle"] }
 
 [crates.ffi]
 prefix = "xberg"

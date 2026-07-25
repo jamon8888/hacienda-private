@@ -12,6 +12,7 @@ export * from "./ocr";
 export * from "./chunk";
 export * from "./embed";
 export * from "./ner";
+export { ensureGliner2Model, resetGliner2Model } from "./gliner2";
 export * from "./rag";
 export * from "./redact";
 export * from "./mirror";

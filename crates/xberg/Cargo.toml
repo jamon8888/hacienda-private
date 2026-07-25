@@ -305,6 +305,10 @@ static-embeddings = [
     "dep:reqwest",
     "dep:sha2",
 ]
+# Shared Granite ModernBERT embedding inference. This is separate from the
+# legacy ONNX/static preset machinery so hosts can opt into one backend and one
+# identity without enabling unrelated ORT features.
+candle-embeddings = ["dep:xberg-candle-embed"]
 # v5.0.0: cross-encoder reranking.
 # reranker-presets: static preset metadata (WASM/Android-safe, no ORT).
 reranker-presets = []
@@ -344,6 +348,7 @@ diff = ["dep:similar"]
 # Each feature lands in its own module under `crates/xberg/src/text/` (or
 # `crates/xberg/src/extractors/` for QR) and is wired through a built-in
 # post-processor under `crates/xberg/src/plugins/processor/builtin/`.
+ner-candle = ["ner", "dep:xberg-gliner", "xberg-gliner/candle"]
 ner = [] # NER result types only; safe on every target.
 ner-llm-types = [
     "ner",
@@ -643,6 +648,7 @@ full = [
     "diff",
     "ner-llm",
     "ner-onnx",
+    "ner-candle",
     "presets",
     "structured",
     "redaction",
@@ -825,6 +831,7 @@ whatlang = { version = "0.18.0", optional = true }
 xberg-gliner = { workspace = true, optional = true }
 xberg-libheif = { path = "../xberg-libheif", version = "1.0.0-rc.29", optional = true }
 xberg-rag = { workspace = true }
+xberg-candle-embed = { workspace = true, optional = true, features = ["candle"] }
 # No `version` on this path-dep: xberg-tesseract carries `links =
 # "xberg_tesseract"`, and a versioned path-dep makes the maturin sdist
 # resolve two copies (path + registry) of a `links` crate, which cargo rejects

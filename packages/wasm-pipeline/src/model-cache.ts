@@ -72,7 +72,22 @@ export async function cachedFetchBuffer(url: string, onProgress?: (p: FetchProgr
     // Caching is best-effort: a full Cache Storage (e.g. Safari/iOS quota limits) must
     // never fail an otherwise-successful download.
   }
-  return bytes.buffer;
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
+
+/** Fetch an immutable model artifact and verify its content hash before use. */
+export async function cachedFetchVerifiedBuffer(
+	url: string,
+	expectedSha256: string,
+	onProgress?: (p: FetchProgress) => void,
+): Promise<ArrayBuffer> {
+	const bytes = new Uint8Array(await cachedFetchBuffer(url, onProgress));
+	const digest = await crypto.subtle.digest("SHA-256", bytes);
+	const actual = Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join("");
+	if (actual !== expectedSha256.toLowerCase()) {
+		throw new Error(`model artifact checksum mismatch for ${url}`);
+	}
+	return bytes.buffer;
 }
 
 export async function cachedFetchJson(url: string): Promise<unknown> {

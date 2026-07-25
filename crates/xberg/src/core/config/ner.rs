@@ -19,10 +19,13 @@ pub struct NerConfig {
     /// when empty.
     #[serde(default)]
     pub categories: Vec<EntityCategory>,
-    /// Override the default model — only used by [`NerBackendKind::Onnx`].
-    /// `None` lets the backend pick its pinned default xberg GLiNER model alias.
+    /// Override the model. For ONNX this is an xberg model alias; for Candle it
+    /// is a local directory containing the GLiNER2 artifacts.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
+    /// Optional local PEFT/LoRA adapter directory used by the Candle backend.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub adapter: Option<String>,
     /// Optional LLM configuration — only used by [`NerBackendKind::Llm`]. Token usage
     /// for LLM backends is recorded in `ExtractedDocument::llm_usage`.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -52,4 +55,27 @@ pub enum NerBackendKind {
     /// liter-llm zero-shot NER via structured-output prompts. Requires `ner-llm`
     /// feature. Useful when domain-specific categories outstrip the ONNX taxonomy.
     Llm,
+    /// Pure-Rust Candle GLiNER2 inference from local safetensors artifacts.
+    /// Requires the `ner-candle` feature.
+    Candle,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn candle_backend_round_trips_with_local_artifacts() {
+        let config = NerConfig {
+            backend: NerBackendKind::Candle,
+            model: Some("models/gliner2".into()),
+            adapter: Some("models/pii-adapter".into()),
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&config).expect("serialize config");
+        let restored: NerConfig = serde_json::from_str(&json).expect("deserialize config");
+        assert_eq!(restored.backend, NerBackendKind::Candle);
+        assert_eq!(restored.model.as_deref(), Some("models/gliner2"));
+        assert_eq!(restored.adapter.as_deref(), Some("models/pii-adapter"));
+    }
 }

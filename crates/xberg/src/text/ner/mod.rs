@@ -19,6 +19,8 @@
 #![cfg(feature = "ner")]
 
 pub mod backend;
+#[cfg(feature = "ner-candle")]
+pub mod candle;
 #[cfg(feature = "ner-onnx")]
 pub mod gline;
 #[cfg(all(feature = "ner-llm", not(all(target_os = "android", target_arch = "x86_64"))))]
@@ -112,4 +114,24 @@ pub async fn detect_entities(
     categories: &[crate::types::entity::EntityCategory],
 ) -> Result<Vec<Entity>> {
     backend.detect(text, categories).await
+}
+
+/// Detect entities with a local Candle GLiNER2 model.
+///
+/// This convenience façade keeps model loading out of [`NerConfig`] and is
+/// intended for native integrations that manage model artifacts explicitly.
+#[cfg(all(feature = "ner-candle", not(target_arch = "wasm32")))]
+pub async fn detect_candle_entities(
+    text: &str,
+    model_dir: std::path::PathBuf,
+    adapter_dir: Option<std::path::PathBuf>,
+    categories: &[crate::types::entity::EntityCategory],
+    custom_labels: Option<Vec<String>>,
+) -> Result<Vec<Entity>> {
+    let adapter = adapter_dir.as_deref();
+    let backend = candle::CandleBackend::get_or_init(&model_dir, adapter)?;
+    let custom_labels = custom_labels.unwrap_or_default();
+    backend
+        .detect_with_custom(text, categories, &custom_labels)
+        .await
 }
