@@ -2,8 +2,8 @@
 
 **Date:** 2026-07-22
 **Status:** Draft (pending user review of this document)
-**Resolves:** GitHub issue #30 ("RAG: browser (e5-base, 768-dim) and native host (model2vec,
-256-dim) embeddings are incompatible")
+**Tracks / proposes a resolution for:** GitHub issue #30 ("RAG: browser (e5-base, 768-dim)
+and native host (model2vec, 256-dim) embeddings are incompatible")
 **Depends on / extends:**
 
 - `docs/superpowers/specs/2026-07-21-isomorphic-rag-core-design.md` (R5 phase list, R6 status,
@@ -29,9 +29,10 @@ Confirmed directly in code, not assumed:
   `crates/xberg-rag/src/flat.rs:20` (ingest) and `:29` (query), both `RagError::DimMismatch`.
   Clean hard failure, not silent wrong-ranking, but a matter indexed by one host is unusable by
   the other.
-- No reconciliation exists: the snapshot format stores a single scalar `dim` per matter
-  (`crates/xberg-rag/src/engine.rs`, `FlatStore::new(self.embedder.dim())`), no embedder-identity
-  field, no re-embed path.
+- The original v1 snapshot stored only a scalar `dim` per matter
+  (`crates/xberg-rag/src/engine.rs`, `FlatStore::new(self.embedder.dim())`). Snapshot v2 adds
+  the complete `EmbeddingIdentity` compatibility guard defined below, but no shared cross-host
+  model or automatic re-embed path exists yet.
 
 Two more facts, found investigating this spec, change what "fix" means here:
 
@@ -104,10 +105,16 @@ Non-goals.
 
 **D3 — Strict identity, not per-host tuning.**
 The MCP native host must not run a "fuller" or differently-quantized variant than the browser.
-Both hosts serve the exact same quantized weight artifact, at the same dimension. This is the
-direct fix for the problem statement: choosing "the best model per host" independently is what
-produced the current incompatibility, and repeating that pattern with better models still
-reproduces the bug.
+Both hosts serve the exact same immutable `EmbeddingIdentity`: `artifact_digest` (content
+digest of the exact weights), `tokenizer_revision` (digest of the tokenizer/config artifacts
+plus the effective maximum sequence length), `pooling` (encoded as
+`<strategy>;normalize=<bool>`), `instruction` (the exact prefixes encoded as
+`documents=<prefix>;queries=<prefix>`), `quantization`, `dimension`, and `pipeline_version`
+(the fixed preprocessing-semantics version). Compatibility requires exact equality across
+every field; model names and dimensions alone are insufficient. This is the direct fix for the
+problem statement: choosing "the best model per host" independently is what produced the
+current incompatibility, and repeating that pattern with better models still reproduces the
+bug.
 
 **D4 — BM25 lexical hybrid, independent of the dense-model decision.**
 No lexical scoring exists today — `crates/xberg` has YAKE/RAKE keyword extraction
@@ -145,10 +152,10 @@ support. Same crate compiles for native and `wasm32` — that identity is the en
 - Browser: `xberg-wasm` exposes the same embedder via wasm-bindgen, replacing
   `packages/wasm-pipeline/src/embed.ts`'s `onnxruntime-web` call. `wasm-pipeline`'s `rag.ts`
   calls into it instead of the TS/ORT path.
-- Migration safety net: tag each `FlatStore` snapshot with an embedder identity (model name +
-  quantization + dim), not just the raw `dim` it has today. On a foreign-identity open, surface
-  an actionable error or trigger re-embedding — re-embedding is cheap because chunk text is
-  already persisted; it is not a re-extraction.
+- Migration safety net: persist the complete `EmbeddingIdentity` in every `FlatStore` snapshot,
+  not just the raw `dim` it has today. Loading, appending to, or querying with a foreign identity
+  must surface an actionable re-embedding error; it must never compare or combine the vectors.
+  Re-embedding is cheap because chunk text is already persisted; it is not a re-extraction.
 
 ### Section 4 — BM25 (D4, independent track)
 
@@ -187,53 +194,3 @@ useful as an interim quality improvement.
 - Reranking (Non-goals).
 - HNSW/P2b backend swap (Non-goals, separate open spike).
 - Any change to `FlatStore`'s cosine-similarity search algorithm itself — only what feeds it.
-
-## 2026-07-23 GLiNER2 implementation update
-
-Upstream Xberg revision `b06fbc71cc5f2a5aed425b56dba105122f7cd4c2`
-contains a pure-Rust Candle GLiNER2 implementation in `xberg-gliner`. It loads
-the official safetensors/tokenizer/config from a native directory or from bytes
-on WASM. This removes the previous architectural assumption that contextual NER
-must permanently remain a JavaScript/ORT concern.
-
-**Status update (this PR):** The `ner-candle` feature and `CandleBackend`
-implementing `NerBackend` are now wired through Xberg configuration/dispatch
-in `crates/xberg/src/text/ner/candle.rs`. This integrates the Candle GLiNER2
-core into the native extraction pipeline. Generated Node/WASM bindings for the
-new surface are pending (Alef generation required). Hacienda's browser and MCP
-paths still use the legacy JavaScript GLiNER runtime; migration will switch
-them to the unified Candle/WASM path once bindings are generated and parity
-is verified.
-
-This does not change this spec's separation between embedding identity and NER
-identity. GLiNER2 remains a companion migration with its own model lifecycle,
-thresholds, supported languages, persistence, and audit policy.
-
-The target is one Rust implementation and one conformance contract, compiled
-to native code for MCP and to WASM for the browser. Native F32 and browser F16
-artifacts may differ physically, so parity is tolerance-based rather than
-bit-identical. The 1.23 GB source checkpoint, approximately 614 MB converted
-WASM weights, seven-language coverage, main-thread blocking, 512-position
-truncation, and absent real-model browser test remain release gates.
-
-## Resolved GLiNER2 integration shape
-
-Model bytes do not belong in `ExtractionConfig`. The shared contract carries
-backend choice, immutable artifact identity, labels, thresholds, windowing, and
-offset semantics; each host resolves the artifact and owns the model session.
-
-- Native Hacienda MCP uses a generated Node façade over Xberg Candle, loading
-  verified local paths and executing through a bounded model queue.
-- Browser WASM uses a hand-written Alef-declared module with `loadBytes` and
-  `extractNer`, hosted in a dedicated Worker. The generated package remains
-  responsible only for the normal Xberg API surface.
-- Both hosts use the same Rust GLiNER2 implementation and conformance fixtures.
-  Native F32 and browser F16 are separate physical artifacts and require
-  tolerance-based score parity.
-- The raw F32 checkpoint is not a browser default. A pinned F16 artifact and a
-  real Worker memory/startup spike are prerequisites; quantization is a later
-  optimization.
-
-This leaves the existing JavaScript GLiNER path as a temporary fallback. Running
-the browser WASM binary inside Node is explicitly rejected because it makes MCP
-inherit browser memory, CPU, and Worker constraints.

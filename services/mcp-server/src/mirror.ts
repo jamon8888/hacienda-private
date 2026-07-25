@@ -76,10 +76,17 @@ export class MirrorStore {
     mkdirSync(mirrorsDir, { recursive: true });
   }
 
+  private validateMatterId(matterId: string): void {
+    if (matterId === "" || matterId === "." || matterId === "..") {
+      throw new AppError("bad_request", "matter_id must not be empty, '.' or '..'");
+    }
+  }
+
   // Every matter's mirror files live under one directory, so a re-save can swap the whole
   // directory in with a single atomic rename (see saveMirror) instead of writing 3 files
   // independently, which could leave a crash-torn mix of old/new files on disk.
   private matterDir(matterId: string): string {
+    this.validateMatterId(matterId);
     return `${this.mirrorsDir}/${encodeURIComponent(matterId)}`;
   }
 
@@ -109,9 +116,7 @@ export class MirrorStore {
   // temporarily absent (never corrupted) until the next ingest — an accepted, documented
   // residual risk for this single-owner deployment.
   saveMirror(matterId: string, body: Buffer): MirrorStatus {
-    if (!matterId) {
-      throw new AppError("bad_request", "matter_id is required");
-    }
+    this.validateMatterId(matterId);
     if (body.length === 0) {
       throw new AppError("bad_request", "mirror payload is empty");
     }
@@ -148,6 +153,7 @@ export class MirrorStore {
   // browser-owned EdgeVec/curtain-privacy bytes this Node-side code never constructs (see the
   // "server NEVER imports edgevec" note above).
   appendMirror(matterId: string, additions: { pii: MirrorPiiSpanInput[]; chunks: MirrorChunkInput[] }): MirrorStatus {
+    this.validateMatterId(matterId);
     const bundleFile = this.bundlePath(matterId);
     const existing: MirrorBundle = existsSync(bundleFile)
       ? this.parseBundle(matterId, readFileSync(bundleFile))
@@ -165,6 +171,7 @@ export class MirrorStore {
   }
 
   status(matterId: string): MirrorStatus | null {
+    this.validateMatterId(matterId);
     const meta = this.metaPath(matterId);
     if (!existsSync(meta)) return null;
     const raw = JSON.parse(readFileSync(meta, "utf8")) as { matter_id: string; synced_at: string };
@@ -196,6 +203,7 @@ export class MirrorStore {
   }
 
   async loadMirror(matterId: string): Promise<LoadedMirror> {
+    this.validateMatterId(matterId);
     const bundleFile = this.bundlePath(matterId);
     if (!existsSync(bundleFile)) {
       throw new AppError("not_found", `no mirror for matter ${matterId}`);
@@ -237,6 +245,7 @@ export class MirrorStore {
   }
 
   listPii(matterId: string, docId: string): PiiEntity[] {
+    this.validateMatterId(matterId);
     const bundle = this.getBundle(matterId);
     return bundle.pii
       .filter((s) => s.doc_id === docId)
@@ -258,6 +267,7 @@ export class MirrorStore {
   // True vector retrieval is browser-side; the server serves the last-mirrored cited chunks,
   // sorted by their mirror-time relevance placeholder score.
   retrieve(matterId: string, _query: string, topK = 8): RetrievedChunk[] {
+    this.validateMatterId(matterId);
     const bundle = this.getBundle(matterId);
     return bundle.chunks
       .slice()
@@ -278,6 +288,7 @@ export class MirrorStore {
   }
 
   loadCipher(matterId: string, chunkId: string): Uint8Array {
+    this.validateMatterId(matterId);
     const bundle = this.getBundle(matterId);
     const sep = chunkId.lastIndexOf(":");
     if (sep <= 0) {
@@ -306,6 +317,7 @@ export class MirrorStore {
   // DELETE flow already removes the matter's DB rows before calling this — throwing here would
   // leave that deletion half-applied and skip the audit entry that follows.
   forget(matterId: string): void {
+    this.validateMatterId(matterId);
     this.bundles.delete(matterId);
     const dir = this.matterDir(matterId);
     if (existsSync(dir)) {

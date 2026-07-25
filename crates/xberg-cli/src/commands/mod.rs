@@ -20,6 +20,7 @@ pub mod extract;
 #[cfg(feature = "ner-onnx")]
 pub mod ner;
 pub mod overrides;
+pub mod rag;
 #[cfg(any(feature = "api", feature = "mcp"))]
 pub mod server;
 
@@ -31,6 +32,7 @@ pub use embed::embed_command;
 pub use extract::{
     BatchInputFormat, ExtractInputSource, batch_command, extract_command, load_batch_input_manifest, uri_to_local_path,
 };
+pub use rag::{EmbedderKind, rag_import_legacy_command, rag_index_command, rag_query_command};
 #[cfg(feature = "mcp")]
 pub use server::mcp_command;
 #[cfg(feature = "api")]

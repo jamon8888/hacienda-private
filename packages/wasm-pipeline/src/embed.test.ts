@@ -19,6 +19,7 @@ vi.mock("onnxruntime-web/wasm", () => ({
 
 import { ensureEmbedSession, resetEmbedSession } from "./embed";
 import { cachedFetchBuffer } from "./model-cache";
+import { InferenceSession } from "onnxruntime-web/wasm";
 import type { ModelScenario } from "./scenario";
 
 const scenario: ModelScenario = {
@@ -58,5 +59,15 @@ describe("ensureEmbedSession", () => {
     await ensureEmbedSession(scenario);
 
     expect(cachedFetchBuffer).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries session creation after a rejected creation promise", async () => {
+    vi.mocked(InferenceSession.create).mockRejectedValueOnce(new Error("backend unavailable"));
+
+    await expect(ensureEmbedSession(scenario)).rejects.toThrow("backend unavailable");
+    await expect(ensureEmbedSession(scenario)).resolves.toBeDefined();
+
+    expect(cachedFetchBuffer).toHaveBeenCalledTimes(2);
+    expect(InferenceSession.create).toHaveBeenCalledTimes(2);
   });
 });

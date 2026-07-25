@@ -6,12 +6,12 @@
 
 **Architecture:** A new `warmup.ts` orchestrator in `packages/wasm-pipeline` reuses the existing lazy-init functions in `embed.ts` (E5) and `ner.ts` (GLiNER), adding byte-progress + caching to each, plus retry-with-backoff. A module-level singleton store in `apps/web` (`warmup-store.ts`) kicks this off exactly once per tab from `AppShell`, and a `useModelWarmup()` hook lets the status pill, the search page, and the folder ingest view all read `{stage, progress, error}` without prop drilling.
 
-**Tech Stack:** TypeScript, Vitest, React 19 (`useSyncExternalStore`), `onnxruntime-web`, `gliner`, `@xenova/transformers`, Cache Storage API (browser), existing Base UI-derived `Badge`/`Button` components.
+**Tech Stack:** TypeScript, Vitest, React 18.3.1 (`useSyncExternalStore`), `onnxruntime-web`, `gliner`, `@xenova/transformers`, Cache Storage API (browser), existing Base UI-derived `Badge`/`Button` components.
 
 ## Global Constraints
 
 - Cache Storage bucket name is exactly `xberg-models-v1` (used for E5 model bytes, E5 tokenizer JSON, and the pre-fetched GLiNER model bytes).
-- Retry policy is 3 attempts per model with backoff `1000 * 2^attempt` ms (1s / 2s / 4s), matching the approved design spec.
+- Retry policy is 3 total attempts per model (the initial attempt plus 2 automatic retries) with backoff `1000 * 2^attempt` ms between failures (1s, then 2s), matching the approved design spec.
 - `ner.ts`'s `transformersSettings.useBrowserCache` must be flipped from `false` to `true` (fixes the pre-existing every-session-redownload bug for the GLiNER tokenizer).
 - No Web Worker or Service Worker — approved design spec explicitly rejected both as out of scope for this feature.
 - **Testing scope correction:** the approved spec calls for a Playwright e2e smoke test. There is no `playwright.config.*` at the repo root today, despite `@playwright/test` being a devDependency (a `services/mcp-server`-level e2e harness exists but nothing for `apps/web`) — standing up Playwright for the web app from scratch is out of scope for this plan; every task below instead gets a Vitest + Testing Library test at the store/component level (jsdom environment, per `apps/web/vitest.config.ts`), which covers the same "loading → ready → search/ingest enabled" behavior without inventing new test infrastructure.
@@ -831,7 +831,7 @@ describe("warmupModels", () => {
 		vi.useRealTimers();
 	});
 
-	it("throws after exhausting retries on both attempts", async () => {
+	it("throws after exhausting all three attempts", async () => {
 		vi.useFakeTimers();
 		ensureEmbedSessionMock.mockRejectedValue(new Error("permanent failure"));
 		ensurePiiModelMock.mockResolvedValue({});

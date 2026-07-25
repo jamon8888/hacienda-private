@@ -91,7 +91,7 @@ describe("warmupModels", () => {
     vi.useRealTimers();
   });
 
-  it("throws after exhausting retries on both attempts", async () => {
+  it("throws after exhausting all three attempts", async () => {
     vi.useFakeTimers();
     ensureEmbedSessionMock.mockRejectedValue(new Error("permanent failure"));
     ensurePiiModelMock.mockResolvedValue({});

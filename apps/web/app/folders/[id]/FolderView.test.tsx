@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { warmupState, useModelWarmupMock } from "@/test-utils/warmup-store-mock";
 
 // jsdom doesn't implement window.matchMedia. The real FileDropzone (rendered here once
 // models are "ready") pulls in `border-beam`'s <BorderBeam>, which reads
@@ -45,9 +46,8 @@ vi.mock("@xberg-io/wasm-pipeline", () => ({
   ingestFolder: vi.fn(),
 }));
 
-const warmupState: { current: { stage: string } } = { current: { stage: "loading" } };
 vi.mock("@/lib/engine/warmup-store", () => ({
-  useModelWarmup: () => warmupState.current,
+  useModelWarmup: useModelWarmupMock,
 }));
 
 import FolderView from "./FolderView";
