@@ -135,6 +135,7 @@ impl LoraAdapter {
 
         // Validate every module has both A and B.
         let mut modules = HashMap::new();
+        let r = config.r;
         for (path, (a, b)) in by_module {
             let lora_a = a.ok_or_else(|| {
                 crate::candle::GlinerCandleError::Backend(format!("lora: missing lora_A for module {path}"))
@@ -142,6 +143,27 @@ impl LoraAdapter {
             let lora_b = b.ok_or_else(|| {
                 crate::candle::GlinerCandleError::Backend(format!("lora: missing lora_B for module {path}"))
             })?;
+            // Validate LoRA matrix ranks against config.r
+            let a_rank = lora_a.shape().get(0).copied().unwrap_or(0);
+            let b_rank = lora_b.shape().get(1).copied().unwrap_or(0);
+            if a_rank != r {
+                return Err(crate::candle::GlinerCandleError::Backend(format!(
+                    "lora: module {path}: lora_A rank {a_rank} != config.r {r}"
+                )));
+            }
+            if b_rank != r {
+                return Err(crate::candle::GlinerCandleError::Backend(format!(
+                    "lora: module {path}: lora_B rank {b_rank} != config.r {r}"
+                )));
+            }
+            // Validate A/B multiplication dimensions are compatible: A=[r, in], B=[out, r]
+            let a_in = lora_a.shape().get(1).copied().unwrap_or(0);
+            let b_out = lora_b.shape().get(0).copied().unwrap_or(0);
+            if a_in == 0 || b_out == 0 {
+                return Err(crate::candle::GlinerCandleError::Backend(format!(
+                    "lora: module {path}: invalid A/B shapes A={:?} B={:?}", lora_a.shape(), lora_b.shape()
+                )));
+            }
             modules.insert(path, LoraModule { lora_a, lora_b });
         }
 
@@ -207,7 +229,7 @@ pub(crate) fn merge_into_base(
 
     for (key, view) in st.tensors() {
         // Decode safetensors view to a Candle tensor using candle's Load trait.
-        let tensor = Tensor::load(&view, device)
+        let mut tensor = Tensor::load(&view, device)
             .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("lora_merge: decode {key}: {e}")))?;
 
         // Match key against adapter modules: strip `.weight` suffix, look up.
