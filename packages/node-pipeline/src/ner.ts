@@ -4,18 +4,48 @@ import { dirname } from "node:path";
 import type { Gliner, IEntityResult, InitConfig, IONNXWebSettings, ITransformersSettings } from "gliner";
 
 export const RUST_ALIGNED_PII_TYPES = [
-  "person",
-  "organization",
-  "location",
-  "date",
-  "time",
-  "money",
-  "percent",
-  "email",
-  "phone",
-  "url",
-  "ssn",
-  "financial",
+	"person",
+	"full_name",
+	"first_name",
+	"middle_name",
+	"last_name",
+	"date_of_birth",
+	"email",
+	"phone_number",
+	"address",
+	"street_address",
+	"city",
+	"state_or_region",
+	"postal_code",
+	"country",
+	"government_id",
+	"national_id_number",
+	"passport_number",
+	"drivers_license_number",
+	"license_number",
+	"tax_id",
+	"tax_number",
+	"bank_account",
+	"account_number",
+	"routing_number",
+	"iban",
+	"payment_card",
+	"card_number",
+	"card_expiry",
+	"card_cvv",
+	"username",
+	"ip_address",
+	"account_id",
+	"sensitive_account_id",
+	"password",
+	"secret",
+	"api_key",
+	"access_token",
+	"recovery_code",
+	"sensitive_date",
+	"document_date",
+	"expiration_date",
+	"transaction_date",
 ] as const;
 
 export interface DetectedEntity {
@@ -23,6 +53,45 @@ export interface DetectedEntity {
   start: number;
   end: number;
   text: string;
+}
+
+/**
+ * Native GLiNER2 bridge contract.
+ *
+ * The implementation is supplied by the generated xberg-node façade once its
+ * Candle entry point is exposed. Keeping the contract here lets the MCP
+ * lifecycle (artifact verification and path wiring) be tested without loading
+ * the multi-gigabyte model or importing an unavailable native module.
+ */
+export interface Gliner2NativeFacade {
+	detectGliner2(
+		text: string,
+		modelDir: string,
+		labels: readonly string[],
+		threshold: number,
+	): Promise<DetectedEntity[]> | DetectedEntity[];
+}
+
+let gliner2NativeFacade: Gliner2NativeFacade | undefined;
+
+/** Install the generated native façade at application startup. */
+export function configureGliner2NativeFacade(facade: Gliner2NativeFacade | undefined): void {
+	gliner2NativeFacade = facade;
+}
+
+/** Run native GLiNER2 inference through the configured generated façade. */
+export async function detectGliner2(
+	text: string,
+	modelDir: string,
+	labels: readonly string[] = RUST_ALIGNED_PII_TYPES,
+	threshold = 0.5,
+): Promise<DetectedEntity[]> {
+	if (!gliner2NativeFacade) {
+		throw new Error(
+			"native GLiNER2 façade is unavailable; regenerate xberg-node and configureGliner2NativeFacade() before inference",
+		);
+	}
+	return gliner2NativeFacade.detectGliner2(text, modelDir, labels, threshold);
 }
 
 async function disableRemoteModels(): Promise<void> {

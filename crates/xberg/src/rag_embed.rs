@@ -13,8 +13,12 @@ use std::{
 };
 use xberg_rag::{Embedder, EmbeddingIdentity, RagError};
 
+#[cfg(feature = "candle-embeddings")]
+use xberg_candle_embed::GraniteEmbedder;
+
 /// Probe text used once at construction to measure the model's output width.
 const DIM_PROBE: &str = "dimension probe";
+#[cfg(feature = "embedding-presets")]
 const PIPELINE_VERSION: &str = "xberg-embedding-pipeline-v1";
 
 static PRESET_CACHE: LazyLock<Mutex<HashMap<String, XbergEmbedder>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
@@ -28,6 +32,76 @@ static PRESET_CACHE: LazyLock<Mutex<HashMap<String, XbergEmbedder>>> = LazyLock:
 pub struct XbergEmbedder {
     config: EmbeddingConfig,
     identity: EmbeddingIdentity,
+}
+
+/// RAG adapter for the shared Granite backend. Unlike [`XbergEmbedder`], this
+/// adapter does not probe or select a host-specific preset: its identity comes
+/// directly from the three pinned Granite artifacts.
+#[cfg(feature = "candle-embeddings")]
+#[derive(Debug)]
+pub struct GraniteRagEmbedder {
+    inner: GraniteEmbedder,
+    identity: EmbeddingIdentity,
+}
+
+#[cfg(feature = "candle-embeddings")]
+impl GraniteRagEmbedder {
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn from_files(
+        weights: impl AsRef<std::path::Path>,
+        tokenizer: impl AsRef<std::path::Path>,
+        config: impl AsRef<std::path::Path>,
+    ) -> xberg_rag::Result<Self> {
+        let inner = GraniteEmbedder::from_files(weights, tokenizer, config)
+            .map_err(|error| RagError::Embed(format!("load Granite embedding model: {error}")))?;
+        let identity = Self::identity_from(&inner);
+        Ok(Self { inner, identity })
+    }
+
+    pub fn from_bytes(weights: &[u8], tokenizer: &[u8], config: &[u8]) -> xberg_rag::Result<Self> {
+        let inner = GraniteEmbedder::from_safetensors_bytes(weights, tokenizer, config)
+            .map_err(|error| RagError::Embed(format!("load Granite embedding model: {error}")))?;
+        let identity = Self::identity_from(&inner);
+        Ok(Self { inner, identity })
+    }
+
+    fn identity_from(inner: &GraniteEmbedder) -> EmbeddingIdentity {
+        let source = inner.identity();
+        EmbeddingIdentity {
+            artifact_digest: source.artifact_sha256.clone(),
+            tokenizer_revision: format!("{};config={}", source.tokenizer_sha256, source.config_sha256),
+            pooling: source.pooling.clone(),
+            instruction: "documents=raw;queries=raw".to_string(),
+            quantization: format!("{}->{}", source.source_dtype, source.runtime_dtype),
+            dimension: source.dimension,
+            pipeline_version: format!("granite:{}", source.revision),
+        }
+    }
+
+    #[cfg_attr(alef, alef(skip))]
+    pub fn identity(&self) -> &EmbeddingIdentity {
+        &self.identity
+    }
+}
+
+#[cfg(feature = "candle-embeddings")]
+impl Embedder for GraniteRagEmbedder {
+    #[cfg_attr(alef, alef(skip))]
+    fn identity(&self) -> &EmbeddingIdentity {
+        &self.identity
+    }
+
+    fn embed_documents(&self, texts: &[String]) -> xberg_rag::Result<Vec<Vec<f32>>> {
+        self.inner
+            .embed_documents(texts)
+            .map_err(|error| RagError::Embed(format!("Granite document embedding: {error}")))
+    }
+
+    fn embed_query(&self, text: &str) -> xberg_rag::Result<Vec<f32>> {
+        self.inner
+            .embed_query(text)
+            .map_err(|error| RagError::Embed(format!("Granite query embedding: {error}")))
+    }
 }
 
 #[cfg(feature = "embedding-presets")]
@@ -175,6 +249,7 @@ impl XbergEmbedder {
 }
 
 impl Embedder for XbergEmbedder {
+    #[cfg_attr(alef, alef(skip))]
     fn identity(&self) -> &EmbeddingIdentity {
         &self.identity
     }

@@ -24,5 +24,6 @@ pub use store::SearchStore;
 pub use testing::MockEmbedder;
 pub use types::{EmbeddingIdentity, IndexedChunk, RetrievedChunk};
 
-/// Dense embedding dimension (e5). Mirrors `EMBED_DIM` in the TS pipeline.
-pub const EMBED_DIM: usize = 768;
+/// Shared Granite dense embedding dimension. Kept as a compatibility constant
+/// for hosts that size an index before loading its persisted identity.
+pub const EMBED_DIM: usize = 384;

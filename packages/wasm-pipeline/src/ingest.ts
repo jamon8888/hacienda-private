@@ -61,10 +61,7 @@ export async function ingestFolder(
 
   const piiTypes = listPiiTypes();
   const chunks = chunkExtraction(doc);
-  const vectors = await embedChunks(
-    chunks.map((c) => ({ text: c.content })),
-    scenario,
-  );
+  const vectors = await embedChunks(chunks.map((c) => ({ text: c.content })));
 
   const items: IndexedChunk[] = [];
   const allEntries: RedactionEntry[] = [];

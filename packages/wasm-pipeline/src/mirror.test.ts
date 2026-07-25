@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { serializeMirror, serializeMirrorToBytes, pushMirror } from "./mirror";
-import { API_BASE } from "./constants";
+import { API_BASE, GRANITE_EMBEDDING_IDENTITY } from "./constants";
 
 describe("serializeMirror", () => {
   it("bundles index and vault into a versioned structure", () => {
@@ -8,7 +8,8 @@ describe("serializeMirror", () => {
     const vault = new Uint8Array([9, 8, 7]);
     const vaultSalt = new Uint8Array([5, 5]);
     const bundle = serializeMirror(index, vault, vaultSalt);
-    expect(bundle.version).toBe(1);
+    expect(bundle.version).toBe(2);
+    expect(bundle.embedding_identity).toBe(GRANITE_EMBEDDING_IDENTITY);
     expect(bundle.index).toEqual([1, 2, 3, 4]);
     expect(bundle.vault).toEqual([9, 8, 7]);
     expect(bundle.vaultSalt).toEqual([5, 5]);
@@ -17,7 +18,7 @@ describe("serializeMirror", () => {
   it("serializes to JSON bytes carrying index, vault, and vaultSalt", () => {
     const bytes = serializeMirrorToBytes(new Uint8Array([1, 2]), new Uint8Array([7]), new Uint8Array([3]));
     const parsed = JSON.parse(new TextDecoder().decode(bytes));
-    expect(parsed).toEqual({ version: 1, index: [1, 2], vault: [7], vaultSalt: [3], pii: [], chunks: [] });
+    expect(parsed).toEqual({ version: 2, embedding_identity: GRANITE_EMBEDDING_IDENTITY, index: [1, 2], vault: [7], vaultSalt: [3], pii: [], chunks: [] });
   });
 });
 
@@ -48,7 +49,7 @@ describe("pushMirror", () => {
     expect(capturedContentType).toBe("application/octet-stream");
     expect(capturedAuth).toBe("Bearer tok");
     const parsed = JSON.parse(new TextDecoder().decode(capturedBody));
-    expect(parsed).toEqual({ version: 1, index: [1, 2, 3], vault: [9], vaultSalt: [4], pii: [], chunks: [] });
+    expect(parsed).toEqual({ version: 2, embedding_identity: GRANITE_EMBEDDING_IDENTITY, index: [1, 2, 3], vault: [9], vaultSalt: [4], pii: [], chunks: [] });
 
     vi.unstubAllGlobals();
   });

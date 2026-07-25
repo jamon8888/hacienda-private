@@ -15,6 +15,9 @@ use xberg_rag::{ChunkInput, DocumentInput, RagEngine, default_mirrors_dir};
 /// index/query path with no model on disk and no network.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum EmbedderKind {
+    /// Shared Granite ModernBERT backend (the production default).
+    #[value(alias = "granite")]
+    Shared,
     /// Bundled preset via xberg's embedding engine (downloads on first use).
     Preset,
     /// Deterministic hash embedder — tests and smoke checks only.
@@ -93,6 +96,19 @@ fn preset_embedder(preset: &str) -> Result<xberg::XbergEmbedder> {
     xberg::XbergEmbedder::from_preset(preset).with_context(|| format!("embedding preset {preset:?}"))
 }
 
+#[cfg(feature = "candle-embeddings")]
+fn shared_embedder() -> Result<xberg::GraniteRagEmbedder> {
+    let root = std::env::var_os("XBERG_GRANITE_MODEL_DIR")
+        .map(PathBuf::from)
+        .ok_or_else(|| anyhow::anyhow!("XBERG_GRANITE_MODEL_DIR must point to the pinned Granite model directory"))?;
+    xberg::GraniteRagEmbedder::from_files(
+        root.join("model.safetensors"),
+        root.join("tokenizer.json"),
+        root.join("config.json"),
+    )
+    .context("load shared Granite embedding model")
+}
+
 /// `xberg rag index` — chunk, embed, and index every text file under `input`.
 ///
 /// There is no generic `with_engine` helper here on purpose: `RagEngine<E>` is
@@ -118,6 +134,16 @@ pub fn rag_index_command(
     let mirrors_dir = mirrors_root(mirrors_dir);
 
     let total = match embedder {
+        EmbedderKind::Shared => {
+            #[cfg(feature = "candle-embeddings")]
+            {
+                RagEngine::new(shared_embedder()?, mirrors_dir).index_documents(matter, &docs)?
+            }
+            #[cfg(not(feature = "candle-embeddings"))]
+            {
+                bail!("the shared Granite backend is not compiled; enable the candle-embeddings feature")
+            }
+        }
         EmbedderKind::Mock => {
             RagEngine::new(xberg_rag::MockEmbedder::new(64), mirrors_dir).index_documents(matter, &docs)?
         }
@@ -143,6 +169,16 @@ pub fn rag_query_command(
     let mirrors_dir = mirrors_root(mirrors_dir);
 
     let hits = match embedder {
+        EmbedderKind::Shared => {
+            #[cfg(feature = "candle-embeddings")]
+            {
+                RagEngine::new(shared_embedder()?, mirrors_dir).query(matter, text, top_k)?
+            }
+            #[cfg(not(feature = "candle-embeddings"))]
+            {
+                bail!("the shared Granite backend is not compiled; enable the candle-embeddings feature")
+            }
+        }
         EmbedderKind::Mock => {
             RagEngine::new(xberg_rag::MockEmbedder::new(64), mirrors_dir).query(matter, text, top_k)?
         }
@@ -173,6 +209,16 @@ pub fn rag_import_legacy_command(
     let mirrors_dir = mirrors_root(mirrors_dir);
 
     let count = match embedder {
+        EmbedderKind::Shared => {
+            #[cfg(feature = "candle-embeddings")]
+            {
+                RagEngine::new(shared_embedder()?, mirrors_dir).import_legacy(matter)?
+            }
+            #[cfg(not(feature = "candle-embeddings"))]
+            {
+                bail!("the shared Granite backend is not compiled; enable the candle-embeddings feature")
+            }
+        }
         EmbedderKind::Mock => RagEngine::new(xberg_rag::MockEmbedder::new(64), mirrors_dir).import_legacy(matter)?,
         EmbedderKind::Preset => RagEngine::new(preset_embedder(preset)?, mirrors_dir).import_legacy(matter)?,
     };

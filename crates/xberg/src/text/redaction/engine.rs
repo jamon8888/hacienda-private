@@ -581,6 +581,27 @@ fn make_ner_backend(
                 ))
             }
         }
+        NerBackendKind::Candle => {
+            #[cfg(all(feature = "ner-candle", not(target_arch = "wasm32")))]
+            {
+                let model = config.model.as_deref().ok_or_else(|| {
+                    crate::XbergError::validation(
+                        "Candle NER backend selected but NerConfig.model is None (expected a model directory)",
+                    )
+                })?;
+                let adapter = config.adapter.as_deref().map(std::path::Path::new);
+                Ok(crate::text::ner::candle::CandleBackend::get_or_init(
+                    std::path::Path::new(model), adapter,
+                )?)
+            }
+            #[cfg(any(not(feature = "ner-candle"), target_arch = "wasm32"))]
+            {
+                Err(crate::XbergError::MissingDependency(
+                    "ner-candle feature is not enabled (or is unavailable on wasm32) — rebuild xberg with --features ner-candle"
+                        .to_string(),
+                ))
+            }
+        }
     }
 }
 

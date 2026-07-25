@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AppError } from "../src/error.js";
-import { MirrorStore } from "../src/mirror.js";
+import { MirrorStore, SHARED_EMBEDDING_IDENTITY } from "../src/mirror.js";
 
 describe("MirrorStore", () => {
   let dir: string;
@@ -70,12 +70,36 @@ describe("MirrorStore", () => {
     expect(typeof result.loaded).toBe("boolean");
   });
 
+  it("rejects a bundle with the wrong embedding identity", async () => {
+    const store = new MirrorStore(dir);
+    store.saveMirror(
+      "m",
+      Buffer.from(
+        JSON.stringify({
+          version: 2,
+          embedding_identity: "wrong-identity",
+          index: [1, 2, 3],
+          vault: [4, 5, 6],
+          vaultSalt: [7, 8],
+          pii: [],
+          chunks: [],
+        }),
+      ),
+    );
+
+    const result = await store.loadMirror("m");
+    expect(result.loaded).toBe(false);
+    expect(result.reason).toContain("unexpected bundle shape");
+  });
+
   function bundle(text: string) {
     return Buffer.from(
       JSON.stringify({
-        version: 1,
+        version: 2,
+        embedding_identity: SHARED_EMBEDDING_IDENTITY,
         index: [1, 2, 3],
         vault: [4, 5, 6],
+        vaultSalt: [7, 8],
         pii: [],
         chunks: [{ doc_id: "d1", chunk_index: 0, text, score: 1, citation: "d1#0" }],
       }),

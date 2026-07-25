@@ -14,7 +14,16 @@ import { KeyVault } from "./vault.js";
 import { PLACEHOLDER_HTML, resolveUiDir, resolveWasmPackageDir, resolveEmbedPdfiumDir, injectToken } from "./static.js";
 import { runMcp } from "./mcp/mod.js";
 import type { IngestDeps } from "@xberg-io/node-pipeline";
-import { DEFAULT_GLINER_MODEL, RUST_ALIGNED_PII_TYPES, detectPii, embedText } from "@xberg-io/node-pipeline";
+import {
+	DEFAULT_GLINER_MODEL,
+	GLINER2_MANIFEST_NAMES,
+	RUST_ALIGNED_PII_TYPES,
+	configureGliner2NativeFacade,
+	detectGliner2,
+	detectPii,
+	embedText,
+	type Gliner2ArtifactPaths,
+} from "@xberg-io/node-pipeline";
 import { loadOrCreateSessionToken, resolveLaunchScopes, authenticateHttp, ownerPrincipal } from "./auth.js";
 import type { Principal } from "./principal.js";
 import { authorize } from "./mcp/scopes.js";
@@ -33,6 +42,55 @@ export interface AppContext {
   vault: KeyVault;
   httpAuth: HttpAuth;
   pipeline: Omit<IngestDeps, "store" | "mirror">;
+}
+
+/**
+ * Verify and resolve a native GLiNER2 artifact set through the same pinned
+ * ModelCache used by the legacy ONNX pipeline. The generated xberg-node
+ * façade should consume the returned `modelDir`; keeping this seam explicit
+ * avoids accidentally falling back to an unverified download or inventing a
+ * JS implementation of Candle inference.
+ */
+export function ensureGliner2ModelArtifacts(
+	ctx: AppContext,
+	names: { weights: string; tokenizer: string; encoderConfig: string } = GLINER2_MANIFEST_NAMES,
+): Promise<Gliner2ArtifactPaths> {
+	return ctx.models.ensureGliner2Artifacts(names);
+}
+
+let nativeGliner2Ready: Promise<boolean> | undefined;
+
+type NativeGliner2Module = typeof import("@xberg-io/xberg") & {
+	detectCandleEntities(
+		text: string,
+		modelDir: string,
+		adapterDir: string | undefined,
+		categories: unknown[],
+		customLabels: string[],
+	): Promise<ReadonlyArray<{ category: unknown; start: number; end: number; text: string }>>;
+};
+
+async function configureNativeGliner2(): Promise<boolean> {
+	nativeGliner2Ready ??= (async () => {
+		try {
+			const native = (await import("@xberg-io/xberg")) as unknown as NativeGliner2Module;
+			configureGliner2NativeFacade({
+				detectGliner2: async (text, modelDir, labels) => {
+					const entities = await native.detectCandleEntities(text, modelDir, undefined, [], [...labels]);
+					return entities.map((entity) => ({
+						kind: String(entity.category),
+						start: entity.start,
+						end: entity.end,
+						text: entity.text,
+					}));
+				},
+			});
+			return true;
+		} catch {
+			return false;
+		}
+	})();
+	return nativeGliner2Ready;
 }
 
 // Extensions walkFolder() will hand us — kept in sync with node-pipeline's own
@@ -233,6 +291,11 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
     return;
   }
 
+  if (pathname === "/models/manifest.json" && method === "GET") {
+    sendJson(res, 200, ctx.models.getManifest());
+    return;
+  }
+
   if (pathname.startsWith("/models/") && method === "GET") {
     await handleModels(ctx, res, pathname.slice("/models/".length));
     return;
@@ -268,15 +331,17 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
     const uiDir = resolveUiDir();
     if (uiDir) {
       const segments = pathname.split("/").filter(Boolean);
-      const candidate =
+      const candidates =
         segments.length === 2
-          ? join(uiDir, segments[0]!, "_.html")
+          ? [join(uiDir, ...segments) + ".html", join(uiDir, segments[0]!, "_.html")]
           : segments.length === 1
-            ? join(uiDir, `${segments[0]}.html`)
-            : null;
-      if (candidate && existsSync(candidate)) {
-        serveHtmlWithToken(res, candidate, auth.token);
-        return;
+            ? [join(uiDir, `${segments[0]}.html`)]
+            : [];
+      for (const candidate of candidates) {
+        if (existsSync(candidate)) {
+          serveHtmlWithToken(res, candidate, auth.token);
+          return;
+        }
       }
       const notFoundPage = join(uiDir, "404.html");
       if (existsSync(notFoundPage)) {
@@ -505,6 +570,15 @@ export function createAppContext(config: AppConfig): AppContext {
     }))();
     return glinerPathsPromise;
   };
+  let gliner2PathsPromise: Promise<Gliner2ArtifactPaths> | null = null;
+  const gliner2Paths = () => {
+    gliner2PathsPromise ??= models.ensureGliner2Artifacts({
+      weights: GLINER2_MANIFEST_NAMES.weights,
+      tokenizer: GLINER2_MANIFEST_NAMES.tokenizer,
+      encoderConfig: GLINER2_MANIFEST_NAMES.encoderConfig,
+    });
+    return gliner2PathsPromise;
+  };
 
   const pipeline: AppContext["pipeline"] = {
     extract: async (path: string) => {
@@ -530,6 +604,18 @@ export function createAppContext(config: AppConfig): AppContext {
       return embedText(text, modelPath, tokenizerPath);
     },
     detectPii: async (text: string) => {
+      const backend = process.env.HACIENDA_NER_BACKEND ?? "auto";
+      if (backend !== "legacy" && (await configureNativeGliner2())) {
+        try {
+          const { modelDir } = await gliner2Paths();
+          return detectGliner2(text, modelDir, RUST_ALIGNED_PII_TYPES);
+        } catch (error) {
+          if (backend === "candle") throw error;
+        }
+      }
+      if (backend === "candle") {
+        throw new AppError("model", "native GLiNER2 backend is unavailable or its artifacts are not pinned");
+      }
       const { modelPath, tokenizerPath } = await glinerPaths();
       return detectPii(text, modelPath, tokenizerPath, RUST_ALIGNED_PII_TYPES);
     },

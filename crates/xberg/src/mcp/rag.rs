@@ -4,6 +4,9 @@
 //! and re-sorted the last-mirrored chunks by a mirror-time placeholder score.
 //! Here the query is embedded and searched against the matter's actual vectors.
 
+#[cfg(feature = "candle-embeddings")]
+use crate::rag_embed::GraniteRagEmbedder;
+#[cfg(not(feature = "candle-embeddings"))]
 use crate::rag_embed::XbergEmbedder;
 use xberg_rag::{RagEngine, RagError, default_mirrors_dir};
 
@@ -25,22 +28,24 @@ pub(crate) fn is_enabled() -> bool {
     enabled_from_value(std::env::var("XBERG_RAG_ENABLED").ok().as_deref())
 }
 
-fn preset_from_value(value: Option<String>) -> String {
-    value.unwrap_or_else(|| "lightweight".to_string())
-}
-
-/// Embedding preset used by the MCP host.
-///
-/// Defaults to `lightweight` (model2vec, pure Rust) so the server never
-/// hard-requires a bundled ONNX Runtime — the spec's R3 mitigation. Override
-/// with `XBERG_RAG_PRESET`.
-fn preset_name() -> String {
-    preset_from_value(std::env::var("XBERG_RAG_PRESET").ok())
-}
-
 /// Build an engine over the mirrors root this host is configured for.
+#[cfg(feature = "candle-embeddings")]
+fn build_engine() -> Result<RagEngine<GraniteRagEmbedder>, RagError> {
+    let root = std::env::var_os("XBERG_GRANITE_MODEL_DIR")
+        .map(std::path::PathBuf::from)
+        .ok_or_else(|| RagError::Embed("XBERG_GRANITE_MODEL_DIR is not configured".to_string()))?;
+    let embedder = GraniteRagEmbedder::from_files(
+        root.join("model.safetensors"),
+        root.join("tokenizer.json"),
+        root.join("config.json"),
+    )?;
+    Ok(RagEngine::new(embedder, default_mirrors_dir()))
+}
+
+#[cfg(not(feature = "candle-embeddings"))]
 fn build_engine() -> Result<RagEngine<XbergEmbedder>, RagError> {
-    let embedder = XbergEmbedder::from_preset(&preset_name())?;
+    let preset = std::env::var("XBERG_RAG_PRESET").unwrap_or_else(|_| "lightweight".to_string());
+    let embedder = XbergEmbedder::from_preset(&preset)?;
     Ok(RagEngine::new(embedder, default_mirrors_dir()))
 }
 
@@ -152,11 +157,5 @@ mod tests {
         for enabled in ["1", "true", "TRUE"] {
             assert!(enabled_from_value(Some(enabled)), "{enabled} should enable RAG");
         }
-    }
-
-    #[test]
-    fn preset_value_parser_defaults_only_when_absent() {
-        assert_eq!(preset_from_value(None), "lightweight");
-        assert_eq!(preset_from_value(Some("balanced".to_string())), "balanced");
     }
 }

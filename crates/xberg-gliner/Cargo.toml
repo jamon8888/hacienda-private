@@ -35,7 +35,6 @@ candle = [
     "dep:safetensors",
     "dep:serde",
     "dep:serde_json",
-    "dep:ndarray",
 ]
 # GPU pass-throughs for the candle backend. Neither can build on CPU-only CI
 # runners, which is why scripts/ci/rust/run-unit-tests.sh tests this crate
@@ -59,7 +58,7 @@ candle-transformers = { workspace = true, optional = true }
 # 0.11's transitive `half` version (see Cargo.lock) so `Tensor::from_vec`
 # accepts the Vec<half::f16> directly.
 half = { version = "2.7", optional = true }
-ndarray = { version = "0.17", optional = true }
+ndarray = "0.17"
 ort = { workspace = true, features = ["ndarray"], optional = true }
 parking_lot = { workspace = true }
 regex = "1.13"

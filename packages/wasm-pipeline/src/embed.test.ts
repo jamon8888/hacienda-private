@@ -1,73 +1,16 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, expect, it } from "vitest";
+import {
+	GRANITE_EMBED_DIM,
+	GRANITE_EMBEDDING_IDENTITY,
+	GRANITE_EMBEDDING_FALLBACK_SHA256,
+} from "./constants";
+import { graniteEmbeddingDimension, graniteEmbeddingIdentity } from "./embed";
 
-vi.mock("./model-cache", () => ({
-  cachedFetchBuffer: vi.fn(
-    async (_url: string, onProgress?: (p: { bytesLoaded: number; bytesTotal: number }) => void) => {
-      onProgress?.({ bytesLoaded: 10, bytesTotal: 10 });
-      return new ArrayBuffer(10);
-    },
-  ),
-  cachedFetchJson: vi.fn(async () => ({})),
-}));
-
-// embed.ts imports "onnxruntime-web/wasm" specifically (not the bare "onnxruntime-web" entry —
-// see the Global Constraints note on why), so the mock must target that exact subpath.
-vi.mock("onnxruntime-web/wasm", () => ({
-  env: { wasm: { numThreads: 0 } },
-  InferenceSession: { create: vi.fn(async () => ({ run: vi.fn(), outputNames: [], inputNames: [] })) },
-}));
-
-import { ensureEmbedSession, resetEmbedSession } from "./embed";
-import { cachedFetchBuffer } from "./model-cache";
-import { InferenceSession } from "onnxruntime-web/wasm";
-import type { ModelScenario } from "./scenario";
-
-const scenario: ModelScenario = {
-  executionProviders: ["wasm"],
-  quant: "int8",
-  numThreads: 2,
-  chunkSize: 512,
-  deferPii: false,
-  modelVariant: "e5-base",
-};
-
-describe("ensureEmbedSession", () => {
-  beforeEach(() => {
-    resetEmbedSession();
-    vi.clearAllMocks();
-  });
-
-  it("fetches the model once and reuses the session for the same scenario signature", async () => {
-    const progressEvents: unknown[] = [];
-    await ensureEmbedSession(scenario, (p) => progressEvents.push(p));
-    await ensureEmbedSession(scenario);
-
-    expect(cachedFetchBuffer).toHaveBeenCalledTimes(1);
-    expect(progressEvents).toEqual([{ bytesLoaded: 10, bytesTotal: 10 }]);
-  });
-
-  it("re-fetches when the scenario signature changes", async () => {
-    await ensureEmbedSession(scenario);
-    await ensureEmbedSession({ ...scenario, quant: "int4" });
-
-    expect(cachedFetchBuffer).toHaveBeenCalledTimes(2);
-  });
-
-  it("resetEmbedSession forces the next call to fetch again", async () => {
-    await ensureEmbedSession(scenario);
-    resetEmbedSession();
-    await ensureEmbedSession(scenario);
-
-    expect(cachedFetchBuffer).toHaveBeenCalledTimes(2);
-  });
-
-  it("retries session creation after a rejected creation promise", async () => {
-    vi.mocked(InferenceSession.create).mockRejectedValueOnce(new Error("backend unavailable"));
-
-    await expect(ensureEmbedSession(scenario)).rejects.toThrow("backend unavailable");
-    await expect(ensureEmbedSession(scenario)).resolves.toBeDefined();
-
-    expect(cachedFetchBuffer).toHaveBeenCalledTimes(2);
-    expect(InferenceSession.create).toHaveBeenCalledTimes(2);
-  });
+describe("shared Granite embedding contract", () => {
+	it("uses the pinned 384-dimensional identity for both hosts", () => {
+		expect(graniteEmbeddingDimension()).toBe(GRANITE_EMBED_DIM);
+		expect(graniteEmbeddingIdentity()).toBe(GRANITE_EMBEDDING_IDENTITY);
+		expect(GRANITE_EMBEDDING_FALLBACK_SHA256.model).toMatch(/^[0-9a-f]{64}$/);
+		expect(GRANITE_EMBEDDING_FALLBACK_SHA256.tokenizer).toMatch(/^[0-9a-f]{64}$/);
+	});
 });

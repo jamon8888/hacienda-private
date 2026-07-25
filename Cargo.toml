@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/xberg",
+    "crates/xberg-candle-embed",
     "crates/xberg-candle-ocr",
     "crates/xberg-cli",
     "crates/xberg-ffi",
@@ -121,6 +122,7 @@ web-sys = { version = "0.3", features = [
     "Response",
 ] }
 xberg = { path = "./crates/xberg", version = "1.0.0-rc.29", default-features = false }
+xberg-candle-embed = { path = "./crates/xberg-candle-embed", version = "1.0.0-rc.29", default-features = false }
 xberg-gliner = { path = "./crates/xberg-gliner", version = "1.0.0-rc.29", default-features = false }
 xberg-rag = { path = "./crates/xberg-rag", version = "1.0.0-rc.29", default-features = false }
 

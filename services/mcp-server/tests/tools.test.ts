@@ -10,6 +10,7 @@ import { MirrorStore } from "../src/mirror.js";
 import { ModelCache } from "../src/models.js";
 import { KeyVault } from "../src/vault.js";
 import { AppError, isAppError } from "../src/error.js";
+import { SHARED_EMBEDDING_IDENTITY } from "../src/mirror.js";
 import {
   listPii,
   ragQuery,
@@ -48,9 +49,11 @@ function makeConfig(dir: string): AppConfig {
 function seedBundle(mirror: MirrorStore, vault: KeyVault, matterId: string): void {
   const ciphertext = vault.seal(Buffer.from("Jane")).toString("base64");
   const bundle = {
-    version: 1,
+    version: 2,
+    embedding_identity: SHARED_EMBEDDING_IDENTITY,
     index: [1, 2, 3],
     vault: [4, 5, 6],
+    vaultSalt: [7, 8],
     pii: [{ doc_id: "d1", kind: "PER", start: 0, end: 3, token: "t1", ciphertext }],
     chunks: [{ doc_id: "d1", chunk_index: 0, text: "redacted", score: 0.9, citation: "d1#0" }],
   };
@@ -64,7 +67,7 @@ function makeFakePipeline(): AppContext["pipeline"] {
   return {
     extract: vi.fn(async (path: string) => ({ content: readFileSync(path, "utf8"), pageCount: 1 })),
     chunk: vi.fn((content: string) => [content]),
-    embed: vi.fn(async () => new Array(768).fill(0)),
+    embed: vi.fn(async () => new Array(384).fill(0)),
     detectPii: vi.fn(async (text: string) =>
       text.includes("Jane Doe") ? [{ kind: "person", start: 0, end: 8, text: "Jane Doe" }] : [],
     ),
@@ -128,16 +131,16 @@ afterEach(() => {
 });
 
 describe("mcp tools", () => {
-  it("rag_query returns the cited chunk", async () => {
+  it("rag_query fails closed on the Node mirror host", async () => {
     const { ctx, matter, principal } = await harness(["read", "ingest", "redact", "admin"], true);
-    const res = ragQuery(ctx, principal, { matter_id: matter.id, query: "who" });
-    const chunks = JSON.parse(res.content[0]?.text ?? "[]") as { citation: string; text: string }[];
-    expect(chunks).toHaveLength(1);
-    expect(chunks[0]?.citation).toBe("d1#0");
-    expect(chunks[0]?.text).toBe("redacted");
-    const audit = ctx.store.getAuditLog(matter.id);
-    expect(audit.some((a) => a.action === "rag_query")).toBe(true);
-    expect(audit[0]?.actor).toBe("owner");
+    expect(() => ragQuery(ctx, principal, { matter_id: matter.id, query: "who" })).toThrowError(
+      expect.objectContaining({
+        code: "model",
+        message:
+          "live rag_query is only supported by the native Rust MCP host; the Node mirror only stores metadata bundles",
+      }),
+    );
+    expect(ctx.store.getAuditLog(matter.id).some((a) => a.action === "rag_query")).toBe(false);
   });
 
   it("list_pii returns the span token, never plaintext", async () => {

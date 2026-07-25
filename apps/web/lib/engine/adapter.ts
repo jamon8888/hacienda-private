@@ -108,7 +108,6 @@ export async function ingestFolder(file: File, ctx: IngestContext): Promise<Inge
 
   const vectors = await embedChunks(
     chunks.map((c) => ({ text: c.content })),
-    scenario,
   );
   emit(ctx, name, name, "embed", 0.6);
 
@@ -233,8 +232,7 @@ export async function extractDocumentForUi(file: File): Promise<ExtractedDocumen
 }
 
 export async function queryRagForUi(matter: Matter, query: string, topK = 8): Promise<RetrievedChunk[]> {
-  const scenario = selectScenario(await detectCapabilities());
-  const vec = await embedQuery(query, scenario);
+  const vec = await embedQuery(query);
   return retrieve(matter.id, vec, topK);
 }
 
