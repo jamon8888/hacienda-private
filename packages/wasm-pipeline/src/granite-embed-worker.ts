@@ -1,19 +1,14 @@
 interface GraniteWasmModule {
   default: (input?: unknown) => Promise<unknown>;
   GraniteEmbeddingModel: new () => {
-    loadBytes(
-      weights: Uint8Array,
-      tokenizer: Uint8Array,
-      config: Uint8Array,
-    ): void;
+    loadBytes(weights: Uint8Array, tokenizer: Uint8Array, config: Uint8Array): void;
     embedDocuments(texts: string[]): number[][];
     embedQuery(text: string): number[];
     identity(): unknown;
   };
 }
 
-let model: InstanceType<GraniteWasmModule["GraniteEmbeddingModel"]> | null =
-  null;
+let model: InstanceType<GraniteWasmModule["GraniteEmbeddingModel"]> | null = null;
 
 self.onmessage = async (event: MessageEvent) => {
   const message = event.data as {
@@ -27,8 +22,7 @@ self.onmessage = async (event: MessageEvent) => {
   };
   try {
     if (!model) {
-      const wasm =
-        (await import("@xberg-io/xberg-wasm")) as unknown as GraniteWasmModule;
+      const wasm = (await import("@xberg-io/xberg-wasm")) as unknown as GraniteWasmModule;
       await wasm.default();
       model = new wasm.GraniteEmbeddingModel();
     }

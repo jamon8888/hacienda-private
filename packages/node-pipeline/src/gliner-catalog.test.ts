@@ -79,7 +79,9 @@ describe("gliner-catalog", () => {
       "gliner2-guardrails-pii-multi.tokenizer",
       "gliner2-guardrails-pii-multi.encoder-config",
     ]);
-    expect(entries.every((entry) => entry.url.startsWith("https://huggingface.co/fastino/GLiNER2-Guardrails-PII-Multi/"))).toBe(true);
+    expect(
+      entries.every((entry) => entry.url.startsWith("https://huggingface.co/fastino/GLiNER2-Guardrails-PII-Multi/")),
+    ).toBe(true);
     expect(entries.every((entry) => /^[a-f0-9]{64}$/.test(entry.sha256))).toBe(true);
   });
 });

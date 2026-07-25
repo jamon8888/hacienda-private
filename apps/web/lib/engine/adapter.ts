@@ -28,12 +28,7 @@ import {
   selectScenario,
   type IndexedChunk,
 } from "@xberg-io/wasm-pipeline-real";
-import {
-  mergeIntoAccumulator,
-  accumulatorKey,
-  type MatterMirrorAccumulator,
-  type MirrorChunk,
-} from "./mirror-merge";
+import { mergeIntoAccumulator, accumulatorKey, type MatterMirrorAccumulator, type MirrorChunk } from "./mirror-merge";
 
 export interface ExtractedDocument {
   doc_id: string;
@@ -46,15 +41,7 @@ export interface ExtractedDocument {
 export interface IngestProgress {
   doc_id: string;
   name: string;
-  stage:
-    | "extract"
-    | "ocr"
-    | "chunk"
-    | "embed"
-    | "pii"
-    | "index"
-    | "done"
-    | "error";
+  stage: "extract" | "ocr" | "chunk" | "embed" | "pii" | "index" | "done" | "error";
   progress: number;
 }
 
@@ -80,13 +67,7 @@ export interface IngestContext {
   onProgress?: (p: IngestProgress) => void;
 }
 
-function emit(
-  ctx: IngestContext,
-  name: string,
-  docId: string,
-  stage: IngestProgress["stage"],
-  progress: number,
-) {
+function emit(ctx: IngestContext, name: string, docId: string, stage: IngestProgress["stage"], progress: number) {
   ctx.onProgress?.({ doc_id: docId, name, stage, progress });
 }
 
@@ -103,10 +84,7 @@ function mirrorPiiSpans(
   }));
 }
 
-export async function ingestFolder(
-  file: File,
-  ctx: IngestContext,
-): Promise<IngestResult> {
+export async function ingestFolder(file: File, ctx: IngestContext): Promise<IngestResult> {
   const name = file.name;
   emit(ctx, name, name, "extract", 0.05);
 
@@ -156,9 +134,7 @@ export async function ingestFolder(
   // prior ingest already persisted this matter's EdgeVec index (index + accumulator are written
   // together per matter). appendIndex must not probe via EdgeVec.load(), which hangs instead of
   // rejecting when no index exists yet. Reused below for mergeIntoAccumulator (no second read).
-  const prior = await get<MatterMirrorAccumulator>(
-    accumulatorKey(ctx.matter.id),
-  );
+  const prior = await get<MatterMirrorAccumulator>(accumulatorKey(ctx.matter.id));
 
   // Additive retrieval index: augment the matter's existing EdgeVec index rather than replacing it.
   const db = await appendIndex(ctx.matter.id, items, prior !== undefined);
@@ -243,19 +219,13 @@ export async function ingestFolder(
   };
 }
 
-export async function extractDocumentForUi(
-  file: File,
-): Promise<ExtractedDocument> {
+export async function extractDocumentForUi(file: File): Promise<ExtractedDocument> {
   const base = await defaultExtractionConfig();
   const config = await withTesseractOcr(base, "tesseract");
   const result = await extractDocument(file, config);
   const doc = firstDocument(result);
   if (!doc) throw new Error(`no document extracted from ${file.name}`);
-  const pii = await detectPii(
-    doc.content ?? "",
-    listPiiTypes(),
-    selectScenario(await detectCapabilities()),
-  );
+  const pii = await detectPii(doc.content ?? "", listPiiTypes(), selectScenario(await detectCapabilities()));
   return {
     doc_id: file.name,
     name: file.name,
@@ -265,11 +235,7 @@ export async function extractDocumentForUi(
   };
 }
 
-export async function queryRagForUi(
-  matter: Matter,
-  query: string,
-  topK = 8,
-): Promise<RetrievedChunk[]> {
+export async function queryRagForUi(matter: Matter, query: string, topK = 8): Promise<RetrievedChunk[]> {
   const vec = await embedQuery(query);
   return retrieve(matter.id, vec, topK);
 }
@@ -299,9 +265,7 @@ export async function rehydrateSpanForUi(
     vaultSalt: number[];
   };
   if (!Array.isArray(parsed.vault) || !Array.isArray(parsed.vaultSalt)) {
-    throw new Error(
-      "this document's cached mirror is missing vault data — please re-ingest it",
-    );
+    throw new Error("this document's cached mirror is missing vault data — please re-ingest it");
   }
   const entries = await openVault(
     {
@@ -310,15 +274,10 @@ export async function rehydrateSpanForUi(
     },
     passphrase,
   );
-  const match = entries.find(
-    (e) => e.kind === span.kind && e.start === span.start && e.end === span.end,
-  );
+  const match = entries.find((e) => e.kind === span.kind && e.start === span.start && e.end === span.end);
   if (!match) throw new Error("no matching PII entry for this span");
   return match.original;
 }
 
 export { warmupModels } from "@xberg-io/wasm-pipeline-real";
-export type {
-  WarmupProgress,
-  WarmupResult,
-} from "@xberg-io/wasm-pipeline-real";
+export type { WarmupProgress, WarmupResult } from "@xberg-io/wasm-pipeline-real";

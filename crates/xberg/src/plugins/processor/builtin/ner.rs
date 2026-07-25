@@ -119,7 +119,8 @@ fn make_backend(config: &NerConfig) -> Result<Arc<dyn NerBackend>> {
                 })?;
                 let adapter = config.adapter.as_deref().map(std::path::Path::new);
                 Ok(crate::text::ner::candle::CandleBackend::get_or_init(
-                    std::path::Path::new(model), adapter,
+                    std::path::Path::new(model),
+                    adapter,
                 )?)
             }
             #[cfg(any(not(feature = "ner-candle"), target_arch = "wasm32"))]

@@ -5,8 +5,7 @@ interface ViteImportMeta {
 function resolveApiBase(): string {
   const meta = import.meta as unknown as ViteImportMeta;
   const viteValue = meta.env && meta.env.VITE_API_BASE;
-  const procValue =
-    typeof process !== "undefined" && process.env && process.env["API_BASE"];
+  const procValue = typeof process !== "undefined" && process.env && process.env["API_BASE"];
   const envValue = viteValue || procValue || null;
   if (envValue) return envValue;
   // The mcp-server serves the API and the static UI from the same origin, on whatever port it's
@@ -14,8 +13,7 @@ function resolveApiBase(): string {
   // pushMirror/model downloads for every deployment on a different port; the browser's own
   // origin is the correct default in the environment this code actually runs in (a page the
   // server served).
-  if (typeof window !== "undefined" && window.location?.origin)
-    return window.location.origin;
+  if (typeof window !== "undefined" && window.location?.origin) return window.location.origin;
   return "http://localhost:8787";
 }
 

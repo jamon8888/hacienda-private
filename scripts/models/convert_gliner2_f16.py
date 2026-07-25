@@ -32,9 +32,7 @@ def convert(source: Path, destination: Path) -> tuple[str, int]:
     ):
         header_size = struct.unpack_from("<Q", source_map, 0)[0]
         header = json.loads(source_map[8 : 8 + header_size])
-        output_header: dict[str, object] = {
-            "__metadata__": {"source": source.name, "precision": "f16"}
-        }
+        output_header: dict[str, object] = {"__metadata__": {"source": source.name, "precision": "f16"}}
         output_offset = 0
         for name, info in header.items():
             if name == "__metadata__":
@@ -62,9 +60,7 @@ def convert(source: Path, destination: Path) -> tuple[str, int]:
                 start, end = info["data_offsets"]
                 raw = memoryview(source_map)[data_start + start : data_start + end]
                 if info["dtype"] == "F32":
-                    output.write(
-                        np.frombuffer(raw, dtype="<f4").astype("<f2").tobytes()
-                    )
+                    output.write(np.frombuffer(raw, dtype="<f4").astype("<f2").tobytes())
                 else:
                     output.write(raw)
                 raw.release()

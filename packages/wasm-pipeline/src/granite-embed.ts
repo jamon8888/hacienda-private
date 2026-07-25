@@ -5,11 +5,7 @@ import { resolveGraniteArtifacts } from "./model-manifest";
 interface GraniteWasmModule {
   default: (input?: unknown) => Promise<unknown>;
   GraniteEmbeddingModel: new () => {
-    loadBytes(
-      weights: Uint8Array,
-      tokenizer: Uint8Array,
-      config: Uint8Array,
-    ): void;
+    loadBytes(weights: Uint8Array, tokenizer: Uint8Array, config: Uint8Array): void;
     embedDocuments(texts: string[]): number[][];
     embedQuery(text: string): number[];
     identity(): unknown;
@@ -22,9 +18,7 @@ interface Pending {
 }
 
 let worker: Worker | null = null;
-let directModel: InstanceType<
-  GraniteWasmModule["GraniteEmbeddingModel"]
-> | null = null;
+let directModel: InstanceType<GraniteWasmModule["GraniteEmbeddingModel"]> | null = null;
 let loadPromise: Promise<void> | null = null;
 let sequence = 0;
 const pending = new Map<number, Pending>();
@@ -46,14 +40,10 @@ function workerFor(): Worker | undefined {
       if (!request) return;
       pending.delete(message.id);
       if (message.ok) request.resolve(message);
-      else
-        request.reject(
-          new Error(message.error ?? "Granite worker request failed"),
-        );
+      else request.reject(new Error(message.error ?? "Granite worker request failed"));
     };
     worker.onerror = (event) => {
-      for (const request of pending.values())
-        request.reject(new Error(event.message || "Granite worker failed"));
+      for (const request of pending.values()) request.reject(new Error(event.message || "Granite worker failed"));
       pending.clear();
       worker = null;
     };
@@ -61,10 +51,7 @@ function workerFor(): Worker | undefined {
   return worker;
 }
 
-function callWorker(
-  message: Record<string, unknown>,
-  transfer: Transferable[] = [],
-): Promise<Record<string, unknown>> {
+function callWorker(message: Record<string, unknown>, transfer: Transferable[] = []): Promise<Record<string, unknown>> {
   const instance = workerFor();
   if (!instance) return Promise.reject(new Error("worker unavailable"));
   const id = ++sequence;
@@ -77,50 +64,25 @@ function callWorker(
   });
 }
 
-async function loadDirect(
-  weights: ArrayBuffer,
-  tokenizer: ArrayBuffer,
-  config: ArrayBuffer,
-): Promise<void> {
-  const wasm =
-    (await import("@xberg-io/xberg-wasm")) as unknown as GraniteWasmModule;
+async function loadDirect(weights: ArrayBuffer, tokenizer: ArrayBuffer, config: ArrayBuffer): Promise<void> {
+  const wasm = (await import("@xberg-io/xberg-wasm")) as unknown as GraniteWasmModule;
   await wasm.default();
   directModel = new wasm.GraniteEmbeddingModel();
-  directModel.loadBytes(
-    new Uint8Array(weights),
-    new Uint8Array(tokenizer),
-    new Uint8Array(config),
-  );
+  directModel.loadBytes(new Uint8Array(weights), new Uint8Array(tokenizer), new Uint8Array(config));
 }
 
-export async function ensureGraniteEmbedder(
-  onProgress?: (progress: FetchProgress) => void,
-): Promise<void> {
+export async function ensureGraniteEmbedder(onProgress?: (progress: FetchProgress) => void): Promise<void> {
   if (!loadPromise) {
     loadPromise = (async () => {
       const artifacts = await resolveGraniteArtifacts();
       const [weights, tokenizer, config] = await Promise.all([
-        cachedFetchVerifiedBuffer(
-          artifacts.model.url,
-          artifacts.model.sha256,
-          onProgress,
-        ),
-        cachedFetchVerifiedBuffer(
-          artifacts.tokenizer.url,
-          artifacts.tokenizer.sha256,
-        ),
-        cachedFetchVerifiedBuffer(
-          artifacts.config.url,
-          artifacts.config.sha256,
-        ),
+        cachedFetchVerifiedBuffer(artifacts.model.url, artifacts.model.sha256, onProgress),
+        cachedFetchVerifiedBuffer(artifacts.tokenizer.url, artifacts.tokenizer.sha256),
+        cachedFetchVerifiedBuffer(artifacts.config.url, artifacts.config.sha256),
       ]);
       const instance = workerFor();
       if (instance) {
-        await callWorker({ op: "load", weights, tokenizer, config }, [
-          weights,
-          tokenizer,
-          config,
-        ]);
+        await callWorker({ op: "load", weights, tokenizer, config }, [weights, tokenizer, config]);
       } else {
         await loadDirect(weights, tokenizer, config);
       }
@@ -138,22 +100,15 @@ export async function embedChunks(
 ): Promise<Float32Array[]> {
   await ensureGraniteEmbedder(onProgress);
   if (directModel)
-    return directModel
-      .embedDocuments(chunks.map((chunk) => chunk.text))
-      .map((vector) => new Float32Array(vector));
+    return directModel.embedDocuments(chunks.map((chunk) => chunk.text)).map((vector) => new Float32Array(vector));
   const result = await callWorker({
     op: "documents",
     texts: chunks.map((chunk) => chunk.text),
   });
-  return (result["vectors"] as number[][]).map(
-    (vector) => new Float32Array(vector),
-  );
+  return (result["vectors"] as number[][]).map((vector) => new Float32Array(vector));
 }
 
-export async function embedQuery(
-  text: string,
-  onProgress?: (progress: FetchProgress) => void,
-): Promise<Float32Array> {
+export async function embedQuery(text: string, onProgress?: (progress: FetchProgress) => void): Promise<Float32Array> {
   await ensureGraniteEmbedder(onProgress);
   if (directModel) return new Float32Array(directModel.embedQuery(text));
   const result = await callWorker({ op: "query", text });
@@ -173,7 +128,6 @@ export function resetGraniteEmbedder(): void {
   worker = null;
   directModel = null;
   loadPromise = null;
-  for (const request of pending.values())
-    request.reject(new Error("Granite embedder reset"));
+  for (const request of pending.values()) request.reject(new Error("Granite embedder reset"));
   pending.clear();
 }

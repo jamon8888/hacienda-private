@@ -20,10 +20,7 @@ export function embedChunks(
 }
 
 /** Embed a query with the same model, tokenizer, pooling, and normalization as documents. */
-export function embedQuery(
-  text: string,
-  onProgress?: (progress: FetchProgress) => void,
-): Promise<Float32Array> {
+export function embedQuery(text: string, onProgress?: (progress: FetchProgress) => void): Promise<Float32Array> {
   return embedGraniteQuery(text, onProgress);
 }
 

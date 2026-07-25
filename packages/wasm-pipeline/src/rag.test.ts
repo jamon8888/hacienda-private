@@ -67,17 +67,10 @@ describe("rag retrieve", () => {
     loadMock.mockResolvedValue(fakeDb);
 
     const { retrieve } = await import("./rag");
-    const hits = await retrieve(
-      "matter-42",
-      new Float32Array([0.1, 0.2, 0.3]),
-      2,
-    );
+    const hits = await retrieve("matter-42", new Float32Array([0.1, 0.2, 0.3]), 2);
 
     expect(loadMock).toHaveBeenCalledWith("edgevec:matter-42");
-    expect(fakeDb.search).toHaveBeenCalledWith(
-      new Float32Array([0.1, 0.2, 0.3]),
-      2,
-    );
+    expect(fakeDb.search).toHaveBeenCalledWith(new Float32Array([0.1, 0.2, 0.3]), 2);
     expect(hits).toEqual([
       {
         doc_id: "doc-1",

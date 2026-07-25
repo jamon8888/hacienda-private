@@ -3,11 +3,11 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-	configureGliner2NativeFacade,
-	detectGliner2,
-	detectPii,
-	resolveLocalOnnxWasmPaths,
-	RUST_ALIGNED_PII_TYPES,
+  configureGliner2NativeFacade,
+  detectGliner2,
+  detectPii,
+  resolveLocalOnnxWasmPaths,
+  RUST_ALIGNED_PII_TYPES,
 } from "./ner.js";
 
 /**
@@ -19,117 +19,117 @@ import {
  * resolvable directly).
  */
 function findOwnPackageJson(startDir: string, packageName: string): Record<string, unknown> {
-	let dir = startDir;
-	for (;;) {
-		const candidate = join(dir, "package.json");
-		if (existsSync(candidate)) {
-			const pkg = JSON.parse(readFileSync(candidate, "utf8")) as Record<string, unknown>;
-			if (pkg.name === packageName) return pkg;
-		}
-		const parent = dirname(dir);
-		if (parent === dir) {
-			throw new Error(`Could not find installed package.json for "${packageName}" above ${startDir}`);
-		}
-		dir = parent;
-	}
+  let dir = startDir;
+  for (;;) {
+    const candidate = join(dir, "package.json");
+    if (existsSync(candidate)) {
+      const pkg = JSON.parse(readFileSync(candidate, "utf8")) as Record<string, unknown>;
+      if (pkg.name === packageName) return pkg;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) {
+      throw new Error(`Could not find installed package.json for "${packageName}" above ${startDir}`);
+    }
+    dir = parent;
+  }
 }
 
 describe("RUST_ALIGNED_PII_TYPES", () => {
-	it("uses the GLiNER2-PII taxonomy", () => {
-		expect(RUST_ALIGNED_PII_TYPES).toHaveLength(42);
-		expect(RUST_ALIGNED_PII_TYPES).toContain("iban");
-		expect(RUST_ALIGNED_PII_TYPES).toContain("national_id_number");
-		expect(RUST_ALIGNED_PII_TYPES).toContain("api_key");
-	});
+  it("uses the GLiNER2-PII taxonomy", () => {
+    expect(RUST_ALIGNED_PII_TYPES).toHaveLength(42);
+    expect(RUST_ALIGNED_PII_TYPES).toContain("iban");
+    expect(RUST_ALIGNED_PII_TYPES).toContain("national_id_number");
+    expect(RUST_ALIGNED_PII_TYPES).toContain("api_key");
+  });
 });
 
 describe("native GLiNER2 façade contract", () => {
-	it("passes verified model directory, labels, and threshold to the injected façade", async () => {
-		const calls: unknown[][] = [];
-		configureGliner2NativeFacade({
-			detectGliner2: (...args) => {
-				calls.push(args);
-				return [{ kind: "person", start: 0, end: 4, text: "Ada" }];
-			},
-		});
+  it("passes verified model directory, labels, and threshold to the injected façade", async () => {
+    const calls: unknown[][] = [];
+    configureGliner2NativeFacade({
+      detectGliner2: (...args) => {
+        calls.push(args);
+        return [{ kind: "person", start: 0, end: 4, text: "Ada" }];
+      },
+    });
 
-		await expect(detectGliner2("Ada", "/cache/gliner2", ["person"], 0.7)).resolves.toEqual([
-			{ kind: "person", start: 0, end: 4, text: "Ada" },
-		]);
-		expect(calls).toEqual([["Ada", "/cache/gliner2", ["person"], 0.7]]);
-		configureGliner2NativeFacade(undefined);
-	});
+    await expect(detectGliner2("Ada", "/cache/gliner2", ["person"], 0.7)).resolves.toEqual([
+      { kind: "person", start: 0, end: 4, text: "Ada" },
+    ]);
+    expect(calls).toEqual([["Ada", "/cache/gliner2", ["person"], 0.7]]);
+    configureGliner2NativeFacade(undefined);
+  });
 
-	it("fails clearly when the generated façade has not been installed", async () => {
-		configureGliner2NativeFacade(undefined);
-		await expect(detectGliner2("Ada", "/cache/gliner2")).rejects.toThrow(/façade is unavailable/);
-	});
+  it("fails clearly when the generated façade has not been installed", async () => {
+    configureGliner2NativeFacade(undefined);
+    await expect(detectGliner2("Ada", "/cache/gliner2")).rejects.toThrow(/façade is unavailable/);
+  });
 });
 
 describe("resolveLocalOnnxWasmPaths", () => {
-	it("resolves to a real local directory, never the onnxruntime-web CDN default", () => {
-		const wasmPaths = resolveLocalOnnxWasmPaths();
+  it("resolves to a real local directory, never the onnxruntime-web CDN default", () => {
+    const wasmPaths = resolveLocalOnnxWasmPaths();
 
-		expect(wasmPaths).not.toMatch(/^https?:/);
-		expect(wasmPaths).not.toContain("cdn.jsdelivr.net");
-		expect(wasmPaths.endsWith("/")).toBe(true);
+    expect(wasmPaths).not.toMatch(/^https?:/);
+    expect(wasmPaths).not.toContain("cdn.jsdelivr.net");
+    expect(wasmPaths.endsWith("/")).toBe(true);
 
-		// Strip the trailing slash convention (wasmPaths is concatenated with a
-		// filename by gliner's ONNXWebWrapper) to check the directory on disk.
-		const dir = wasmPaths.slice(0, -1);
-		expect(existsSync(dir)).toBe(true);
-	});
+    // Strip the trailing slash convention (wasmPaths is concatenated with a
+    // filename by gliner's ONNXWebWrapper) to check the directory on disk.
+    const dir = wasmPaths.slice(0, -1);
+    expect(existsSync(dir)).toBe(true);
+  });
 
-	it("resolves onnxruntime-web's WASM directory from gliner's OWN installed copy, not node-pipeline's direct dependency", () => {
-		// node-pipeline declares its own direct onnxruntime-web dependency, but
-		// gliner pins and imports a separate, private copy of onnxruntime-web
-		// under pnpm's isolated node_modules. ONNXWebWrapper (inside gliner)
-		// assigns wasmPaths onto *gliner's own* ort.env.wasm, so handing it
-		// wasm binaries from a different onnxruntime-web version than the one
-		// gliner's JS runtime actually imports is a real version mismatch. This
-		// test reads gliner's pinned version straight from its own installed
-		// package.json (never a hardcoded version string, so pin drift can't
-		// silently make this test meaningless) and asserts the resolved WASM
-		// directory actually belongs to that exact installed copy.
-		const require = createRequire(import.meta.url);
-		const glinerEntryPath = require.resolve("gliner");
-		const glinerPkg = findOwnPackageJson(dirname(glinerEntryPath), "gliner");
-		const glinerDeps = glinerPkg.dependencies as Record<string, string>;
-		const glinerPinnedOnnxVersion = glinerDeps["onnxruntime-web"];
-		expect(glinerPinnedOnnxVersion).toBeTruthy();
+  it("resolves onnxruntime-web's WASM directory from gliner's OWN installed copy, not node-pipeline's direct dependency", () => {
+    // node-pipeline declares its own direct onnxruntime-web dependency, but
+    // gliner pins and imports a separate, private copy of onnxruntime-web
+    // under pnpm's isolated node_modules. ONNXWebWrapper (inside gliner)
+    // assigns wasmPaths onto *gliner's own* ort.env.wasm, so handing it
+    // wasm binaries from a different onnxruntime-web version than the one
+    // gliner's JS runtime actually imports is a real version mismatch. This
+    // test reads gliner's pinned version straight from its own installed
+    // package.json (never a hardcoded version string, so pin drift can't
+    // silently make this test meaningless) and asserts the resolved WASM
+    // directory actually belongs to that exact installed copy.
+    const require = createRequire(import.meta.url);
+    const glinerEntryPath = require.resolve("gliner");
+    const glinerPkg = findOwnPackageJson(dirname(glinerEntryPath), "gliner");
+    const glinerDeps = glinerPkg.dependencies as Record<string, string>;
+    const glinerPinnedOnnxVersion = glinerDeps["onnxruntime-web"];
+    expect(glinerPinnedOnnxVersion).toBeTruthy();
 
-		const wasmPaths = resolveLocalOnnxWasmPaths();
-		const wasmDir = wasmPaths.slice(0, -1);
+    const wasmPaths = resolveLocalOnnxWasmPaths();
+    const wasmDir = wasmPaths.slice(0, -1);
 
-		// The resolved WASM directory sits at .../onnxruntime-web/dist under
-		// the installed onnxruntime-web package root; read that package's own
-		// package.json to get the actual version physically on disk there.
-		const onnxPkg = findOwnPackageJson(wasmDir, "onnxruntime-web");
-		const resolvedOnnxVersion = onnxPkg.version as string;
+    // The resolved WASM directory sits at .../onnxruntime-web/dist under
+    // the installed onnxruntime-web package root; read that package's own
+    // package.json to get the actual version physically on disk there.
+    const onnxPkg = findOwnPackageJson(wasmDir, "onnxruntime-web");
+    const resolvedOnnxVersion = onnxPkg.version as string;
 
-		expect(resolvedOnnxVersion).toBe(glinerPinnedOnnxVersion);
+    expect(resolvedOnnxVersion).toBe(glinerPinnedOnnxVersion);
 
-		// Guard against a regression back to node-pipeline's own direct
-		// dependency: if that version genuinely differs from gliner's pinned
-		// version (the exact bug this test targets), the resolved path must
-		// NOT be node-pipeline's own onnxruntime-web copy.
-		const nodePipelineOnnxEntry = require.resolve("onnxruntime-web");
-		const nodePipelineOnnxPkg = findOwnPackageJson(dirname(nodePipelineOnnxEntry), "onnxruntime-web");
-		const nodePipelineOnnxVersion = nodePipelineOnnxPkg.version as string;
-		if (nodePipelineOnnxVersion !== glinerPinnedOnnxVersion) {
-			expect(resolvedOnnxVersion).not.toBe(nodePipelineOnnxVersion);
-		}
-	});
+    // Guard against a regression back to node-pipeline's own direct
+    // dependency: if that version genuinely differs from gliner's pinned
+    // version (the exact bug this test targets), the resolved path must
+    // NOT be node-pipeline's own onnxruntime-web copy.
+    const nodePipelineOnnxEntry = require.resolve("onnxruntime-web");
+    const nodePipelineOnnxPkg = findOwnPackageJson(dirname(nodePipelineOnnxEntry), "onnxruntime-web");
+    const nodePipelineOnnxVersion = nodePipelineOnnxPkg.version as string;
+    if (nodePipelineOnnxVersion !== glinerPinnedOnnxVersion) {
+      expect(resolvedOnnxVersion).not.toBe(nodePipelineOnnxVersion);
+    }
+  });
 });
 
 describe.skip("detectPii (real model — run manually, needs network)", () => {
-	it("detects a person and organization", async () => {
-		const entities = await detectPii(
-			"Elon Musk founded SpaceX in Hawthorne, California.",
-			process.env.GLINER_MODEL_PATH ?? "",
-			process.env.GLINER_TOKENIZER_PATH ?? "",
-		);
-		const texts = entities.map((e) => e.text);
-		expect(texts).toEqual(expect.arrayContaining([expect.stringContaining("Musk")]));
-	});
+  it("detects a person and organization", async () => {
+    const entities = await detectPii(
+      "Elon Musk founded SpaceX in Hawthorne, California.",
+      process.env.GLINER_MODEL_PATH ?? "",
+      process.env.GLINER_TOKENIZER_PATH ?? "",
+    );
+    const texts = entities.map((e) => e.text);
+    expect(texts).toEqual(expect.arrayContaining([expect.stringContaining("Musk")]));
+  });
 });

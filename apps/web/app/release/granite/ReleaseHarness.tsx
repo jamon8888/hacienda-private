@@ -70,15 +70,8 @@ function currentHeap(): number | null {
 function graniteResources(): ResourceReport[] {
   return performance
     .getEntriesByType("resource")
-    .filter(
-      (entry): entry is PerformanceResourceTiming =>
-        entry instanceof PerformanceResourceTiming,
-    )
-    .filter((entry) =>
-      entry.name.includes(
-        "/models/granite/granite-embedding-97m-multilingual-r2/",
-      ),
-    )
+    .filter((entry): entry is PerformanceResourceTiming => entry instanceof PerformanceResourceTiming)
+    .filter((entry) => entry.name.includes("/models/granite/granite-embedding-97m-multilingual-r2/"))
     .map((entry) => ({
       name: entry.name,
       duration: entry.duration,
@@ -102,14 +95,13 @@ function buildReport(input: CorpusFixture) {
     ]);
     const batchEmbedMs = performance.now() - batchStartedAt;
     const heapAfterBatchBytes = currentHeap();
-    const peakHeapBytes = [
-      heapBeforeBytes,
-      heapAfterWarmupBytes,
-      heapAfterBatchBytes,
-    ].reduce<number | null>((peak, value) => {
-      if (value === null) return peak;
-      return peak === null ? value : Math.max(peak, value);
-    }, null);
+    const peakHeapBytes = [heapBeforeBytes, heapAfterWarmupBytes, heapAfterBatchBytes].reduce<number | null>(
+      (peak, value) => {
+        if (value === null) return peak;
+        return peak === null ? value : Math.max(peak, value);
+      },
+      null,
+    );
 
     const report: ReleaseReport = {
       identity: graniteEmbeddingIdentity(),
@@ -136,9 +128,7 @@ function buildReport(input: CorpusFixture) {
 
 export default function ReleaseHarness() {
   const fixture = useMemo(() => corpus as CorpusFixture, []);
-  const [status, setStatus] = useState<"idle" | "running" | "done" | "error">(
-    "idle",
-  );
+  const [status, setStatus] = useState<"idle" | "running" | "done" | "error">("idle");
   const [report, setReport] = useState<ReleaseReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const run = useMemo(() => buildReport(fixture), [fixture]);
@@ -157,9 +147,7 @@ export default function ReleaseHarness() {
   };
 
   useEffect(() => {
-    const autorun =
-      typeof window !== "undefined" &&
-      new URLSearchParams(window.location.search).get("autorun") === "1";
+    const autorun = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("autorun") === "1";
     if (!autorun) return;
     setStatus("running");
     let cancelled = false;
@@ -183,8 +171,7 @@ export default function ReleaseHarness() {
     <main className="mx-auto max-w-5xl p-6">
       <h1 className="text-2xl font-semibold">Granite Release Harness</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        Release verification surface for the shared Granite embedding backend on
-        Thursday, July 23, 2026.
+        Release verification surface for the shared Granite embedding backend on Thursday, July 23, 2026.
       </p>
       <div className="mt-4 rounded-lg border p-4">
         <p data-testid="granite-release-status" className="font-medium">
@@ -200,10 +187,7 @@ export default function ReleaseHarness() {
           Run Granite release checks
         </button>
         {error ? (
-          <p
-            data-testid="granite-release-error"
-            className="mt-2 text-sm text-destructive"
-          >
+          <p data-testid="granite-release-error" className="mt-2 text-sm text-destructive">
             {error}
           </p>
         ) : null}
