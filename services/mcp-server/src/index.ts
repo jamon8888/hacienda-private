@@ -664,7 +664,7 @@ export function createAppContext(config: AppConfig): AppContext {
       if (backend !== "legacy" && (await configureNativeGliner2())) {
         try {
           const { modelDir } = await gliner2Paths();
-          return detectGliner2(text, modelDir, RUST_ALIGNED_PII_TYPES);
+          return await detectGliner2(text, modelDir, RUST_ALIGNED_PII_TYPES);
         } catch (error) {
           if (backend === "candle") throw error;
           console.warn(

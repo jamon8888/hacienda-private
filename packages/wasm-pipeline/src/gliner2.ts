@@ -91,14 +91,24 @@ class Gliner2WorkerSession implements Gliner2Session {
 }
 
 let sessionPromise: Promise<Gliner2Session> | null = null;
+// Tracked separately from sessionPromise: set synchronously as soon as the worker is
+// constructed (not once `ready` resolves), so a reset can terminate a worker that's still
+// loading — or hung — instead of waiting on a promise that may never settle.
+let activeWorkerSession: Gliner2WorkerSession | null = null;
 
 export function resetGliner2Model(): void {
-  const previous = sessionPromise;
+  const previousPromise = sessionPromise;
+  const previousWorker = activeWorkerSession;
   sessionPromise = null;
-  if (!previous) return;
+  activeWorkerSession = null;
+  if (previousWorker) {
+    previousWorker.dispose();
+    return;
+  }
+  if (!previousPromise) return;
   // Dispose asynchronously: a dedicated worker (and its loaded model) must not be left
   // running just because the session promise reference was cleared.
-  void previous
+  void previousPromise
     .then((session) => {
       if (session instanceof Gliner2WorkerSession) session.dispose();
     })
@@ -108,9 +118,12 @@ export function resetGliner2Model(): void {
 }
 
 export async function ensureGliner2Model(onProgress?: (progress: FetchProgress) => void): Promise<Gliner2Session> {
-  sessionPromise ??= (async () => {
+  if (sessionPromise) return sessionPromise;
+  let worker: Gliner2WorkerSession | null = null;
+  const attempt: Promise<Gliner2Session> = (async () => {
     if (typeof Worker !== "undefined" && typeof window !== "undefined") {
-      const worker = new Gliner2WorkerSession();
+      worker = new Gliner2WorkerSession();
+      activeWorkerSession = worker;
       await worker.ready;
       return worker;
     }
@@ -127,10 +140,13 @@ export async function ensureGliner2Model(onProgress?: (progress: FetchProgress) 
     model.loadBytes(new Uint8Array(weights), new Uint8Array(tokenizer), new Uint8Array(encoderConfig));
     return model;
   })().catch((error) => {
-    sessionPromise = null;
+    // Only clear shared state if a reset (or a newer session) hasn't already replaced it.
+    if (sessionPromise === attempt) sessionPromise = null;
+    if (worker && activeWorkerSession === worker) activeWorkerSession = null;
     throw error;
   });
-  return sessionPromise;
+  sessionPromise = attempt;
+  return attempt;
 }
 
 export async function detectGliner2(
