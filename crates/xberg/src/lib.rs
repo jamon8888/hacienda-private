@@ -1121,6 +1121,6 @@ pub use enrich::CaptioningEnrichmentConfig;
 
 /// Adapter binding xberg's embedding engine to `xberg_rag::Embedder`.
 pub mod rag_embed;
-pub use rag_embed::XbergEmbedder;
 #[cfg(feature = "candle-embeddings")]
 pub use rag_embed::GraniteRagEmbedder;
+pub use rag_embed::XbergEmbedder;

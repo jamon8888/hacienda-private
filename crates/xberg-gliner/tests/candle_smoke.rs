@@ -56,7 +56,7 @@ fn base_model_extracts_entities_and_adapter_changes_output() {
 
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
-#[ignore = "requires real fastino/GLiNER2-Guardrails-PII-Multi safetensors on disk"]
+#[ignore = "requires real fastino/gliner2-privacy-filter-PII-multi safetensors on disk"]
 fn pii_model_loads_from_bytes_and_extracts_entities() {
     let Ok(model_dir) = std::env::var("GLINER2_PII_MODEL_DIR") else {
         eprintln!("skipping: GLINER2_PII_MODEL_DIR not set");

@@ -16,8 +16,8 @@
 //!   pos_seq_fbcast = pos_seq.unsqueeze(1).expand(L, F, 768)
 //!   h_0 = field_embs                                   # [F, 768]
 //!   for t in 0..L:
-//!       h_t = GRU_step(pos_seq_fbcast[t], h_{t-1})     # [F, 768]
-//!   out_h = stack(h_0..h_{L-1}, dim=0)                 # [L, F, 768]
+//!       h_{t+1} = GRU_step(pos_seq_fbcast[t], h_t)     # [F, 768]
+//!   out_h = stack(h_1..h_L, dim=0)                     # [L, F, 768]
 //!   field_emb_b = field_embs.unsqueeze(0).expand(L, F, 768)
 //!   cat = concat([out_h, field_emb_b], dim=-1)         # [L, F, 1536]
 //!   struct_proj = projector_2(relu(projector_0(cat)))  # [L, F, 768]
@@ -69,8 +69,7 @@ impl CountLstmFixed {
     }
 
     /// Forward pass.
-    pub fn forward(&self, field_embs: &Tensor, pred_count: usize, device: &Device) -> candle_core::Result<Tensor> {
-        let _ = device;
+    pub fn forward(&self, field_embs: &Tensor, pred_count: usize) -> candle_core::Result<Tensor> {
         let (f, h) = field_embs.dims2()?;
         debug_assert_eq!(h, HIDDEN);
 

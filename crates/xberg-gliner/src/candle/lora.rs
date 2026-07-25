@@ -34,6 +34,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 
+use candle_core::safetensors::Load;
 use candle_core::{DType, Device, Tensor};
 use safetensors::SafeTensors;
 use serde::Deserialize;
@@ -120,23 +121,10 @@ impl LoraAdapter {
         let mut by_module: HashMap<String, (Option<Tensor>, Option<Tensor>)> = HashMap::new();
         for (key, view) in st.tensors() {
             let (module_path, slot) = parse_lora_key(&key)?;
-            let shape: Vec<usize> = view.shape().to_vec();
-            // safetensors gives us a byte slice; load into a Candle tensor.
-            // PEFT adapters are typically fp32; if the dtype is fp16/bf16 we'd
-            // need to convert. Phase 4 supports fp32 only; error otherwise.
-            if view.dtype() != safetensors::Dtype::F32 {
-                return Err(crate::candle::GlinerCandleError::Backend(format!(
-                    "lora: {key}: dtype {:?} not supported (Phase 4 ships fp32 only)",
-                    view.dtype()
-                )));
-            }
-            let bytes = view.data();
-            let n = bytes.len() / 4;
-            let mut data = Vec::with_capacity(n);
-            for chunk in bytes.chunks_exact(4) {
-                data.push(f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]));
-            }
-            let tensor = Tensor::from_vec(data, shape, device)
+
+            // Use candle_core's Load trait to load tensors from SafeTensors view
+            // This supports F32, F16, BF16, F64, I64 without manual byte parsing.
+            let tensor = candle_core::safetensors::Load::load(&view, device)
                 .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("lora: tensor {key}: {e}")))?;
             let entry = by_module.entry(module_path).or_default();
             match slot {
@@ -147,6 +135,7 @@ impl LoraAdapter {
 
         // Validate every module has both A and B.
         let mut modules = HashMap::new();
+        let r = config.r;
         for (path, (a, b)) in by_module {
             let lora_a = a.ok_or_else(|| {
                 crate::candle::GlinerCandleError::Backend(format!("lora: missing lora_A for module {path}"))
@@ -154,6 +143,29 @@ impl LoraAdapter {
             let lora_b = b.ok_or_else(|| {
                 crate::candle::GlinerCandleError::Backend(format!("lora: missing lora_B for module {path}"))
             })?;
+            // Validate LoRA matrix ranks against config.r
+            let a_rank = lora_a.shape().dims()[0];
+            let b_rank = lora_b.shape().dims()[1];
+            if a_rank != r {
+                return Err(crate::candle::GlinerCandleError::Backend(format!(
+                    "lora: module {path}: lora_A rank {a_rank} != config.r {r}"
+                )));
+            }
+            if b_rank != r {
+                return Err(crate::candle::GlinerCandleError::Backend(format!(
+                    "lora: module {path}: lora_B rank {b_rank} != config.r {r}"
+                )));
+            }
+            // Validate A/B multiplication dimensions are compatible: A=[r, in], B=[out, r]
+            let a_in = lora_a.shape().dims()[1];
+            let b_out = lora_b.shape().dims()[0];
+            if a_in == 0 || b_out == 0 {
+                return Err(crate::candle::GlinerCandleError::Backend(format!(
+                    "lora: module {path}: invalid A/B shapes A={:?} B={:?}",
+                    lora_a.shape(),
+                    lora_b.shape()
+                )));
+            }
             modules.insert(path, LoraModule { lora_a, lora_b });
         }
 
@@ -218,9 +230,8 @@ pub(crate) fn merge_into_base(
     let mut applied: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     for (key, view) in st.tensors() {
-        // Decode safetensors view to a Candle tensor.
-        let shape: Vec<usize> = view.shape().to_vec();
-        let mut tensor = decode_view(&view, shape, device)
+        // Decode safetensors view to a Candle tensor using candle's Load trait.
+        let mut tensor = candle_core::safetensors::Load::load(&view, device)
             .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("lora_merge: decode {key}: {e}")))?;
 
         // Match key against adapter modules: strip `.weight` suffix, look up.
@@ -256,41 +267,6 @@ pub(crate) fn merge_into_base(
     }
 
     Ok(out)
-}
-
-/// Decode a SafeTensors view into a Candle Tensor. Supports fp32 + i64.
-fn decode_view(
-    view: &safetensors::tensor::TensorView<'_>,
-    shape: Vec<usize>,
-    device: &Device,
-) -> candle_core::Result<Tensor> {
-    use safetensors::Dtype as ST;
-    match view.dtype() {
-        ST::F32 => {
-            let bytes = view.data();
-            let n = bytes.len() / 4;
-            let mut data = Vec::with_capacity(n);
-            for chunk in bytes.chunks_exact(4) {
-                data.push(f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]));
-            }
-            Tensor::from_vec(data, shape, device)
-        }
-        ST::I64 => {
-            let bytes = view.data();
-            let n = bytes.len() / 8;
-            let mut data: Vec<i64> = Vec::with_capacity(n);
-            for chunk in bytes.chunks_exact(8) {
-                data.push(i64::from_le_bytes([
-                    chunk[0], chunk[1], chunk[2], chunk[3], chunk[4], chunk[5], chunk[6], chunk[7],
-                ]));
-            }
-            Tensor::from_vec(data, shape, device)
-        }
-        other => Err(candle_core::Error::Msg(format!(
-            "lora_merge: dtype {other:?} not supported (only F32, I64; the GLiNER2 \
-             base safetensors has only F32 and I64)"
-        ))),
-    }
 }
 
 /// Apply `W += scale * (lora_B @ lora_A)`. If `fan_in_fan_out`, the
@@ -363,6 +339,25 @@ mod tests {
         let merged = apply_lora_delta(&base, &lora_a, &lora_b, 0.5, false).unwrap();
         assert_eq!(merged.shape().dims(), &[4, 3]);
         // Each entry of (lora_b @ lora_a) is r=2 ones, so delta = 2 * 0.5 = 1.0 everywhere.
+        let v = merged.flatten_all().unwrap().to_vec1::<f32>().unwrap();
+        for x in v {
+            assert!((x - 1.0).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn apply_lora_delta_shape_fan_in_fan_out() {
+        let device = Device::Cpu;
+        // fan_in_fan_out = true means base weight is [in, out]
+        // Standard LoRA: lora_A=[r, in], lora_B=[out, r]
+        // Implementation computes delta = lora_B @ lora_A = [out, in], then transposes to [in, out]
+        let base = Tensor::zeros((3, 4), DType::F32, &device).unwrap(); // [in=3, out=4]
+        let lora_a = Tensor::ones((2, 3), DType::F32, &device).unwrap(); // [r=2, in=3]
+        let lora_b = Tensor::ones((4, 2), DType::F32, &device).unwrap(); // [out=4, r=2]
+        let merged = apply_lora_delta(&base, &lora_a, &lora_b, 0.5, true).unwrap();
+        assert_eq!(merged.shape().dims(), &[3, 4]);
+        // delta = lora_B @ lora_A = [4,2] @ [2,3] = [4,3], then transpose to [3,4]
+        // Each entry of (lora_B @ lora_A) is r=2 ones, so delta = 2 * 0.5 = 1.0 everywhere.
         let v = merged.flatten_all().unwrap().to_vec1::<f32>().unwrap();
         for x in v {
             assert!((x - 1.0).abs() < 1e-6);
