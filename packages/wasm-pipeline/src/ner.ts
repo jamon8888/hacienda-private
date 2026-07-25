@@ -1,21 +1,7 @@
 import type { PiiEntity } from "@xberg-io/core";
-import type {
-  Gliner,
-  IEntityResult,
-  InitConfig,
-  IONNXWebSettings,
-  ITransformersSettings,
-} from "gliner";
-import {
-  API_BASE,
-  GLINER_TOKENIZER_REPO_ID,
-  glinerModelUrl,
-} from "./constants";
-import {
-  cachedFetchBuffer,
-  withScopedFetchOverride,
-  type FetchProgress,
-} from "./model-cache";
+import type { Gliner, IEntityResult, InitConfig, IONNXWebSettings, ITransformersSettings } from "gliner";
+import { API_BASE, GLINER_TOKENIZER_REPO_ID, glinerModelUrl } from "./constants";
+import { cachedFetchBuffer, withScopedFetchOverride, type FetchProgress } from "./model-cache";
 import type { ModelScenario } from "./scenario";
 import { detectGliner2 as detectGliner2Native } from "./gliner2";
 
@@ -153,9 +139,7 @@ export async function ensurePiiModel(
         };
         const model = new GlinerClass(config);
         const modelBytes = await cachedFetchBuffer(modelUrl, onProgress);
-        await withScopedFetchOverride(modelUrl, modelBytes, () =>
-          model.initialize(),
-        );
+        await withScopedFetchOverride(modelUrl, modelBytes, () => model.initialize());
         return model;
       } catch (err) {
         // Don't cache a rejected promise: callers outside warmup's retry loop (e.g. detectPii)
@@ -185,9 +169,7 @@ export async function detectPii(
   }
   const backend =
     (typeof import.meta !== "undefined" &&
-      (import.meta as unknown as { env?: Record<string, string> }).env?.[
-        "VITE_NER_BACKEND"
-      ]) ??
+      (import.meta as unknown as { env?: Record<string, string> }).env?.["VITE_NER_BACKEND"]) ??
     (typeof process !== "undefined" ? process.env["NER_BACKEND"] : undefined) ??
     "auto";
   if (backend !== "legacy") {
@@ -195,10 +177,7 @@ export async function detectPii(
       return await detectGliner2Native(text, types);
     } catch (error) {
       if (backend === "gliner2") throw error;
-      console.warn(
-        "[wasm-pipeline] GLiNER2 unavailable; falling back to legacy GLiNER",
-        error,
-      );
+      console.warn("[wasm-pipeline] GLiNER2 unavailable; falling back to legacy GLiNER", error);
     }
   }
   const model = await ensurePiiModel(scenario);

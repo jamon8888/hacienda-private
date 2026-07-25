@@ -1,13 +1,7 @@
 // packages/node-pipeline/src/ner.ts
 import { createRequire } from "node:module";
 import { dirname } from "node:path";
-import type {
-  Gliner,
-  IEntityResult,
-  InitConfig,
-  IONNXWebSettings,
-  ITransformersSettings,
-} from "gliner";
+import type { Gliner, IEntityResult, InitConfig, IONNXWebSettings, ITransformersSettings } from "gliner";
 
 export const RUST_ALIGNED_PII_TYPES = [
   "person",
@@ -81,9 +75,7 @@ export interface Gliner2NativeFacade {
 let gliner2NativeFacade: Gliner2NativeFacade | undefined;
 
 /** Install the generated native façade at application startup. */
-export function configureGliner2NativeFacade(
-  facade: Gliner2NativeFacade | undefined,
-): void {
+export function configureGliner2NativeFacade(facade: Gliner2NativeFacade | undefined): void {
   gliner2NativeFacade = facade;
 }
 
@@ -155,10 +147,7 @@ export function resolveLocalOnnxWasmPaths(): string {
 
 const modelCache = new Map<string, Promise<Gliner>>();
 
-async function getModel(
-  modelPath: string,
-  tokenizerPath: string,
-): Promise<Gliner> {
+async function getModel(modelPath: string, tokenizerPath: string): Promise<Gliner> {
   const key = `${modelPath}::${tokenizerPath}`;
   let cached = modelCache.get(key);
   if (!cached) {

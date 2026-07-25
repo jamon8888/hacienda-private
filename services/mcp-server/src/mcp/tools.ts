@@ -64,11 +64,7 @@ export interface RedactArgs {
 const NODE_RAG_QUERY_UNAVAILABLE_MESSAGE =
   "live rag_query is only supported by the native Rust MCP host; the Node mirror only stores metadata bundles";
 
-export function ragQuery(
-  ctx: AppContext,
-  principal: Principal,
-  args: RagQueryArgs,
-): ToolResult {
+export function ragQuery(ctx: AppContext, principal: Principal, args: RagQueryArgs): ToolResult {
   return wrap(() => {
     const matter = getMatter(ctx, args.matter_id);
     authorize(principal.scopes, "read");
@@ -77,52 +73,30 @@ export function ragQuery(
   });
 }
 
-export function listPii(
-  ctx: AppContext,
-  principal: Principal,
-  args: ListPiiArgs,
-): ToolResult {
+export function listPii(ctx: AppContext, principal: Principal, args: ListPiiArgs): ToolResult {
   return wrap(() => {
     const matter = getMatter(ctx, args.matter_id);
     authorize(principal.scopes, "read");
     requireConsent(ctx.store, matter, "pii_read", principal.subject);
     const result = jsonResult(ctx.mirror.listPii(args.matter_id, args.doc_id));
-    ctx.store.recordAudit(
-      principal.subject,
-      "read",
-      "list_pii",
-      args.matter_id,
-    );
+    ctx.store.recordAudit(principal.subject, "read", "list_pii", args.matter_id);
     return result;
   });
 }
 
-export function rehydrateChunk(
-  ctx: AppContext,
-  principal: Principal,
-  args: RehydrateChunkArgs,
-): ToolResult {
+export function rehydrateChunk(ctx: AppContext, principal: Principal, args: RehydrateChunkArgs): ToolResult {
   return wrap(() => {
     const matter = getMatter(ctx, args.matter_id);
     authorize(principal.scopes, "redact");
     requireConsent(ctx.store, matter, "redact_rehydrate", principal.subject);
     const cipher = ctx.mirror.loadCipher(args.matter_id, args.chunk_id);
     const text = ctx.vault.open(cipher).toString("utf8");
-    ctx.store.recordAudit(
-      principal.subject,
-      "redact",
-      "rehydrate_chunk",
-      args.matter_id,
-    );
+    ctx.store.recordAudit(principal.subject, "redact", "rehydrate_chunk", args.matter_id);
     return textResult(text);
   });
 }
 
-export async function ingestFolder(
-  ctx: AppContext,
-  principal: Principal,
-  args: IngestFolderArgs,
-): Promise<ToolResult> {
+export async function ingestFolder(ctx: AppContext, principal: Principal, args: IngestFolderArgs): Promise<ToolResult> {
   const matter = getMatter(ctx, args.matter_id);
   authorize(principal.scopes, "ingest");
 
@@ -132,11 +106,7 @@ export async function ingestFolder(
   // to provide (there would never be a folder.id in common to look up an existing document by).
   const folder =
     ctx.store.getFolders(args.matter_id).find((f) => f.path === args.path) ??
-    ctx.store.createFolder(
-      args.matter_id,
-      args.path.split(/[/\\]/).pop() ?? args.path,
-      args.path,
-    );
+    ctx.store.createFolder(args.matter_id, args.path.split(/[/\\]/).pop() ?? args.path, args.path);
   ctx.store.updateFolderStatus(folder.id, "processing");
 
   // Unlike ragQuery/listPii/etc., this tool is async and can't route through the sync-only
@@ -152,25 +122,18 @@ export async function ingestFolder(
     const errors: { path: string; message: string }[] = [];
 
     for (const file of files) {
-      const existing = ctx.store.findDocumentByHash(
-        folder.id,
-        file.contentHash,
-      );
+      const existing = ctx.store.findDocumentByHash(folder.id, file.contentHash);
       // A previously-errored document must be retried, not counted as already-skipped —
       // ingestFile applies the same rule internally when it re-processes it below.
       if (existing && existing.status !== "error") {
         skipped += 1;
         continue;
       }
-      const doc = await ingestFile(
-        { ...ctx.pipeline, store: ctx.store, mirror: ctx.mirror },
-        file,
-        {
-          folderId: folder.id,
-          matterId: args.matter_id,
-          ingestedVia: "mcp",
-        },
-      );
+      const doc = await ingestFile({ ...ctx.pipeline, store: ctx.store, mirror: ctx.mirror }, file, {
+        folderId: folder.id,
+        matterId: args.matter_id,
+        ingestedVia: "mcp",
+      });
       if (doc.status === "error") {
         errors.push({
           path: file.path,
@@ -182,16 +145,8 @@ export async function ingestFolder(
       }
     }
 
-    ctx.store.updateFolderStatus(
-      folder.id,
-      errors.length > 0 && processed === 0 ? "error" : "done",
-    );
-    ctx.store.recordAudit(
-      principal.subject,
-      "ingest",
-      "ingest_folder",
-      args.matter_id,
-    );
+    ctx.store.updateFolderStatus(folder.id, errors.length > 0 && processed === 0 ? "error" : "done");
+    ctx.store.recordAudit(principal.subject, "ingest", "ingest_folder", args.matter_id);
 
     return jsonResult({
       folder,
@@ -203,33 +158,17 @@ export async function ingestFolder(
   } catch (err) {
     ctx.store.updateFolderStatus(folder.id, "error");
     if (err instanceof AppError) throw err;
-    throw new AppError(
-      "store",
-      err instanceof Error ? err.message : "ingest_folder failed",
-    );
+    throw new AppError("store", err instanceof Error ? err.message : "ingest_folder failed");
   }
 }
 
-export function redact(
-  ctx: AppContext,
-  principal: Principal,
-  args: RedactArgs,
-): ToolResult {
+export function redact(ctx: AppContext, principal: Principal, args: RedactArgs): ToolResult {
   return wrap(() => {
     const matter = getMatter(ctx, args.matter_id);
     authorize(principal.scopes, "redact");
     requireConsent(ctx.store, matter, "redact_rehydrate", principal.subject);
-    const record = ctx.store.recordRedaction(
-      args.doc_id,
-      args.matter_id,
-      args.entity_ids ?? [],
-    );
-    ctx.store.recordAudit(
-      principal.subject,
-      "redact",
-      "redact",
-      args.matter_id,
-    );
+    const record = ctx.store.recordRedaction(args.doc_id, args.matter_id, args.entity_ids ?? []);
+    ctx.store.recordAudit(principal.subject, "redact", "redact", args.matter_id);
     return jsonResult(record);
   });
 }
@@ -245,29 +184,16 @@ export interface CreateMatterArgs {
   name: string;
 }
 
-export function createMatter(
-  ctx: AppContext,
-  principal: Principal,
-  args: CreateMatterArgs,
-): ToolResult {
+export function createMatter(ctx: AppContext, principal: Principal, args: CreateMatterArgs): ToolResult {
   return wrap(() => {
     authorize(principal.scopes, "ingest");
     const matter = ctx.store.createMatter(args.name);
-    ctx.store.recordAudit(
-      principal.subject,
-      "ingest",
-      "create_matter",
-      matter.id,
-    );
+    ctx.store.recordAudit(principal.subject, "ingest", "create_matter", matter.id);
     return jsonResult(matter);
   });
 }
 
-export function registerTools(
-  server: McpServer,
-  ctx: AppContext,
-  principal: Principal,
-): void {
+export function registerTools(server: McpServer, ctx: AppContext, principal: Principal): void {
   server.tool(
     "rag_query",
     {
@@ -278,22 +204,14 @@ export function registerTools(
     async (args) => ragQuery(ctx, principal, args),
   );
 
-  server.tool(
-    "list_pii",
-    { matter_id: z.string(), doc_id: z.string() },
-    async (args) => listPii(ctx, principal, args),
+  server.tool("list_pii", { matter_id: z.string(), doc_id: z.string() }, async (args) => listPii(ctx, principal, args));
+
+  server.tool("rehydrate_chunk", { matter_id: z.string(), chunk_id: z.string() }, async (args) =>
+    rehydrateChunk(ctx, principal, args),
   );
 
-  server.tool(
-    "rehydrate_chunk",
-    { matter_id: z.string(), chunk_id: z.string() },
-    async (args) => rehydrateChunk(ctx, principal, args),
-  );
-
-  server.tool(
-    "ingest_folder",
-    { matter_id: z.string(), path: z.string() },
-    async (args) => ingestFolder(ctx, principal, args),
+  server.tool("ingest_folder", { matter_id: z.string(), path: z.string() }, async (args) =>
+    ingestFolder(ctx, principal, args),
   );
 
   server.tool(
@@ -308,7 +226,5 @@ export function registerTools(
 
   server.tool("list_matters", {}, async () => listMatters(ctx, principal));
 
-  server.tool("create_matter", { name: z.string() }, async (args) =>
-    createMatter(ctx, principal, args),
-  );
+  server.tool("create_matter", { name: z.string() }, async (args) => createMatter(ctx, principal, args));
 }

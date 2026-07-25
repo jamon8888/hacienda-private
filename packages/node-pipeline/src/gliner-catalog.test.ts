@@ -20,9 +20,7 @@ describe("gliner-catalog", () => {
       tokenizerPath: "/cache/gliner2/base/tokenizer.json",
       encoderConfigPath: "/cache/gliner2/base/encoder_config/config.json",
     });
-    expect(GLINER2_ARTIFACT_FILES.encoderConfig).toBe(
-      "encoder_config/config.json",
-    );
+    expect(GLINER2_ARTIFACT_FILES.encoderConfig).toBe("encoder_config/config.json");
   });
 
   it("builds three pinned Candle entries from deployment-provided checksums", () => {
@@ -36,27 +34,16 @@ describe("gliner-catalog", () => {
       "gliner2-guardrails-pii-multi.tokenizer",
       "gliner2-guardrails-pii-multi.encoder-config",
     ]);
-    expect(entries[2]?.file).toBe(
-      "gliner2/gliner2-guardrails-pii-multi/encoder_config/config.json",
-    );
+    expect(entries[2]?.file).toBe("gliner2/gliner2-guardrails-pii-multi/encoder_config/config.json");
   });
 
   it("parses the copied checksum manifest and finds every declared model file", () => {
-    const text = readFileSync(
-      join(import.meta.dirname, "gliner-models.sha256"),
-      "utf8",
-    );
+    const text = readFileSync(join(import.meta.dirname, "gliner-models.sha256"), "utf8");
     const checksums = parseGlinerChecksums(text);
 
     for (const def of GLINER_MODEL_DEFINITIONS) {
-      expect(
-        checksums[def.modelFile],
-        `missing checksum for ${def.modelFile}`,
-      ).toBeTruthy();
-      expect(
-        checksums[def.tokenizerFile],
-        `missing checksum for ${def.tokenizerFile}`,
-      ).toBeTruthy();
+      expect(checksums[def.modelFile], `missing checksum for ${def.modelFile}`).toBeTruthy();
+      expect(checksums[def.tokenizerFile], `missing checksum for ${def.tokenizerFile}`).toBeTruthy();
     }
   });
 
@@ -93,14 +80,8 @@ describe("gliner-catalog", () => {
       "gliner2-guardrails-pii-multi.encoder-config",
     ]);
     expect(
-      entries.every((entry) =>
-        entry.url.startsWith(
-          "https://huggingface.co/fastino/GLiNER2-Guardrails-PII-Multi/",
-        ),
-      ),
+      entries.every((entry) => entry.url.startsWith("https://huggingface.co/fastino/GLiNER2-Guardrails-PII-Multi/")),
     ).toBe(true);
-    expect(entries.every((entry) => /^[a-f0-9]{64}$/.test(entry.sha256))).toBe(
-      true,
-    );
+    expect(entries.every((entry) => /^[a-f0-9]{64}$/.test(entry.sha256))).toBe(true);
   });
 });

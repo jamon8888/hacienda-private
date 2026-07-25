@@ -18,25 +18,17 @@ import {
  * would give (that subpath isn't in gliner's exports map, so it isn't
  * resolvable directly).
  */
-function findOwnPackageJson(
-  startDir: string,
-  packageName: string,
-): Record<string, unknown> {
+function findOwnPackageJson(startDir: string, packageName: string): Record<string, unknown> {
   let dir = startDir;
   for (;;) {
     const candidate = join(dir, "package.json");
     if (existsSync(candidate)) {
-      const pkg = JSON.parse(readFileSync(candidate, "utf8")) as Record<
-        string,
-        unknown
-      >;
+      const pkg = JSON.parse(readFileSync(candidate, "utf8")) as Record<string, unknown>;
       if (pkg.name === packageName) return pkg;
     }
     const parent = dirname(dir);
     if (parent === dir) {
-      throw new Error(
-        `Could not find installed package.json for "${packageName}" above ${startDir}`,
-      );
+      throw new Error(`Could not find installed package.json for "${packageName}" above ${startDir}`);
     }
     dir = parent;
   }
@@ -61,18 +53,16 @@ describe("native GLiNER2 façade contract", () => {
       },
     });
 
-    await expect(
-      detectGliner2("Ada", "/cache/gliner2", ["person"], 0.7),
-    ).resolves.toEqual([{ kind: "person", start: 0, end: 4, text: "Ada" }]);
+    await expect(detectGliner2("Ada", "/cache/gliner2", ["person"], 0.7)).resolves.toEqual([
+      { kind: "person", start: 0, end: 4, text: "Ada" },
+    ]);
     expect(calls).toEqual([["Ada", "/cache/gliner2", ["person"], 0.7]]);
     configureGliner2NativeFacade(undefined);
   });
 
   it("fails clearly when the generated façade has not been installed", async () => {
     configureGliner2NativeFacade(undefined);
-    await expect(detectGliner2("Ada", "/cache/gliner2")).rejects.toThrow(
-      /façade is unavailable/,
-    );
+    await expect(detectGliner2("Ada", "/cache/gliner2")).rejects.toThrow(/façade is unavailable/);
   });
 });
 
@@ -124,10 +114,7 @@ describe("resolveLocalOnnxWasmPaths", () => {
     // version (the exact bug this test targets), the resolved path must
     // NOT be node-pipeline's own onnxruntime-web copy.
     const nodePipelineOnnxEntry = require.resolve("onnxruntime-web");
-    const nodePipelineOnnxPkg = findOwnPackageJson(
-      dirname(nodePipelineOnnxEntry),
-      "onnxruntime-web",
-    );
+    const nodePipelineOnnxPkg = findOwnPackageJson(dirname(nodePipelineOnnxEntry), "onnxruntime-web");
     const nodePipelineOnnxVersion = nodePipelineOnnxPkg.version as string;
     if (nodePipelineOnnxVersion !== glinerPinnedOnnxVersion) {
       expect(resolvedOnnxVersion).not.toBe(nodePipelineOnnxVersion);
@@ -143,8 +130,6 @@ describe.skip("detectPii (real model — run manually, needs network)", () => {
       process.env.GLINER_TOKENIZER_PATH ?? "",
     );
     const texts = entities.map((e) => e.text);
-    expect(texts).toEqual(
-      expect.arrayContaining([expect.stringContaining("Musk")]),
-    );
+    expect(texts).toEqual(expect.arrayContaining([expect.stringContaining("Musk")]));
   });
 });

@@ -9,11 +9,7 @@ const MODEL_URLS = {
 } as const;
 
 interface Gliner2Session {
-  loadBytes(
-    weights: Uint8Array,
-    tokenizer: Uint8Array,
-    encoderConfig: Uint8Array,
-  ): void;
+  loadBytes(weights: Uint8Array, tokenizer: Uint8Array, encoderConfig: Uint8Array): void;
   extractNer(
     text: string,
     labels: string[],
@@ -36,10 +32,7 @@ class Gliner2WorkerSession implements Gliner2Session {
   private readonly worker: Worker;
   readonly ready: Promise<void>;
   private nextId = 1;
-  private readonly pending = new Map<
-    number,
-    { resolve: (value: unknown) => void; reject: (error: Error) => void }
-  >();
+  private readonly pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>();
 
   constructor() {
     this.worker = new Worker(new URL("./gliner2-worker.ts", import.meta.url), {
@@ -50,24 +43,16 @@ class Gliner2WorkerSession implements Gliner2Session {
       if (!request) return;
       this.pending.delete(event.data.id);
       if (event.data.ok) request.resolve(event.data.result);
-      else
-        request.reject(
-          new Error(event.data.error ?? "GLiNER2 Worker request failed"),
-        );
+      else request.reject(new Error(event.data.error ?? "GLiNER2 Worker request failed"));
     };
     this.worker.onerror = (event) => {
-      for (const request of this.pending.values())
-        request.reject(new Error(event.message));
+      for (const request of this.pending.values()) request.reject(new Error(event.message));
       this.pending.clear();
     };
     this.ready = this.request("load", []).then(() => undefined);
   }
 
-  loadBytes(
-    weights: Uint8Array,
-    tokenizer: Uint8Array,
-    encoderConfig: Uint8Array,
-  ): void {
+  loadBytes(weights: Uint8Array, tokenizer: Uint8Array, encoderConfig: Uint8Array): void {
     void this.request(
       "load",
       [weights.buffer, tokenizer.buffer, encoderConfig.buffer],
@@ -87,9 +72,7 @@ class Gliner2WorkerSession implements Gliner2Session {
     text: string,
     labels: string[],
     threshold: number,
-  ): Promise<
-    Array<{ start: number; end: number; text: string; label: string }>
-  > {
+  ): Promise<Array<{ start: number; end: number; text: string; label: string }>> {
     return (await this.request("extract", [text, labels, threshold])) as Array<{
       start: number;
       end: number;
@@ -98,11 +81,7 @@ class Gliner2WorkerSession implements Gliner2Session {
     }>;
   }
 
-  private request(
-    command: string,
-    args: unknown[],
-    transfer: Transferable[] = [],
-  ): Promise<unknown> {
+  private request(command: string, args: unknown[], transfer: Transferable[] = []): Promise<unknown> {
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
@@ -117,21 +96,16 @@ export function resetGliner2Model(): void {
   sessionPromise = null;
 }
 
-export async function ensureGliner2Model(
-  onProgress?: (progress: FetchProgress) => void,
-): Promise<Gliner2Session> {
+export async function ensureGliner2Model(onProgress?: (progress: FetchProgress) => void): Promise<Gliner2Session> {
   sessionPromise ??= (async () => {
     if (typeof Worker !== "undefined" && typeof window !== "undefined") {
       const worker = new Gliner2WorkerSession();
       await worker.ready;
       return worker;
     }
-    const wasm =
-      (await import("@xberg-io/xberg-wasm")) as unknown as Gliner2WasmModule;
+    const wasm = (await import("@xberg-io/xberg-wasm")) as unknown as Gliner2WasmModule;
     if (typeof wasm.Gliner2Model !== "function") {
-      throw new Error(
-        "GLiNER2 is unavailable in this WASM package; regenerate xberg-wasm first",
-      );
+      throw new Error("GLiNER2 is unavailable in this WASM package; regenerate xberg-wasm first");
     }
     const [weights, tokenizer, encoderConfig] = await Promise.all([
       cachedFetchBuffer(MODEL_URLS.weights, onProgress),
@@ -139,11 +113,7 @@ export async function ensureGliner2Model(
       cachedFetchBuffer(MODEL_URLS.encoderConfig, onProgress),
     ]);
     const model = new wasm.Gliner2Model();
-    model.loadBytes(
-      new Uint8Array(weights),
-      new Uint8Array(tokenizer),
-      new Uint8Array(encoderConfig),
-    );
+    model.loadBytes(new Uint8Array(weights), new Uint8Array(tokenizer), new Uint8Array(encoderConfig));
     return model;
   })().catch((error) => {
     sessionPromise = null;

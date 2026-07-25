@@ -1,12 +1,5 @@
 import { createHash } from "node:crypto";
-import {
-  createReadStream,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { chmodSync } from "node:fs";
 import { dirname } from "node:path";
 import type { ModelManifest, ModelManifestEntry } from "@xberg-io/core";
@@ -31,14 +24,8 @@ export interface GraniteEmbeddingArtifactPaths {
   configPath: string;
 }
 
-const MODEL_FETCH_TIMEOUT_MS = Number.parseInt(
-  process.env["XBERG_MODEL_FETCH_TIMEOUT_MS"] ?? "300000",
-  10,
-);
-const MODEL_FETCH_RETRIES = Number.parseInt(
-  process.env["XBERG_MODEL_FETCH_RETRIES"] ?? "4",
-  10,
-);
+const MODEL_FETCH_TIMEOUT_MS = Number.parseInt(process.env["XBERG_MODEL_FETCH_TIMEOUT_MS"] ?? "300000", 10);
+const MODEL_FETCH_RETRIES = Number.parseInt(process.env["XBERG_MODEL_FETCH_RETRIES"] ?? "4", 10);
 const MODEL_FETCH_RETRY_BASE_DELAY_MS = Number.parseInt(
   process.env["XBERG_MODEL_FETCH_RETRY_BASE_DELAY_MS"] ?? "1500",
   10,
@@ -52,11 +39,7 @@ function isRetryableFetchError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   const message = error.message.toLowerCase();
   const causeCode =
-    typeof error.cause === "object" &&
-    error.cause !== null &&
-    "code" in error.cause
-      ? String(error.cause.code)
-      : "";
+    typeof error.cause === "object" && error.cause !== null && "code" in error.cause ? String(error.cause.code) : "";
   return (
     message.includes("timed out") ||
     message.includes("timeout") ||
@@ -144,14 +127,8 @@ export class ModelCache {
       this.ensureModel(names.encoderConfig),
     ]);
     const modelDir = dirname(weightsPath);
-    if (
-      dirname(tokenizerPath) !== modelDir ||
-      dirname(dirname(encoderConfigPath)) !== modelDir
-    ) {
-      throw new AppError(
-        "model",
-        "GLiNER2 artifacts must resolve beneath one model directory",
-      );
+    if (dirname(tokenizerPath) !== modelDir || dirname(dirname(encoderConfigPath)) !== modelDir) {
+      throw new AppError("model", "GLiNER2 artifacts must resolve beneath one model directory");
     }
     return { modelDir, weightsPath, tokenizerPath, encoderConfigPath };
   }
@@ -165,14 +142,8 @@ export class ModelCache {
       this.ensureModel(names.config),
     ]);
     const modelDir = dirname(weightsPath);
-    if (
-      dirname(tokenizerPath) !== modelDir ||
-      dirname(configPath) !== modelDir
-    ) {
-      throw new AppError(
-        "model",
-        "Granite embedding artifacts must resolve beneath one model directory",
-      );
+    if (dirname(tokenizerPath) !== modelDir || dirname(configPath) !== modelDir) {
+      throw new AppError("model", "Granite embedding artifacts must resolve beneath one model directory");
     }
     return { modelDir, weightsPath, tokenizerPath, configPath };
   }
@@ -184,10 +155,7 @@ export class ModelCache {
     }
 
     if (entry.sha256 === PLACEHOLDER_SHA || entry.sha256.trim() === "") {
-      throw new AppError(
-        "model",
-        `model '${name}' is not pinned (SHA256 placeholder) — refusing to serve`,
-      );
+      throw new AppError("model", `model '${name}' is not pinned (SHA256 placeholder) — refusing to serve`);
     }
 
     const cachePath = `${this.modelCacheDir}/${entry.file}`;
@@ -202,19 +170,13 @@ export class ModelCache {
         this.verified.set(cachePath, stamp);
         return cachePath;
       }
-      throw new AppError(
-        "model",
-        `cached model '${name}' SHA256 mismatch — refusing to serve`,
-      );
+      throw new AppError("model", `cached model '${name}' SHA256 mismatch — refusing to serve`);
     }
 
     const downloaded = await this.download(entry, cachePath);
     const actual = await sha256File(downloaded);
     if (actual !== entry.sha256) {
-      throw new AppError(
-        "model",
-        `downloaded model '${name}' SHA256 mismatch — refusing to serve`,
-      );
+      throw new AppError("model", `downloaded model '${name}' SHA256 mismatch — refusing to serve`);
     }
     this.verified.set(downloaded, this.fileStamp(downloaded));
     return downloaded;
@@ -225,10 +187,7 @@ export class ModelCache {
     return `${st.mtimeMs}:${st.size}`;
   }
 
-  private async download(
-    entry: ModelManifestEntry,
-    cachePath: string,
-  ): Promise<string> {
+  private async download(entry: ModelManifestEntry, cachePath: string): Promise<string> {
     let lastError: unknown = null;
     for (let attempt = 1; attempt <= MODEL_FETCH_RETRIES; attempt++) {
       try {
@@ -236,17 +195,12 @@ export class ModelCache {
           signal: AbortSignal.timeout(MODEL_FETCH_TIMEOUT_MS),
         });
         if (!res.ok || !res.body) {
-          throw new AppError(
-            "model",
-            `model '${entry.name}' download returned ${res.status}`,
-          );
+          throw new AppError("model", `model '${entry.name}' download returned ${res.status}`);
         }
 
         mkdirSync(dirname(cachePath), { recursive: true });
         const tmp = `${cachePath}.part`;
-        const file = await import("node:fs/promises").then((m) =>
-          m.open(tmp, "w"),
-        );
+        const file = await import("node:fs/promises").then((m) => m.open(tmp, "w"));
         try {
           const reader = res.body.getReader();
           for (;;) {
@@ -267,8 +221,7 @@ export class ModelCache {
       } catch (error) {
         lastError = error;
         if (error instanceof AppError) throw error;
-        if (attempt === MODEL_FETCH_RETRIES || !isRetryableFetchError(error))
-          break;
+        if (attempt === MODEL_FETCH_RETRIES || !isRetryableFetchError(error)) break;
         await sleep(MODEL_FETCH_RETRY_BASE_DELAY_MS * attempt);
       }
     }
