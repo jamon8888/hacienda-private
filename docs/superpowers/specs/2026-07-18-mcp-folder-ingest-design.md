@@ -195,3 +195,17 @@ Changes in `services/mcp-server/src/mcp/tools.ts`:
 - The per-launch shared-secret token is a minimal fix, not a full auth system — if
   this app ever grows beyond single-user desktop use, the stubbed
   `AuthIssueRequest`/`AuthIssueResponse` flow should be revisited.
+
+## 2026-07-23 GLiNER2 target correction
+
+The implemented Node pipeline is still the legacy JavaScript GLiNER v1 runtime,
+despite the shared catalog's v2.5 naming. Latest upstream Xberg now supplies a
+full Candle GLiNER2 core, but it is not reachable through public NER dispatch or
+the generated Node binding.
+
+The successor design is to expose the Xberg Candle backend natively to this MCP
+service, reuse the existing checksum-verifying model cache, and compare it with
+the browser build through shared span fixtures. Cutover requires verified model
+identity, bounded concurrency, overlapping long-document windows, canonical
+UTF-8 offsets, per-label thresholds, and measured coverage for the model's seven
+claimed languages. Browser payload feasibility is a separate gate.

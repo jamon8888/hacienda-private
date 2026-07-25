@@ -15,6 +15,7 @@ use std::collections::HashMap;
 /// Backed by `nom-exif`, which supports EXIF blocks across JPEG, PNG, TIFF,
 /// HEIC/HEIF, AVIF and several video containers in a single pure-Rust API.
 #[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "heic"))]
+#[cfg_attr(not(any(feature = "ocr", feature = "ocr-wasm", feature = "heic")), allow(dead_code))]
 pub(crate) fn extract_exif_data(bytes: &[u8]) -> HashMap<String, String> {
     use nom_exif::{Exif, ExifIter, ExifTag, MediaParser, MediaSource};
 

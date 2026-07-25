@@ -1,6 +1,6 @@
-﻿"use client"
+﻿"use client";
 
-import * as React from "react"
+import * as React from "react";
 import {
   closestCenter,
   DndContext,
@@ -19,15 +19,15 @@ import {
   type DragOverEvent,
   type DragStartEvent,
   type UniqueIdentifier,
-} from "@dnd-kit/core"
+} from "@dnd-kit/core";
 import {
   arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
-} from "@dnd-kit/sortable"
-import { CSS } from "@dnd-kit/utilities"
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import {
   Add01Icon,
   CancelCircleIcon,
@@ -40,9 +40,9 @@ import {
   SourceCodeSquareIcon,
   TableIcon,
   TextCheckIcon,
-} from "@hugeicons/core-free-icons"
-import { HugeiconsIcon } from "@hugeicons/react"
-import { Virtualizer as DiffsVirtualizer } from "@pierre/diffs"
+} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Virtualizer as DiffsVirtualizer } from "@pierre/diffs";
 import {
   File,
   VirtualizerContext,
@@ -50,16 +50,12 @@ import {
   type VirtualFileMetrics,
   type WorkerInitializationRenderOptions,
   type WorkerPoolOptions,
-} from "@pierre/diffs/react"
-import { useTheme } from "next-themes"
+} from "@pierre/diffs/react";
+import { useTheme } from "next-themes";
 
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import {
-  Collapsible,
-  CollapsiblePanel,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible"
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -71,114 +67,83 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+} from "@/components/ui/dropdown-menu";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-export type SchemaBuilderScalarType =
-  | "string"
-  | "number"
-  | "integer"
-  | "boolean"
-  | "null"
-export type SchemaBuilderFieldType =
-  | SchemaBuilderScalarType
-  | "object"
-  | "array"
-  | "enum"
-export type SchemaBuilderArrayScalarType = Exclude<
-  SchemaBuilderScalarType,
-  "null"
->
-export type SchemaBuilderArrayItemType =
-  | SchemaBuilderArrayScalarType
-  | "object"
-  | "enum"
+export type SchemaBuilderScalarType = "string" | "number" | "integer" | "boolean" | "null";
+export type SchemaBuilderFieldType = SchemaBuilderScalarType | "object" | "array" | "enum";
+export type SchemaBuilderArrayScalarType = Exclude<SchemaBuilderScalarType, "null">;
+export type SchemaBuilderArrayItemType = SchemaBuilderArrayScalarType | "object" | "enum";
 
 export type SchemaBuilderEnumValue = {
-  id: string
-  value: string
-  description: string
-}
+  id: string;
+  value: string;
+  description: string;
+};
 
 export type SchemaBuilderProperty = {
-  id: string
-  key: string
-  type: SchemaBuilderFieldType
-  description: string
-  enumValues?: SchemaBuilderEnumValue[]
-  properties?: SchemaBuilderProperty[]
+  id: string;
+  key: string;
+  type: SchemaBuilderFieldType;
+  description: string;
+  enumValues?: SchemaBuilderEnumValue[];
+  properties?: SchemaBuilderProperty[];
   items?: {
-    type: SchemaBuilderArrayItemType
-    properties?: SchemaBuilderProperty[]
-    enumValues?: SchemaBuilderEnumValue[]
-  }
-}
+    type: SchemaBuilderArrayItemType;
+    properties?: SchemaBuilderProperty[];
+    enumValues?: SchemaBuilderEnumValue[];
+  };
+};
 
 export type SchemaBuilderSchema = {
-  properties: SchemaBuilderProperty[]
-}
+  properties: SchemaBuilderProperty[];
+};
 
-export type SchemaBuilderTheme = "light" | "dark"
+export type SchemaBuilderTheme = "light" | "dark";
 
 export type SerializedSchemaProperty = {
-  type: string
-  description?: string
-  enum?: string[]
-  enumDescriptions?: Record<string, string>
-  properties?: Record<string, SerializedSchemaProperty>
-  items?: SerializedSchemaProperty
-}
+  type: string;
+  description?: string;
+  enum?: string[];
+  enumDescriptions?: Record<string, string>;
+  properties?: Record<string, SerializedSchemaProperty>;
+  items?: SerializedSchemaProperty;
+};
 
 export type SerializedSchema = {
-  type: "object"
-  properties: Record<string, SerializedSchemaProperty>
-}
+  type: "object";
+  properties: Record<string, SerializedSchemaProperty>;
+};
 
-const SCALAR_TYPES: SchemaBuilderScalarType[] = [
-  "string",
-  "number",
-  "integer",
-  "boolean",
-  "null",
-]
-const ARRAY_SCALAR_TYPES: SchemaBuilderArrayScalarType[] = [
-  "string",
-  "number",
-  "integer",
-  "boolean",
-]
-const ROOT_SCHEMA_CONTAINER_ID = "schema-root"
-const SCHEMA_PROPERTY_DRAG_TYPE = "schema-property"
-const ENUM_VALUE_DRAG_TYPE = "enum-value"
-const SCHEMA_PROPERTY_BLOCK_ATTRIBUTE = "data-schema-builder-property-id"
-const SCHEMA_PROPERTY_ROW_ATTRIBUTE = "data-schema-builder-property-row-id"
-const PROPERTY_REORDER_EDGE_THRESHOLD_PX = 18
+const SCALAR_TYPES: SchemaBuilderScalarType[] = ["string", "number", "integer", "boolean", "null"];
+const ARRAY_SCALAR_TYPES: SchemaBuilderArrayScalarType[] = ["string", "number", "integer", "boolean"];
+const ROOT_SCHEMA_CONTAINER_ID = "schema-root";
+const SCHEMA_PROPERTY_DRAG_TYPE = "schema-property";
+const ENUM_VALUE_DRAG_TYPE = "enum-value";
+const SCHEMA_PROPERTY_BLOCK_ATTRIBUTE = "data-schema-builder-property-id";
+const SCHEMA_PROPERTY_ROW_ATTRIBUTE = "data-schema-builder-property-row-id";
+const PROPERTY_REORDER_EDGE_THRESHOLD_PX = 18;
 const SCHEMA_DND_MEASURING = {
   droppable: {
     strategy: MeasuringStrategy.WhileDragging,
   },
-}
-type SchemaCollisionArgs = Parameters<CollisionDetection>[0]
+};
+type SchemaCollisionArgs = Parameters<CollisionDetection>[0];
 
-function getDroppableRectArea(
-  droppableRects: SchemaCollisionArgs["droppableRects"],
-  id: UniqueIdentifier
-) {
-  const rect = droppableRects.get(id)
-  return rect ? rect.width * rect.height : Number.POSITIVE_INFINITY
+function getDroppableRectArea(droppableRects: SchemaCollisionArgs["droppableRects"], id: UniqueIdentifier) {
+  const rect = droppableRects.get(id);
+  return rect ? rect.width * rect.height : Number.POSITIVE_INFINITY;
 }
 
 function getProjectedPropertyChildContainerId(
   properties: SchemaBuilderProperty[],
   propertyId: UniqueIdentifier,
-  args: SchemaCollisionArgs
+  args: SchemaCollisionArgs,
 ) {
-  const overLocation = findPropertyLocation(properties, String(propertyId))
-  const childContainerId = overLocation
-    ? getPropertyChildContainerId(overLocation.property)
-    : null
-  const overRect = args.droppableRects.get(propertyId)
+  const overLocation = findPropertyLocation(properties, String(propertyId));
+  const childContainerId = overLocation ? getPropertyChildContainerId(overLocation.property) : null;
+  const overRect = args.droppableRects.get(propertyId);
 
   if (
     childContainerId &&
@@ -186,42 +151,33 @@ function getProjectedPropertyChildContainerId(
     overRect &&
     args.pointerCoordinates.x > overRect.left + overRect.width * 0.18
   ) {
-    return childContainerId
+    return childContainerId;
   }
 
-  return null
+  return null;
 }
 
 function getSchemaPropertyElementRect(attribute: string, id: UniqueIdentifier) {
-  if (typeof document === "undefined") return null
+  if (typeof document === "undefined") return null;
 
-  for (const element of document.querySelectorAll<HTMLElement>(
-    `[${attribute}]`
-  )) {
+  for (const element of document.querySelectorAll<HTMLElement>(`[${attribute}]`)) {
     if (element.getAttribute(attribute) === String(id)) {
-      return element.getBoundingClientRect()
+      return element.getBoundingClientRect();
     }
   }
 
-  return null
+  return null;
 }
 
 function getPropertyBlockRect(id: UniqueIdentifier, args: SchemaCollisionArgs) {
-  return (
-    getSchemaPropertyElementRect(SCHEMA_PROPERTY_BLOCK_ATTRIBUTE, id) ??
-    args.droppableRects.get(id) ??
-    null
-  )
+  return getSchemaPropertyElementRect(SCHEMA_PROPERTY_BLOCK_ATTRIBUTE, id) ?? args.droppableRects.get(id) ?? null;
 }
 
 function getPropertyRowRect(id: UniqueIdentifier) {
-  return getSchemaPropertyElementRect(SCHEMA_PROPERTY_ROW_ATTRIBUTE, id)
+  return getSchemaPropertyElementRect(SCHEMA_PROPERTY_ROW_ATTRIBUTE, id);
 }
 
-const TYPE_LABELS: Record<
-  SchemaBuilderFieldType | `array-${SchemaBuilderArrayItemType}`,
-  string
-> = {
+const TYPE_LABELS: Record<SchemaBuilderFieldType | `array-${SchemaBuilderArrayItemType}`, string> = {
   string: "String",
   number: "Number",
   integer: "Integer",
@@ -236,17 +192,15 @@ const TYPE_LABELS: Record<
   "array-boolean": "Array<boolean>",
   "array-enum": "Array<enum>",
   "array-object": "Array<object>",
-}
+};
 
-type SchemaBuilderTypeStyleKey =
-  | SchemaBuilderFieldType
-  | `array-${SchemaBuilderArrayItemType}`
+type SchemaBuilderTypeStyleKey = SchemaBuilderFieldType | `array-${SchemaBuilderArrayItemType}`;
 
 const TYPE_STYLES: Record<
   SchemaBuilderTypeStyleKey,
   {
-    icon: React.ComponentProps<typeof HugeiconsIcon>["icon"]
-    badge: string
+    icon: React.ComponentProps<typeof HugeiconsIcon>["icon"];
+    badge: string;
   }
 > = {
   string: {
@@ -255,8 +209,7 @@ const TYPE_STYLES: Record<
   },
   number: {
     icon: InputNumericIcon,
-    badge:
-      "bg-emerald-50 text-emerald-600 dark:bg-emerald-300/10 dark:text-emerald-300",
+    badge: "bg-emerald-50 text-emerald-600 dark:bg-emerald-300/10 dark:text-emerald-300",
   },
   integer: {
     icon: InputNumericIcon,
@@ -264,8 +217,7 @@ const TYPE_STYLES: Record<
   },
   boolean: {
     icon: TextCheckIcon,
-    badge:
-      "bg-amber-50 text-amber-600 dark:bg-amber-300/10 dark:text-amber-300",
+    badge: "bg-amber-50 text-amber-600 dark:bg-amber-300/10 dark:text-amber-300",
   },
   null: {
     icon: CancelCircleIcon,
@@ -273,8 +225,7 @@ const TYPE_STYLES: Record<
   },
   object: {
     icon: SourceCodeSquareIcon,
-    badge:
-      "bg-violet-50 text-violet-600 dark:bg-violet-300/10 dark:text-violet-300",
+    badge: "bg-violet-50 text-violet-600 dark:bg-violet-300/10 dark:text-violet-300",
   },
   array: {
     icon: SecondBracketIcon,
@@ -290,8 +241,7 @@ const TYPE_STYLES: Record<
   },
   "array-number": {
     icon: SecondBracketIcon,
-    badge:
-      "bg-emerald-50 text-emerald-600 dark:bg-emerald-300/10 dark:text-emerald-300",
+    badge: "bg-emerald-50 text-emerald-600 dark:bg-emerald-300/10 dark:text-emerald-300",
   },
   "array-integer": {
     icon: SecondBracketIcon,
@@ -299,8 +249,7 @@ const TYPE_STYLES: Record<
   },
   "array-boolean": {
     icon: SecondBracketIcon,
-    badge:
-      "bg-amber-50 text-amber-600 dark:bg-amber-300/10 dark:text-amber-300",
+    badge: "bg-amber-50 text-amber-600 dark:bg-amber-300/10 dark:text-amber-300",
   },
   "array-enum": {
     icon: LeftToRightListBulletIcon,
@@ -308,10 +257,9 @@ const TYPE_STYLES: Record<
   },
   "array-object": {
     icon: SecondBracketIcon,
-    badge:
-      "bg-violet-50 text-violet-600 dark:bg-violet-300/10 dark:text-violet-300",
+    badge: "bg-violet-50 text-violet-600 dark:bg-violet-300/10 dark:text-violet-300",
   },
-}
+};
 
 const CODE_FILE_THEME = {
   "--diffs-light-bg": "var(--color-code)",
@@ -324,10 +272,10 @@ const CODE_FILE_THEME = {
   "--diffs-fg-number-override": "var(--color-muted-foreground)",
   "--diffs-font-size": "0.8rem",
   "--diffs-line-height": "1.625",
-} as React.CSSProperties
+} as React.CSSProperties;
 
-const CODE_FONT_SIZE_PX = 12.8
-const CODE_LINE_HEIGHT_PX = CODE_FONT_SIZE_PX * 1.625
+const CODE_FONT_SIZE_PX = 12.8;
+const CODE_LINE_HEIGHT_PX = CODE_FONT_SIZE_PX * 1.625;
 
 const CODE_VIRTUAL_FILE_METRICS = {
   hunkLineCount: 50,
@@ -336,7 +284,7 @@ const CODE_VIRTUAL_FILE_METRICS = {
   spacing: 8,
   paddingTop: 0,
   paddingBottom: 8,
-} satisfies VirtualFileMetrics
+} satisfies VirtualFileMetrics;
 
 const CODE_HIGHLIGHTER_OPTIONS = {
   theme: {
@@ -344,14 +292,14 @@ const CODE_HIGHLIGHTER_OPTIONS = {
     dark: "pierre-dark-soft",
   },
   langs: ["json"],
-} satisfies WorkerInitializationRenderOptions
+} satisfies WorkerInitializationRenderOptions;
 
 const CODE_WORKER_POOL_OPTIONS = {
   workerFactory: () =>
     new Worker(new URL("@pierre/diffs/worker/worker.js", import.meta.url), {
       type: "module",
     }),
-} satisfies WorkerPoolOptions
+} satisfies WorkerPoolOptions;
 
 function ScrollAreaVirtualizer({
   children,
@@ -360,80 +308,69 @@ function ScrollAreaVirtualizer({
   contentStyle,
   scrollFade = true,
 }: {
-  children: React.ReactNode
-  className?: string
-  contentClassName?: string
-  contentStyle?: React.CSSProperties
-  scrollFade?: boolean
+  children: React.ReactNode;
+  className?: string;
+  contentClassName?: string;
+  contentStyle?: React.CSSProperties;
+  scrollFade?: boolean;
 }) {
-  const [virtualizer] = React.useState(() =>
-    typeof window !== "undefined" ? new DiffsVirtualizer() : undefined
-  )
-  const viewportRef = React.useRef<HTMLDivElement | null>(null)
-  const contentRef = React.useRef<HTMLDivElement | null>(null)
+  const [virtualizer] = React.useState(() => (typeof window !== "undefined" ? new DiffsVirtualizer() : undefined));
+  const viewportRef = React.useRef<HTMLDivElement | null>(null);
+  const contentRef = React.useRef<HTMLDivElement | null>(null);
   const syncVirtualizer = React.useCallback(() => {
-    if (!virtualizer) return
+    if (!virtualizer) return;
 
-    const viewport = viewportRef.current
-    const content = contentRef.current
+    const viewport = viewportRef.current;
+    const content = contentRef.current;
 
     if (viewport && content) {
-      virtualizer.setup(viewport, content)
-      return
+      virtualizer.setup(viewport, content);
+      return;
     }
 
-    virtualizer.cleanUp()
-  }, [virtualizer])
+    virtualizer.cleanUp();
+  }, [virtualizer]);
   const setViewportRef = React.useCallback(
     (node: HTMLDivElement | null) => {
-      viewportRef.current = node
-      syncVirtualizer()
+      viewportRef.current = node;
+      syncVirtualizer();
     },
-    [syncVirtualizer]
-  )
+    [syncVirtualizer],
+  );
   const setContentRef = React.useCallback(
     (node: HTMLDivElement | null) => {
-      contentRef.current = node
-      syncVirtualizer()
+      contentRef.current = node;
+      syncVirtualizer();
     },
-    [syncVirtualizer]
-  )
+    [syncVirtualizer],
+  );
 
   React.useEffect(() => {
-    return () => virtualizer?.cleanUp()
-  }, [virtualizer])
+    return () => virtualizer?.cleanUp();
+  }, [virtualizer]);
 
   return (
     <VirtualizerContext.Provider value={virtualizer}>
-      <ScrollArea
-        className={className}
-        scrollFade={scrollFade}
-        scrollbarOverflowOnly
-        viewportRef={setViewportRef}
-      >
-        <div
-          ref={setContentRef}
-          className={contentClassName}
-          style={contentStyle}
-        >
+      <ScrollArea className={className} scrollFade={scrollFade} scrollbarOverflowOnly viewportRef={setViewportRef}>
+        <div ref={setContentRef} className={contentClassName} style={contentStyle}>
           {children}
         </div>
       </ScrollArea>
     </VirtualizerContext.Provider>
-  )
+  );
 }
 
 function useResolvedCodeThemeType(theme?: SchemaBuilderTheme) {
-  const { resolvedTheme } = useTheme()
-  const [isMounted, setIsMounted] = React.useState(false)
+  const { resolvedTheme } = useTheme();
+  const [isMounted, setIsMounted] = React.useState(false);
 
   React.useEffect(() => {
-    setIsMounted(true)
-  }, [])
+    setIsMounted(true);
+  }, []);
 
-  if (theme) return theme
+  if (theme) return theme;
 
-  return isMounted && resolvedTheme === "dark" ? "dark" : "light"
+  return isMounted && resolvedTheme === "dark" ? "dark" : "light";
 }
 
 export const SAMPLE_SCHEMA: SchemaBuilderSchema = {
@@ -526,13 +463,13 @@ export const SAMPLE_SCHEMA: SchemaBuilderSchema = {
       },
     },
   ],
-}
+};
 
-let nextPropertyId = 0
+let nextPropertyId = 0;
 
 function createId(prefix: string) {
-  nextPropertyId += 1
-  return `${prefix}-${nextPropertyId}`
+  nextPropertyId += 1;
+  return `${prefix}-${nextPropertyId}`;
 }
 
 function createEnumValue(): SchemaBuilderEnumValue {
@@ -540,49 +477,40 @@ function createEnumValue(): SchemaBuilderEnumValue {
     id: createId("enum"),
     value: "",
     description: "",
-  }
+  };
 }
 
-function createProperty(
-  type: SchemaBuilderFieldType = "string"
-): SchemaBuilderProperty {
+function createProperty(type: SchemaBuilderFieldType = "string"): SchemaBuilderProperty {
   return normalizePropertyForType({
     id: createId("property"),
     key: "",
     type,
     description: "",
-  })
+  });
 }
 
-function normalizePropertyForType(
-  property: SchemaBuilderProperty,
-  type = property.type
-): SchemaBuilderProperty {
+function normalizePropertyForType(property: SchemaBuilderProperty, type = property.type): SchemaBuilderProperty {
   const base = {
     ...property,
     type,
-  }
+  };
 
   if (type === "enum") {
     return {
       ...base,
-      enumValues: base.enumValues?.length
-        ? base.enumValues
-        : [createEnumValue()],
+      enumValues: base.enumValues?.length ? base.enumValues : [createEnumValue()],
       properties: undefined,
       items: undefined,
-    }
+    };
   }
 
   if (type === "object") {
     return {
       ...base,
       enumValues: undefined,
-      properties: base.properties?.length
-        ? base.properties
-        : [createProperty("string")],
+      properties: base.properties?.length ? base.properties : [createProperty("string")],
       items: undefined,
-    }
+    };
   }
 
   if (type === "array") {
@@ -594,7 +522,7 @@ function normalizePropertyForType(
         type: "object",
         properties: [createProperty("string")],
       },
-    }
+    };
   }
 
   return {
@@ -602,31 +530,27 @@ function normalizePropertyForType(
     enumValues: undefined,
     properties: undefined,
     items: undefined,
-  }
+  };
 }
 
 function formatJson(value: unknown) {
-  return JSON.stringify(value, null, 2)
+  return JSON.stringify(value, null, 2);
 }
 
-function serializeProperty(
-  property: SchemaBuilderProperty
-): SerializedSchemaProperty {
-  const description = property.description.trim()
-  const base = description ? { description } : {}
+function serializeProperty(property: SchemaBuilderProperty): SerializedSchemaProperty {
+  const description = property.description.trim();
+  const base = description ? { description } : {};
 
   if (property.type === "enum") {
-    const enumValues = property.enumValues ?? []
+    const enumValues = property.enumValues ?? [];
     return {
       type: "string",
       ...base,
       enum: enumValues.map((option) => option.value),
       enumDescriptions: Object.fromEntries(
-        enumValues
-          .filter((option) => option.description.trim())
-          .map((option) => [option.value, option.description])
+        enumValues.filter((option) => option.description.trim()).map((option) => [option.value, option.description]),
       ),
-    }
+    };
   }
 
   if (property.type === "object") {
@@ -634,11 +558,11 @@ function serializeProperty(
       type: "object",
       ...base,
       properties: serializeProperties(property.properties ?? []),
-    }
+    };
   }
 
   if (property.type === "array") {
-    const items = property.items ?? { type: "string" as const }
+    const items = property.items ?? { type: "string" as const };
 
     return {
       type: "array",
@@ -656,205 +580,173 @@ function serializeProperty(
                 enumDescriptions: Object.fromEntries(
                   (items.enumValues ?? [])
                     .filter((option) => option.description.trim())
-                    .map((option) => [option.value, option.description])
+                    .map((option) => [option.value, option.description]),
                 ),
               }
             : { type: items.type },
-    }
+    };
   }
 
   return {
     type: property.type,
     ...base,
-  }
+  };
 }
 
-function serializeProperties(
-  properties: SchemaBuilderProperty[]
-): Record<string, SerializedSchemaProperty> {
+function serializeProperties(properties: SchemaBuilderProperty[]): Record<string, SerializedSchemaProperty> {
   return Object.fromEntries(
     properties
       .filter((property) => property.key.trim())
-      .map((property) => [property.key.trim(), serializeProperty(property)])
-  )
+      .map((property) => [property.key.trim(), serializeProperty(property)]),
+  );
 }
 
 export function serializeSchema(schema: SchemaBuilderSchema): SerializedSchema {
   return {
     type: "object",
     properties: serializeProperties(schema.properties),
-  }
+  };
 }
 
 function updatePropertyById(
   properties: SchemaBuilderProperty[],
   id: string,
-  update: (property: SchemaBuilderProperty) => SchemaBuilderProperty
+  update: (property: SchemaBuilderProperty) => SchemaBuilderProperty,
 ) {
-  return properties.map((property) =>
-    property.id === id ? update(property) : property
-  )
+  return properties.map((property) => (property.id === id ? update(property) : property));
 }
 
 function getObjectContainerId(propertyId: string) {
-  return `object:${propertyId}`
+  return `object:${propertyId}`;
 }
 
 function getArrayObjectContainerId(propertyId: string) {
-  return `array-object:${propertyId}`
+  return `array-object:${propertyId}`;
 }
 
 function isPropertyContainerId(id: UniqueIdentifier) {
-  const value = String(id)
+  const value = String(id);
 
-  return (
-    value === ROOT_SCHEMA_CONTAINER_ID ||
-    value.startsWith("object:") ||
-    value.startsWith("array-object:")
-  )
+  return value === ROOT_SCHEMA_CONTAINER_ID || value.startsWith("object:") || value.startsWith("array-object:");
 }
 
 function getPropertyChildContainerId(property: SchemaBuilderProperty) {
   if (property.type === "object") {
-    return getObjectContainerId(property.id)
+    return getObjectContainerId(property.id);
   }
 
   if (property.type === "array" && property.items?.type === "object") {
-    return getArrayObjectContainerId(property.id)
+    return getArrayObjectContainerId(property.id);
   }
 
-  return null
+  return null;
 }
 
 function propertyHasNestedEditor(property: SchemaBuilderProperty) {
-  return (
-    property.type === "enum" ||
-    property.type === "object" ||
-    property.type === "array"
-  )
+  return property.type === "enum" || property.type === "object" || property.type === "array";
 }
 
 function getNestedEditorLabel(property: SchemaBuilderProperty) {
-  return `${
-    property.type === "enum" ? "Configure enums" : "Configure schema"
-  } for ${property.key || "property"}`
+  return `${property.type === "enum" ? "Configure enums" : "Configure schema"} for ${property.key || "property"}`;
 }
 
 type PropertyLocation = {
-  containerId: string
-  index: number
-  property: SchemaBuilderProperty
-}
+  containerId: string;
+  index: number;
+  property: SchemaBuilderProperty;
+};
 
-const NOT_FOUND_PROPERTIES: SchemaBuilderProperty[] = []
+const NOT_FOUND_PROPERTIES: SchemaBuilderProperty[] = [];
 
 function findPropertyLocation(
   properties: SchemaBuilderProperty[],
   propertyId: string,
-  containerId = ROOT_SCHEMA_CONTAINER_ID
+  containerId = ROOT_SCHEMA_CONTAINER_ID,
 ): PropertyLocation | null {
   for (let index = 0; index < properties.length; index += 1) {
-    const property = properties[index]
-    if (!property) continue
+    const property = properties[index];
+    if (!property) continue;
 
     if (property.id === propertyId) {
       return {
         containerId,
         index,
         property,
-      }
+      };
     }
 
     if (property.type === "object") {
       const nestedLocation = findPropertyLocation(
         property.properties ?? [],
         propertyId,
-        getObjectContainerId(property.id)
-      )
-      if (nestedLocation) return nestedLocation
+        getObjectContainerId(property.id),
+      );
+      if (nestedLocation) return nestedLocation;
     }
 
     if (property.type === "array" && property.items?.type === "object") {
       const nestedLocation = findPropertyLocation(
         property.items.properties ?? [],
         propertyId,
-        getArrayObjectContainerId(property.id)
-      )
-      if (nestedLocation) return nestedLocation
+        getArrayObjectContainerId(property.id),
+      );
+      if (nestedLocation) return nestedLocation;
     }
   }
 
-  return null
+  return null;
 }
 
-function propertyOwnsContainer(
-  property: SchemaBuilderProperty,
-  containerId: string
-): boolean {
+function propertyOwnsContainer(property: SchemaBuilderProperty, containerId: string): boolean {
   if (property.type === "object") {
-    if (getObjectContainerId(property.id) === containerId) return true
+    if (getObjectContainerId(property.id) === containerId) return true;
 
-    if (
-      (property.properties ?? []).some((childProperty) =>
-        propertyOwnsContainer(childProperty, containerId)
-      )
-    ) {
-      return true
+    if ((property.properties ?? []).some((childProperty) => propertyOwnsContainer(childProperty, containerId))) {
+      return true;
     }
   }
 
   if (property.type === "array" && property.items?.type === "object") {
-    if (getArrayObjectContainerId(property.id) === containerId) return true
+    if (getArrayObjectContainerId(property.id) === containerId) return true;
 
-    return (property.items.properties ?? []).some((childProperty) =>
-      propertyOwnsContainer(childProperty, containerId)
-    )
+    return (property.items.properties ?? []).some((childProperty) => propertyOwnsContainer(childProperty, containerId));
   }
 
-  return false
+  return false;
 }
 
-function getContainerProperties(
-  properties: SchemaBuilderProperty[],
-  containerId: string
-): SchemaBuilderProperty[] {
-  if (containerId === ROOT_SCHEMA_CONTAINER_ID) return properties
+function getContainerProperties(properties: SchemaBuilderProperty[], containerId: string): SchemaBuilderProperty[] {
+  if (containerId === ROOT_SCHEMA_CONTAINER_ID) return properties;
 
   for (const property of properties) {
     if (property.type === "object") {
       if (getObjectContainerId(property.id) === containerId) {
-        return property.properties ?? []
+        return property.properties ?? [];
       }
 
-      const nestedProperties = getContainerProperties(
-        property.properties ?? [],
-        containerId
-      )
-      if (nestedProperties !== NOT_FOUND_PROPERTIES) return nestedProperties
+      const nestedProperties = getContainerProperties(property.properties ?? [], containerId);
+      if (nestedProperties !== NOT_FOUND_PROPERTIES) return nestedProperties;
     }
 
     if (property.type === "array" && property.items?.type === "object") {
       if (getArrayObjectContainerId(property.id) === containerId) {
-        return property.items.properties ?? []
+        return property.items.properties ?? [];
       }
 
-      const nestedProperties = getContainerProperties(
-        property.items.properties ?? [],
-        containerId
-      )
-      if (nestedProperties !== NOT_FOUND_PROPERTIES) return nestedProperties
+      const nestedProperties = getContainerProperties(property.items.properties ?? [], containerId);
+      if (nestedProperties !== NOT_FOUND_PROPERTIES) return nestedProperties;
     }
   }
 
-  return NOT_FOUND_PROPERTIES
+  return NOT_FOUND_PROPERTIES;
 }
 
 function setContainerProperties(
   properties: SchemaBuilderProperty[],
   containerId: string,
-  nextContainerProperties: SchemaBuilderProperty[]
+  nextContainerProperties: SchemaBuilderProperty[],
 ): SchemaBuilderProperty[] {
-  if (containerId === ROOT_SCHEMA_CONTAINER_ID) return nextContainerProperties
+  if (containerId === ROOT_SCHEMA_CONTAINER_ID) return nextContainerProperties;
 
   return properties.map((property) => {
     if (property.type === "object") {
@@ -862,17 +754,13 @@ function setContainerProperties(
         return {
           ...property,
           properties: nextContainerProperties,
-        }
+        };
       }
 
       return {
         ...property,
-        properties: setContainerProperties(
-          property.properties ?? [],
-          containerId,
-          nextContainerProperties
-        ),
-      }
+        properties: setContainerProperties(property.properties ?? [], containerId, nextContainerProperties),
+      };
     }
 
     if (property.type === "array" && property.items?.type === "object") {
@@ -883,229 +771,185 @@ function setContainerProperties(
             ...property.items,
             properties: nextContainerProperties,
           },
-        }
+        };
       }
 
       return {
         ...property,
         items: {
           ...property.items,
-          properties: setContainerProperties(
-            property.items.properties ?? [],
-            containerId,
-            nextContainerProperties
-          ),
+          properties: setContainerProperties(property.items.properties ?? [], containerId, nextContainerProperties),
         },
-      }
+      };
     }
 
-    return property
-  })
+    return property;
+  });
 }
 
-function moveProperty(
-  properties: SchemaBuilderProperty[],
-  activeId: string,
-  overId: string
-) {
-  const activeLocation = findPropertyLocation(properties, activeId)
-  if (!activeLocation) return properties
+function moveProperty(properties: SchemaBuilderProperty[], activeId: string, overId: string) {
+  const activeLocation = findPropertyLocation(properties, activeId);
+  if (!activeLocation) return properties;
 
-  const overLocation = findPropertyLocation(properties, overId)
-  const targetContainerId = overLocation?.containerId ?? overId
-  if (!isPropertyContainerId(targetContainerId)) return properties
+  const overLocation = findPropertyLocation(properties, overId);
+  const targetContainerId = overLocation?.containerId ?? overId;
+  if (!isPropertyContainerId(targetContainerId)) return properties;
 
   if (propertyOwnsContainer(activeLocation.property, targetContainerId)) {
-    return properties
+    return properties;
   }
 
   if (activeLocation.containerId === targetContainerId) {
-    if (!overLocation) return properties
+    if (!overLocation) return properties;
 
-    const containerProperties = getContainerProperties(
-      properties,
-      activeLocation.containerId
-    )
-    const targetIndex = overLocation.index
+    const containerProperties = getContainerProperties(properties, activeLocation.containerId);
+    const targetIndex = overLocation.index;
 
-    if (activeLocation.index === targetIndex) return properties
+    if (activeLocation.index === targetIndex) return properties;
 
     return setContainerProperties(
       properties,
       activeLocation.containerId,
-      arrayMove(containerProperties, activeLocation.index, targetIndex)
-    )
+      arrayMove(containerProperties, activeLocation.index, targetIndex),
+    );
   }
 
-  const sourceProperties = getContainerProperties(
-    properties,
-    activeLocation.containerId
-  )
+  const sourceProperties = getContainerProperties(properties, activeLocation.containerId);
   let nextProperties = setContainerProperties(
     properties,
     activeLocation.containerId,
-    sourceProperties.filter((property) => property.id !== activeId)
-  )
-  const refreshedOverLocation = overLocation
-    ? findPropertyLocation(nextProperties, overId)
-    : null
-  const targetProperties = getContainerProperties(
-    nextProperties,
-    targetContainerId
-  )
-  const targetIndex = refreshedOverLocation?.index ?? targetProperties.length
-  const nextTargetProperties = targetProperties.slice()
+    sourceProperties.filter((property) => property.id !== activeId),
+  );
+  const refreshedOverLocation = overLocation ? findPropertyLocation(nextProperties, overId) : null;
+  const targetProperties = getContainerProperties(nextProperties, targetContainerId);
+  const targetIndex = refreshedOverLocation?.index ?? targetProperties.length;
+  const nextTargetProperties = targetProperties.slice();
 
-  nextTargetProperties.splice(targetIndex, 0, activeLocation.property)
-  nextProperties = setContainerProperties(
-    nextProperties,
-    targetContainerId,
-    nextTargetProperties
-  )
+  nextTargetProperties.splice(targetIndex, 0, activeLocation.property);
+  nextProperties = setContainerProperties(nextProperties, targetContainerId, nextTargetProperties);
 
-  return nextProperties
+  return nextProperties;
 }
 
 type PropertyMovePreview = {
-  containerId: string
-  index: number
-  property: SchemaBuilderProperty
-}
+  containerId: string;
+  index: number;
+  property: SchemaBuilderProperty;
+};
 
 function getPropertyMovePreview(
   properties: SchemaBuilderProperty[],
   activeId: string,
-  overId: string
+  overId: string,
 ): PropertyMovePreview | null {
-  const activeLocation = findPropertyLocation(properties, activeId)
-  if (!activeLocation) return null
+  const activeLocation = findPropertyLocation(properties, activeId);
+  if (!activeLocation) return null;
 
-  const overLocation = findPropertyLocation(properties, overId)
-  const targetContainerId = overLocation?.containerId ?? overId
-  if (!isPropertyContainerId(targetContainerId)) return null
+  const overLocation = findPropertyLocation(properties, overId);
+  const targetContainerId = overLocation?.containerId ?? overId;
+  if (!isPropertyContainerId(targetContainerId)) return null;
 
   if (propertyOwnsContainer(activeLocation.property, targetContainerId)) {
-    return null
+    return null;
   }
 
-  if (activeLocation.containerId === targetContainerId) return null
+  if (activeLocation.containerId === targetContainerId) return null;
 
-  const targetProperties = getContainerProperties(properties, targetContainerId)
+  const targetProperties = getContainerProperties(properties, targetContainerId);
 
   return {
     containerId: targetContainerId,
     index: overLocation?.index ?? targetProperties.length,
     property: activeLocation.property,
-  }
+  };
 }
 
 function isSameContainerPropertyReorderReady(
   properties: SchemaBuilderProperty[],
   activeId: UniqueIdentifier,
   overId: UniqueIdentifier,
-  args: SchemaCollisionArgs
+  args: SchemaCollisionArgs,
 ) {
-  const activeLocation = findPropertyLocation(properties, String(activeId))
-  const overLocation = findPropertyLocation(properties, String(overId))
-  if (!activeLocation || !overLocation) return true
-  if (activeLocation.containerId !== overLocation.containerId) return true
+  const activeLocation = findPropertyLocation(properties, String(activeId));
+  const overLocation = findPropertyLocation(properties, String(overId));
+  if (!activeLocation || !overLocation) return true;
+  if (activeLocation.containerId !== overLocation.containerId) return true;
 
-  const overRect = getPropertyBlockRect(overId, args)
-  if (!overRect || !args.pointerCoordinates) return true
+  const overRect = getPropertyBlockRect(overId, args);
+  if (!overRect || !args.pointerCoordinates) return true;
 
-  const threshold = Math.min(
-    PROPERTY_REORDER_EDGE_THRESHOLD_PX,
-    overRect.height / 2
-  )
+  const threshold = Math.min(PROPERTY_REORDER_EDGE_THRESHOLD_PX, overRect.height / 2);
 
   if (activeLocation.index < overLocation.index) {
-    return args.pointerCoordinates.y >= overRect.bottom - threshold
+    return args.pointerCoordinates.y >= overRect.bottom - threshold;
   }
 
   if (activeLocation.index > overLocation.index) {
-    return args.pointerCoordinates.y <= overRect.top + threshold
+    return args.pointerCoordinates.y <= overRect.top + threshold;
   }
 
-  return false
+  return false;
 }
 
 function isSchemaCollisionCandidate(
   properties: SchemaBuilderProperty[],
   id: UniqueIdentifier,
   activeId: UniqueIdentifier,
-  args: SchemaCollisionArgs
+  args: SchemaCollisionArgs,
 ) {
-  if (id === activeId) return false
+  if (id === activeId) return false;
 
-  const value = String(id)
-  const isSchemaTarget =
-    isPropertyContainerId(value) ||
-    Boolean(findPropertyLocation(properties, value))
+  const value = String(id);
+  const isSchemaTarget = isPropertyContainerId(value) || Boolean(findPropertyLocation(properties, value));
 
-  return (
-    isSchemaTarget &&
-    isSameContainerPropertyReorderReady(properties, activeId, id, args)
-  )
+  return isSchemaTarget && isSameContainerPropertyReorderReady(properties, activeId, id, args);
 }
 
-function isPointerBelowLastContainerProperty(
-  containerProperties: SchemaBuilderProperty[],
-  args: SchemaCollisionArgs
-) {
-  const lastProperty = containerProperties.at(-1)
-  if (!lastProperty || !args.pointerCoordinates) return true
+function isPointerBelowLastContainerProperty(containerProperties: SchemaBuilderProperty[], args: SchemaCollisionArgs) {
+  const lastProperty = containerProperties.at(-1);
+  if (!lastProperty || !args.pointerCoordinates) return true;
 
-  const lastPropertyRect = getPropertyBlockRect(lastProperty.id, args)
-  if (!lastPropertyRect) return false
+  const lastPropertyRect = getPropertyBlockRect(lastProperty.id, args);
+  if (!lastPropertyRect) return false;
 
-  return args.pointerCoordinates.y >= lastPropertyRect.bottom
+  return args.pointerCoordinates.y >= lastPropertyRect.bottom;
 }
 
-function getNextPropertyInsertionId(
-  properties: SchemaBuilderProperty[],
-  location: PropertyLocation
-) {
-  const targetProperties = getContainerProperties(
-    properties,
-    location.containerId
-  )
+function getNextPropertyInsertionId(properties: SchemaBuilderProperty[], location: PropertyLocation) {
+  const targetProperties = getContainerProperties(properties, location.containerId);
 
-  return targetProperties[location.index + 1]?.id ?? location.containerId
+  return targetProperties[location.index + 1]?.id ?? location.containerId;
 }
 
 function resolveCrossContainerPropertyInsertionId(
   properties: SchemaBuilderProperty[],
   activeId: UniqueIdentifier,
   overId: UniqueIdentifier,
-  args: SchemaCollisionArgs
+  args: SchemaCollisionArgs,
 ) {
-  const activeLocation = findPropertyLocation(properties, String(activeId))
-  const overLocation = findPropertyLocation(properties, String(overId))
+  const activeLocation = findPropertyLocation(properties, String(activeId));
+  const overLocation = findPropertyLocation(properties, String(overId));
   if (!activeLocation || !overLocation || !args.pointerCoordinates) {
-    return overId
+    return overId;
   }
 
   if (activeLocation.containerId === overLocation.containerId) {
-    return overId
+    return overId;
   }
 
-  const overRowRect = getPropertyRowRect(overId)
+  const overRowRect = getPropertyRowRect(overId);
   if (overRowRect) {
-    const overRowMiddle = overRowRect.top + overRowRect.height / 2
+    const overRowMiddle = overRowRect.top + overRowRect.height / 2;
 
-    return args.pointerCoordinates.y < overRowMiddle
-      ? overId
-      : getNextPropertyInsertionId(properties, overLocation)
+    return args.pointerCoordinates.y < overRowMiddle ? overId : getNextPropertyInsertionId(properties, overLocation);
   }
 
-  const overBlockRect = getPropertyBlockRect(overId, args)
-  if (!overBlockRect) return overId
+  const overBlockRect = getPropertyBlockRect(overId, args);
+  if (!overBlockRect) return overId;
 
-  const overBlockMiddle = overBlockRect.top + overBlockRect.height / 2
+  const overBlockMiddle = overBlockRect.top + overBlockRect.height / 2;
 
-  return args.pointerCoordinates.y < overBlockMiddle
-    ? overId
-    : getNextPropertyInsertionId(properties, overLocation)
+  return args.pointerCoordinates.y < overBlockMiddle ? overId : getNextPropertyInsertionId(properties, overLocation);
 }
 
 function useSchemaBuilderSensors() {
@@ -1117,88 +961,72 @@ function useSchemaBuilderSensors() {
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    })
-  )
+    }),
+  );
 }
 
-function useStableCallback<Args extends unknown[], Result>(
-  callback: (...args: Args) => Result
-) {
-  const callbackRef = React.useRef(callback)
+function useStableCallback<Args extends unknown[], Result>(callback: (...args: Args) => Result) {
+  const callbackRef = React.useRef(callback);
 
   React.useInsertionEffect(() => {
-    callbackRef.current = callback
-  })
+    callbackRef.current = callback;
+  });
 
-  return React.useCallback((...args: Args) => callbackRef.current(...args), [])
+  return React.useCallback((...args: Args) => callbackRef.current(...args), []);
 }
 
 function useStableIds(ids: string[]) {
-  const idsKey = JSON.stringify(ids)
+  const idsKey = JSON.stringify(ids);
 
-  return React.useMemo(() => JSON.parse(idsKey) as string[], [idsKey])
+  return React.useMemo(() => JSON.parse(idsKey) as string[], [idsKey]);
 }
 
-function getTypeStyleKey(
-  property: SchemaBuilderProperty
-): SchemaBuilderTypeStyleKey {
+function getTypeStyleKey(property: SchemaBuilderProperty): SchemaBuilderTypeStyleKey {
   if (property.type === "array" && property.items) {
-    return `array-${property.items.type}`
+    return `array-${property.items.type}`;
   }
 
-  return property.type
+  return property.type;
 }
 
-function SchemaTypeBadge({
-  className,
-  type,
-}: {
-  className?: string
-  type: SchemaBuilderTypeStyleKey
-}) {
-  const style = TYPE_STYLES[type]
+function SchemaTypeBadge({ className, type }: { className?: string; type: SchemaBuilderTypeStyleKey }) {
+  const style = TYPE_STYLES[type];
 
   return (
     <span
       className={cn(
         "inline-flex min-w-0 shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
         style.badge,
-        className
+        className,
       )}
     >
       <HugeiconsIcon icon={style.icon} className="size-3.5" />
       <span className="truncate">{TYPE_LABELS[type]}</span>
     </span>
-  )
+  );
 }
 
-function SchemaTypeMenuItem({
-  type,
-  onSelect,
-}: {
-  type: SchemaBuilderTypeStyleKey
-  onSelect: () => void
-}) {
+function SchemaTypeMenuItem({ type, onSelect }: { type: SchemaBuilderTypeStyleKey; onSelect: () => void }) {
   return (
     <DropdownMenuItem onClick={onSelect}>
       <SchemaTypeBadge type={type} />
     </DropdownMenuItem>
-  )
+  );
 }
 
 function SchemaTypeMenu({
   property,
   onChange,
 }: {
-  property: SchemaBuilderProperty
-  onChange: (property: SchemaBuilderProperty) => void
+  property: SchemaBuilderProperty;
+  onChange: (property: SchemaBuilderProperty) => void;
 }) {
   const updateType = React.useCallback(
     (type: SchemaBuilderFieldType) => {
-      onChange(normalizePropertyForType(property, type))
+      onChange(normalizePropertyForType(property, type));
     },
-    [onChange, property]
-  )
+    [onChange, property],
+  );
 
   const updateArrayItemType = React.useCallback(
     (itemType: SchemaBuilderArrayItemType) => {
@@ -1208,22 +1036,18 @@ function SchemaTypeMenu({
           itemType === "object"
             ? {
                 type: "object",
-                properties: property.items?.properties?.length
-                  ? property.items.properties
-                  : [createProperty("string")],
+                properties: property.items?.properties?.length ? property.items.properties : [createProperty("string")],
               }
             : itemType === "enum"
               ? {
                   type: "enum",
-                  enumValues: property.items?.enumValues?.length
-                    ? property.items.enumValues
-                    : [createEnumValue()],
+                  enumValues: property.items?.enumValues?.length ? property.items.enumValues : [createEnumValue()],
                 }
               : { type: itemType },
-      })
+      });
     },
-    [onChange, property]
-  )
+    [onChange, property],
+  );
 
   return (
     <DropdownMenu>
@@ -1234,27 +1058,17 @@ function SchemaTypeMenu({
           size="sm"
           className="h-8 w-full min-w-0 justify-between overflow-hidden rounded-md px-2"
         >
-          <SchemaTypeBadge
-            className="max-w-full shrink"
-            type={getTypeStyleKey(property)}
-          />
+          <SchemaTypeBadge className="max-w-full shrink" type={getTypeStyleKey(property)} />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-44">
         <DropdownMenuGroup>
           <DropdownMenuLabel>JSON types</DropdownMenuLabel>
           {SCALAR_TYPES.map((type) => (
-            <SchemaTypeMenuItem
-              key={type}
-              type={type}
-              onSelect={() => updateType(type)}
-            />
+            <SchemaTypeMenuItem key={type} type={type} onSelect={() => updateType(type)} />
           ))}
           <SchemaTypeMenuItem type="enum" onSelect={() => updateType("enum")} />
-          <SchemaTypeMenuItem
-            type="object"
-            onSelect={() => updateType("object")}
-          />
+          <SchemaTypeMenuItem type="object" onSelect={() => updateType("object")} />
         </DropdownMenuGroup>
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
@@ -1263,41 +1077,31 @@ function SchemaTypeMenu({
           <DropdownMenuSubContent className="w-44">
             <DropdownMenuGroup>
               <DropdownMenuLabel>Nested</DropdownMenuLabel>
-              <SchemaTypeMenuItem
-                type="array-object"
-                onSelect={() => updateArrayItemType("object")}
-              />
-              <SchemaTypeMenuItem
-                type="array-enum"
-                onSelect={() => updateArrayItemType("enum")}
-              />
+              <SchemaTypeMenuItem type="array-object" onSelect={() => updateArrayItemType("object")} />
+              <SchemaTypeMenuItem type="array-enum" onSelect={() => updateArrayItemType("enum")} />
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuLabel>Scalars</DropdownMenuLabel>
               {ARRAY_SCALAR_TYPES.map((type) => (
-                <SchemaTypeMenuItem
-                  key={type}
-                  type={`array-${type}`}
-                  onSelect={() => updateArrayItemType(type)}
-                />
+                <SchemaTypeMenuItem key={type} type={`array-${type}`} onSelect={() => updateArrayItemType(type)} />
               ))}
             </DropdownMenuGroup>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
       </DropdownMenuContent>
     </DropdownMenu>
-  )
+  );
 }
 
 function ArrayItemTypeMenu({
   property,
   onChange,
 }: {
-  property: SchemaBuilderProperty
-  onChange: (property: SchemaBuilderProperty) => void
+  property: SchemaBuilderProperty;
+  onChange: (property: SchemaBuilderProperty) => void;
 }) {
-  const items = property.items ?? { type: "string" as const }
+  const items = property.items ?? { type: "string" as const };
 
   const updateItemType = React.useCallback(
     (type: SchemaBuilderArrayItemType) => {
@@ -1307,22 +1111,18 @@ function ArrayItemTypeMenu({
           type === "object"
             ? {
                 type: "object",
-                properties: items.properties?.length
-                  ? items.properties
-                  : [createProperty("string")],
+                properties: items.properties?.length ? items.properties : [createProperty("string")],
               }
             : type === "enum"
               ? {
                   type: "enum",
-                  enumValues: items.enumValues?.length
-                    ? items.enumValues
-                    : [createEnumValue()],
+                  enumValues: items.enumValues?.length ? items.enumValues : [createEnumValue()],
                 }
               : { type },
-      })
+      });
     },
-    [items.enumValues, items.properties, onChange, property]
-  )
+    [items.enumValues, items.properties, onChange, property],
+  );
 
   return (
     <DropdownMenu>
@@ -1341,89 +1141,71 @@ function ArrayItemTypeMenu({
       <DropdownMenuContent align="end">
         <DropdownMenuGroup>
           <DropdownMenuLabel>Nested</DropdownMenuLabel>
-          <SchemaTypeMenuItem
-            type="array-object"
-            onSelect={() => updateItemType("object")}
-          />
-          <SchemaTypeMenuItem
-            type="array-enum"
-            onSelect={() => updateItemType("enum")}
-          />
+          <SchemaTypeMenuItem type="array-object" onSelect={() => updateItemType("object")} />
+          <SchemaTypeMenuItem type="array-enum" onSelect={() => updateItemType("enum")} />
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuLabel>Scalars</DropdownMenuLabel>
           {ARRAY_SCALAR_TYPES.map((type) => (
-            <SchemaTypeMenuItem
-              key={type}
-              type={`array-${type}`}
-              onSelect={() => updateItemType(type)}
-            />
+            <SchemaTypeMenuItem key={type} type={`array-${type}`} onSelect={() => updateItemType(type)} />
           ))}
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
-  )
+  );
 }
 
-function InlineTextInput({
-  className,
-  onChange,
-  onInput,
-  ...props
-}: React.InputHTMLAttributes<HTMLInputElement>) {
+function InlineTextInput({ className, onChange, onInput, ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
   const handleInput = React.useCallback(
     (event: React.FormEvent<HTMLInputElement>) => {
-      onInput?.(event)
-      onChange?.(event as unknown as React.ChangeEvent<HTMLInputElement>)
+      onInput?.(event);
+      onChange?.(event as unknown as React.ChangeEvent<HTMLInputElement>);
     },
-    [onChange, onInput]
-  )
+    [onChange, onInput],
+  );
 
   return (
     <input
       className={cn(
         "h-9 w-full min-w-0 bg-transparent px-3 text-sm outline-none placeholder:text-muted-foreground/60 focus:bg-background",
-        className
+        className,
       )}
       onInput={handleInput}
       {...props}
     />
-  )
+  );
 }
 
 function EnumEditor({
   values,
   onChange,
 }: {
-  values: SchemaBuilderEnumValue[]
-  onChange: (values: SchemaBuilderEnumValue[]) => void
+  values: SchemaBuilderEnumValue[];
+  onChange: (values: SchemaBuilderEnumValue[]) => void;
 }) {
-  const sensors = useSchemaBuilderSensors()
-  const dndContextId = React.useId()
-  const sortableItems = useStableIds(values.map((value) => value.id))
+  const sensors = useSchemaBuilderSensors();
+  const dndContextId = React.useId();
+  const sortableItems = useStableIds(values.map((value) => value.id));
   const updateValue = useStableCallback(
-    (
-      id: string,
-      update: (value: SchemaBuilderEnumValue) => SchemaBuilderEnumValue
-    ) => {
-      onChange(values.map((value) => (value.id === id ? update(value) : value)))
-    }
-  )
+    (id: string, update: (value: SchemaBuilderEnumValue) => SchemaBuilderEnumValue) => {
+      onChange(values.map((value) => (value.id === id ? update(value) : value)));
+    },
+  );
   const handleDragEnd = React.useCallback(
     (event: DragEndEvent) => {
-      const { active, over } = event
-      if (!over || active.id === over.id) return
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
 
-      const activeIndex = values.findIndex((value) => value.id === active.id)
-      const overIndex = values.findIndex((value) => value.id === over.id)
+      const activeIndex = values.findIndex((value) => value.id === active.id);
+      const overIndex = values.findIndex((value) => value.id === over.id);
 
-      if (activeIndex < 0 || overIndex < 0) return
+      if (activeIndex < 0 || overIndex < 0) return;
 
-      onChange(arrayMove(values, activeIndex, overIndex))
+      onChange(arrayMove(values, activeIndex, overIndex));
     },
-    [onChange, values]
-  )
+    [onChange, values],
+  );
 
   return (
     <DndContext
@@ -1437,9 +1219,7 @@ function EnumEditor({
           <thead>
             <tr className="border-b bg-muted/55 text-xs text-muted-foreground">
               <th className="w-[34%] px-3 py-2 text-left font-medium">Value</th>
-              <th className="border-l px-3 py-2 text-left font-medium">
-                Description
-              </th>
+              <th className="border-l px-3 py-2 text-left font-medium">Description</th>
             </tr>
           </thead>
           <SortableContext
@@ -1449,11 +1229,7 @@ function EnumEditor({
           >
             <tbody>
               {values.map((value) => (
-                <SortableEnumRow
-                  key={value.id}
-                  value={value}
-                  onValueChange={updateValue}
-                />
+                <SortableEnumRow key={value.id} value={value} onValueChange={updateValue} />
               ))}
               <tr>
                 <td colSpan={2} className="p-0">
@@ -1472,40 +1248,27 @@ function EnumEditor({
         </table>
       </div>
     </DndContext>
-  )
+  );
 }
 
 const SortableEnumRow = React.memo(function SortableEnumRow({
   value,
   onValueChange,
 }: {
-  value: SchemaBuilderEnumValue
-  onValueChange: (
-    id: string,
-    update: (value: SchemaBuilderEnumValue) => SchemaBuilderEnumValue
-  ) => void
+  value: SchemaBuilderEnumValue;
+  onValueChange: (id: string, update: (value: SchemaBuilderEnumValue) => SchemaBuilderEnumValue) => void;
 }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: value.id,
     data: {
       type: ENUM_VALUE_DRAG_TYPE,
     },
-  })
+  });
 
   return (
     <tr
       ref={setNodeRef}
-      className={cn(
-        "group/enum-row border-b",
-        isDragging && "relative z-10 opacity-70"
-      )}
+      className={cn("group/enum-row border-b", isDragging && "relative z-10 opacity-70")}
       style={{
         transform: CSS.Translate.toString(transform),
         transition,
@@ -1516,7 +1279,7 @@ const SortableEnumRow = React.memo(function SortableEnumRow({
           type="button"
           className={cn(
             "absolute top-1/2 left-0 z-50 grid size-5 -translate-x-1/2 -translate-y-1/2 cursor-grab place-items-center rounded-md border bg-background text-muted-foreground opacity-0 shadow-sm transition-[opacity,color,box-shadow] outline-none group-hover/enum-row:opacity-100 hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing",
-            isDragging && "opacity-100"
+            isDragging && "opacity-100",
           )}
           aria-label={`Drag enum value ${value.value || "empty value"}`}
           {...attributes}
@@ -1550,8 +1313,8 @@ const SortableEnumRow = React.memo(function SortableEnumRow({
         />
       </td>
     </tr>
-  )
-})
+  );
+});
 
 function ArrayItemsEditor({
   property,
@@ -1561,14 +1324,14 @@ function ArrayItemsEditor({
   nestedEditorOpenByPropertyId,
   onNestedEditorOpenChange,
 }: {
-  property: SchemaBuilderProperty
-  onChange: (property: SchemaBuilderProperty) => void
-  depth: number
-  dropPreview: PropertyMovePreview | null
-  nestedEditorOpenByPropertyId: Record<string, boolean>
-  onNestedEditorOpenChange: (propertyId: string, open: boolean) => void
+  property: SchemaBuilderProperty;
+  onChange: (property: SchemaBuilderProperty) => void;
+  depth: number;
+  dropPreview: PropertyMovePreview | null;
+  nestedEditorOpenByPropertyId: Record<string, boolean>;
+  onNestedEditorOpenChange: (propertyId: string, open: boolean) => void;
 }) {
-  const items = property.items ?? { type: "string" as const }
+  const items = property.items ?? { type: "string" as const };
 
   return (
     <>
@@ -1605,7 +1368,7 @@ function ArrayItemsEditor({
         />
       ) : null}
     </>
-  )
+  );
 }
 
 function NestedEditor({
@@ -1616,20 +1379,17 @@ function NestedEditor({
   nestedEditorOpenByPropertyId,
   onNestedEditorOpenChange,
 }: {
-  property: SchemaBuilderProperty
-  depth: number
-  onChange: (property: SchemaBuilderProperty) => void
-  dropPreview: PropertyMovePreview | null
-  nestedEditorOpenByPropertyId: Record<string, boolean>
-  onNestedEditorOpenChange: (propertyId: string, open: boolean) => void
+  property: SchemaBuilderProperty;
+  depth: number;
+  onChange: (property: SchemaBuilderProperty) => void;
+  dropPreview: PropertyMovePreview | null;
+  nestedEditorOpenByPropertyId: Record<string, boolean>;
+  onNestedEditorOpenChange: (propertyId: string, open: boolean) => void;
 }) {
   if (property.type === "enum") {
     return (
-      <EnumEditor
-        values={property.enumValues ?? []}
-        onChange={(enumValues) => onChange({ ...property, enumValues })}
-      />
-    )
+      <EnumEditor values={property.enumValues ?? []} onChange={(enumValues) => onChange({ ...property, enumValues })} />
+    );
   }
 
   if (property.type === "object") {
@@ -1641,11 +1401,9 @@ function NestedEditor({
         dropPreview={dropPreview}
         nestedEditorOpenByPropertyId={nestedEditorOpenByPropertyId}
         onNestedEditorOpenChange={onNestedEditorOpenChange}
-        onPropertiesChange={(properties) =>
-          onChange({ ...property, properties })
-        }
+        onPropertiesChange={(properties) => onChange({ ...property, properties })}
       />
-    )
+    );
   }
 
   if (property.type === "array") {
@@ -1658,10 +1416,10 @@ function NestedEditor({
         onNestedEditorOpenChange={onNestedEditorOpenChange}
         onChange={onChange}
       />
-    )
+    );
   }
 
-  return null
+  return null;
 }
 
 function SchemaBuilderTable({
@@ -1673,13 +1431,13 @@ function SchemaBuilderTable({
   onNestedEditorOpenChange,
   onPropertiesChange,
 }: {
-  properties: SchemaBuilderProperty[]
-  depth?: number
-  containerId?: string
-  dropPreview: PropertyMovePreview | null
-  nestedEditorOpenByPropertyId: Record<string, boolean>
-  onNestedEditorOpenChange: (propertyId: string, open: boolean) => void
-  onPropertiesChange: (properties: SchemaBuilderProperty[]) => void
+  properties: SchemaBuilderProperty[];
+  depth?: number;
+  containerId?: string;
+  dropPreview: PropertyMovePreview | null;
+  nestedEditorOpenByPropertyId: Record<string, boolean>;
+  onNestedEditorOpenChange: (propertyId: string, open: boolean) => void;
+  onPropertiesChange: (properties: SchemaBuilderProperty[]) => void;
 }) {
   const { setNodeRef } = useDroppable({
     id: containerId,
@@ -1687,52 +1445,32 @@ function SchemaBuilderTable({
       type: SCHEMA_PROPERTY_DRAG_TYPE,
       containerId,
     },
-  })
-  const sortableItems = useStableIds(properties.map((property) => property.id))
-  const updateProperty = useStableCallback(
-    (id: string, nextProperty: SchemaBuilderProperty) => {
-      onPropertiesChange(
-        updatePropertyById(properties, id, () => nextProperty)
-      )
-    }
-  )
+  });
+  const sortableItems = useStableIds(properties.map((property) => property.id));
+  const updateProperty = useStableCallback((id: string, nextProperty: SchemaBuilderProperty) => {
+    onPropertiesChange(updatePropertyById(properties, id, () => nextProperty));
+  });
 
   const addProperty = React.useCallback(() => {
-    onPropertiesChange([...properties, createProperty()])
-  }, [onPropertiesChange, properties])
-  const tableDropPreview =
-    dropPreview?.containerId === containerId ? dropPreview : null
+    onPropertiesChange([...properties, createProperty()]);
+  }, [onPropertiesChange, properties]);
+  const tableDropPreview = dropPreview?.containerId === containerId ? dropPreview : null;
 
   return (
-    <div
-      ref={setNodeRef}
-      className="overflow-visible rounded-lg border bg-background"
-    >
+    <div ref={setNodeRef} className="overflow-visible rounded-lg border bg-background">
       <table className="w-full table-fixed border-collapse text-sm">
         <thead>
           <tr className="border-b bg-muted/55 text-xs text-muted-foreground">
-            <th className="w-[24%] px-3 py-2 text-left font-medium sm:w-[27%]">
-              Property key
-            </th>
-            <th className="w-[36%] border-l px-3 py-2 text-left font-medium sm:w-[23%]">
-              Type
-            </th>
-            <th className="border-l px-3 py-2 text-left font-medium">
-              Description
-            </th>
+            <th className="w-[24%] px-3 py-2 text-left font-medium sm:w-[27%]">Property key</th>
+            <th className="w-[36%] border-l px-3 py-2 text-left font-medium sm:w-[23%]">Type</th>
+            <th className="border-l px-3 py-2 text-left font-medium">Description</th>
           </tr>
         </thead>
-        <SortableContext
-          id={containerId}
-          items={sortableItems}
-          strategy={verticalListSortingStrategy}
-        >
+        <SortableContext id={containerId} items={sortableItems} strategy={verticalListSortingStrategy}>
           {properties.map((property, index) => (
             <React.Fragment key={property.id}>
               {tableDropPreview?.index === index ? (
-                <SchemaPropertyDropPreviewRows
-                  property={tableDropPreview.property}
-                />
+                <SchemaPropertyDropPreviewRows property={tableDropPreview.property} />
               ) : null}
               <SortablePropertyRows
                 property={property}
@@ -1745,9 +1483,7 @@ function SchemaBuilderTable({
             </React.Fragment>
           ))}
           {tableDropPreview?.index === properties.length ? (
-            <SchemaPropertyDropPreviewRows
-              property={tableDropPreview.property}
-            />
+            <SchemaPropertyDropPreviewRows property={tableDropPreview.property} />
           ) : null}
         </SortableContext>
         <tbody>
@@ -1766,7 +1502,7 @@ function SchemaBuilderTable({
         </tbody>
       </table>
     </div>
-  )
+  );
 }
 
 const SortablePropertyRows = React.memo(function SortablePropertyRows({
@@ -1777,35 +1513,28 @@ const SortablePropertyRows = React.memo(function SortablePropertyRows({
   onNestedEditorOpenChange,
   onPropertyChange,
 }: {
-  property: SchemaBuilderProperty
-  depth: number
-  dropPreview: PropertyMovePreview | null
-  nestedEditorOpenByPropertyId: Record<string, boolean>
-  onNestedEditorOpenChange: (propertyId: string, open: boolean) => void
-  onPropertyChange: (id: string, property: SchemaBuilderProperty) => void
+  property: SchemaBuilderProperty;
+  depth: number;
+  dropPreview: PropertyMovePreview | null;
+  nestedEditorOpenByPropertyId: Record<string, boolean>;
+  onNestedEditorOpenChange: (propertyId: string, open: boolean) => void;
+  onPropertyChange: (id: string, property: SchemaBuilderProperty) => void;
 }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: property.id,
     data: {
       type: SCHEMA_PROPERTY_DRAG_TYPE,
     },
-  })
+  });
   const handlePropertyChange = React.useCallback(
     (nextProperty: SchemaBuilderProperty) => {
-      onPropertyChange(nextProperty.id, nextProperty)
+      onPropertyChange(nextProperty.id, nextProperty);
     },
-    [onPropertyChange]
-  )
-  const hasNestedEditor = propertyHasNestedEditor(property)
-  const isNestedEditorOpen = nestedEditorOpenByPropertyId[property.id] ?? true
-  const nestedEditorLabel = getNestedEditorLabel(property)
+    [onPropertyChange],
+  );
+  const hasNestedEditor = propertyHasNestedEditor(property);
+  const isNestedEditorOpen = nestedEditorOpenByPropertyId[property.id] ?? true;
+  const nestedEditorLabel = getNestedEditorLabel(property);
 
   return (
     <tbody
@@ -1819,17 +1548,14 @@ const SortablePropertyRows = React.memo(function SortablePropertyRows({
     >
       <tr
         data-schema-builder-property-row-id={property.id}
-        className={cn(
-          "group/property-row border-b",
-          hasNestedEditor && "bg-muted/20"
-        )}
+        className={cn("group/property-row border-b", hasNestedEditor && "bg-muted/20")}
       >
         <td className="relative p-0 align-top">
           <button
             type="button"
             className={cn(
               "absolute top-1/2 left-0 z-50 grid size-5 -translate-x-1/2 -translate-y-1/2 cursor-grab place-items-center rounded-md border bg-background text-muted-foreground opacity-0 shadow-sm transition-[opacity,color,box-shadow] outline-none group-hover/property-row:opacity-100 hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing",
-              isDragging && "opacity-100"
+              isDragging && "opacity-100",
             )}
             aria-label={`Drag ${property.key || "property"}`}
             {...attributes}
@@ -1853,10 +1579,7 @@ const SortablePropertyRows = React.memo(function SortablePropertyRows({
           </div>
         </td>
         <td className="border-l p-1 align-top">
-          <SchemaTypeMenu
-            property={property}
-            onChange={handlePropertyChange}
-          />
+          <SchemaTypeMenu property={property} onChange={handlePropertyChange} />
         </td>
         <td className="border-l p-0 align-top">
           <InlineTextInput
@@ -1874,12 +1597,7 @@ const SortablePropertyRows = React.memo(function SortablePropertyRows({
       {hasNestedEditor ? (
         <tr className="border-b bg-muted/20">
           <td colSpan={3} className="p-0">
-            <Collapsible
-              open={isNestedEditorOpen}
-              onOpenChange={(open) =>
-                onNestedEditorOpenChange(property.id, open)
-              }
-            >
+            <Collapsible open={isNestedEditorOpen} onOpenChange={(open) => onNestedEditorOpenChange(property.id, open)}>
               <div className="group/collapsible-trigger-row flex h-8 w-full items-center transition-colors focus-within:bg-muted/55 hover:bg-muted/55">
                 <CollapsibleTrigger
                   className="flex h-full min-w-0 flex-1 items-center gap-2 px-3 text-left text-xs font-medium text-muted-foreground transition-colors outline-none group-hover/collapsible-trigger-row:text-foreground focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
@@ -1889,17 +1607,14 @@ const SortablePropertyRows = React.memo(function SortablePropertyRows({
                     icon={ChevronDown}
                     className={cn(
                       "size-3.5 shrink-0 transition-transform duration-200",
-                      !isNestedEditorOpen && "-rotate-90"
+                      !isNestedEditorOpen && "-rotate-90",
                     )}
                   />
                   <span className="min-w-0 truncate">{nestedEditorLabel}</span>
                 </CollapsibleTrigger>
                 {property.type === "array" ? (
                   <div className="flex h-full shrink-0 items-center px-2">
-                    <ArrayItemTypeMenu
-                      property={property}
-                      onChange={handlePropertyChange}
-                    />
+                    <ArrayItemTypeMenu property={property} onChange={handlePropertyChange} />
                   </div>
                 ) : null}
               </div>
@@ -1908,9 +1623,7 @@ const SortablePropertyRows = React.memo(function SortablePropertyRows({
                   className="p-2 pl-[--schema-builder-nest-indent]"
                   style={
                     {
-                      "--schema-builder-nest-indent": `${
-                        0.5 + Math.min(depth, 4) * 0.75
-                      }rem`,
+                      "--schema-builder-nest-indent": `${0.5 + Math.min(depth, 4) * 0.75}rem`,
                     } as React.CSSProperties
                   }
                 >
@@ -1929,19 +1642,12 @@ const SortablePropertyRows = React.memo(function SortablePropertyRows({
         </tr>
       ) : null}
     </tbody>
-  )
-})
+  );
+});
 
-function SchemaPropertyDropPreviewRows({
-  property,
-}: {
-  property: SchemaBuilderProperty
-}) {
+function SchemaPropertyDropPreviewRows({ property }: { property: SchemaBuilderProperty }) {
   return (
-    <tbody
-      className="pointer-events-none"
-      aria-label={`Insert ${property.key || "property"} here`}
-    >
+    <tbody className="pointer-events-none" aria-label={`Insert ${property.key || "property"} here`}>
       <tr className="h-0">
         <td colSpan={3} className="p-0">
           <div className="relative z-20 h-0 overflow-visible">
@@ -1951,7 +1657,7 @@ function SchemaPropertyDropPreviewRows({
         </td>
       </tr>
     </tbody>
-  )
+  );
 }
 
 function SchemaPropertyDragOverlay({
@@ -1959,32 +1665,28 @@ function SchemaPropertyDragOverlay({
   isNestedEditorOpen,
   nestedEditorOpenByPropertyId,
 }: {
-  property: SchemaBuilderProperty
-  isNestedEditorOpen: boolean
-  nestedEditorOpenByPropertyId: Record<string, boolean>
+  property: SchemaBuilderProperty;
+  isNestedEditorOpen: boolean;
+  nestedEditorOpenByPropertyId: Record<string, boolean>;
 }) {
-  const hasNestedEditor = propertyHasNestedEditor(property)
+  const hasNestedEditor = propertyHasNestedEditor(property);
 
   return (
     <div className="w-[min(680px,calc(100vw-2rem))] overflow-hidden rounded-lg border bg-background text-sm shadow-lg">
       <div
         className={cn(
           "grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1.35fr)] items-center",
-          hasNestedEditor && "bg-muted/20"
+          hasNestedEditor && "bg-muted/20",
         )}
       >
         <div className="min-w-0 px-3 py-2 font-mono">
-          <span className="block truncate">
-            {property.key || "property_key"}
-          </span>
+          <span className="block truncate">{property.key || "property_key"}</span>
         </div>
         <div className="border-l px-2 py-1.5">
           <SchemaTypeBadge type={getTypeStyleKey(property)} />
         </div>
         <div className="min-w-0 border-l px-3 py-2 text-muted-foreground">
-          <span className="block truncate">
-            {property.description || "Describe what this field should extract."}
-          </span>
+          <span className="block truncate">{property.description || "Describe what this field should extract."}</span>
         </div>
       </div>
       {hasNestedEditor ? (
@@ -1992,45 +1694,35 @@ function SchemaPropertyDragOverlay({
           <div className="flex h-8 items-center gap-2 px-3 text-xs font-medium text-muted-foreground">
             <HugeiconsIcon
               icon={ChevronDown}
-              className={cn(
-                "size-3.5 shrink-0",
-                !isNestedEditorOpen && "-rotate-90"
-              )}
+              className={cn("size-3.5 shrink-0", !isNestedEditorOpen && "-rotate-90")}
             />
-            <span className="min-w-0 truncate">
-              {getNestedEditorLabel(property)}
-            </span>
+            <span className="min-w-0 truncate">{getNestedEditorLabel(property)}</span>
             {property.type === "array" ? (
               <div className="ml-auto shrink-0">
-                <SchemaTypeBadge
-                  type={`array-${property.items?.type ?? "string"}`}
-                />
+                <SchemaTypeBadge type={`array-${property.items?.type ?? "string"}`} />
               </div>
             ) : null}
           </div>
           {isNestedEditorOpen ? (
             <div className="max-h-[280px] overflow-hidden p-2">
-              <NestedEditorPreview
-                property={property}
-                nestedEditorOpenByPropertyId={nestedEditorOpenByPropertyId}
-              />
+              <NestedEditorPreview property={property} nestedEditorOpenByPropertyId={nestedEditorOpenByPropertyId} />
             </div>
           ) : null}
         </div>
       ) : null}
     </div>
-  )
+  );
 }
 
 function NestedEditorPreview({
   property,
   nestedEditorOpenByPropertyId,
 }: {
-  property: SchemaBuilderProperty
-  nestedEditorOpenByPropertyId: Record<string, boolean>
+  property: SchemaBuilderProperty;
+  nestedEditorOpenByPropertyId: Record<string, boolean>;
 }) {
   if (property.type === "enum") {
-    return <EnumValuesPreview values={property.enumValues ?? []} />
+    return <EnumValuesPreview values={property.enumValues ?? []} />;
   }
 
   if (property.type === "object") {
@@ -2039,14 +1731,14 @@ function NestedEditorPreview({
         properties={property.properties ?? []}
         nestedEditorOpenByPropertyId={nestedEditorOpenByPropertyId}
       />
-    )
+    );
   }
 
   if (property.type === "array") {
-    const items = property.items ?? { type: "string" as const }
+    const items = property.items ?? { type: "string" as const };
 
     if (items.type === "enum") {
-      return <EnumValuesPreview values={items.enumValues ?? []} />
+      return <EnumValuesPreview values={items.enumValues ?? []} />;
     }
 
     if (items.type === "object") {
@@ -2055,11 +1747,11 @@ function NestedEditorPreview({
           properties={items.properties ?? []}
           nestedEditorOpenByPropertyId={nestedEditorOpenByPropertyId}
         />
-      )
+      );
     }
   }
 
-  return null
+  return null;
 }
 
 function EnumValuesPreview({ values }: { values: SchemaBuilderEnumValue[] }) {
@@ -2070,30 +1762,25 @@ function EnumValuesPreview({ values }: { values: SchemaBuilderEnumValue[] }) {
         <div className="border-l px-3 py-2">Description</div>
       </div>
       {values.map((value) => (
-        <div
-          key={value.id}
-          className="grid grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] border-b last:border-b-0"
-        >
+        <div key={value.id} className="grid grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] border-b last:border-b-0">
           <div className="min-w-0 px-3 py-2 font-mono">
             <span className="block truncate">{value.value || "value"}</span>
           </div>
           <div className="min-w-0 border-l px-3 py-2 text-muted-foreground">
-            <span className="block truncate">
-              {value.description || "Description"}
-            </span>
+            <span className="block truncate">{value.description || "Description"}</span>
           </div>
         </div>
       ))}
     </div>
-  )
+  );
 }
 
 function SchemaPropertiesPreview({
   properties,
   nestedEditorOpenByPropertyId,
 }: {
-  properties: SchemaBuilderProperty[]
-  nestedEditorOpenByPropertyId: Record<string, boolean>
+  properties: SchemaBuilderProperty[];
+  nestedEditorOpenByPropertyId: Record<string, boolean>;
 }) {
   return (
     <div className="overflow-hidden rounded-lg border bg-background">
@@ -2103,30 +1790,25 @@ function SchemaPropertiesPreview({
         <div className="border-l px-3 py-2">Description</div>
       </div>
       {properties.map((property) => {
-        const hasNestedEditor = propertyHasNestedEditor(property)
-        const isNestedEditorOpen =
-          nestedEditorOpenByPropertyId[property.id] ?? true
+        const hasNestedEditor = propertyHasNestedEditor(property);
+        const isNestedEditorOpen = nestedEditorOpenByPropertyId[property.id] ?? true;
 
         return (
           <div key={property.id} className="border-b last:border-b-0">
             <div
               className={cn(
                 "grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1.25fr)] items-center",
-                hasNestedEditor && "bg-muted/20"
+                hasNestedEditor && "bg-muted/20",
               )}
             >
               <div className="min-w-0 px-3 py-2 font-mono">
-                <span className="block truncate">
-                  {property.key || "property_key"}
-                </span>
+                <span className="block truncate">{property.key || "property_key"}</span>
               </div>
               <div className="border-l px-2 py-1.5">
                 <SchemaTypeBadge type={getTypeStyleKey(property)} />
               </div>
               <div className="min-w-0 border-l px-3 py-2 text-muted-foreground">
-                <span className="block truncate">
-                  {property.description || "Description"}
-                </span>
+                <span className="block truncate">{property.description || "Description"}</span>
               </div>
             </div>
             {hasNestedEditor ? (
@@ -2134,32 +1816,25 @@ function SchemaPropertiesPreview({
                 <div className="flex h-7 items-center gap-2 px-3 text-xs font-medium text-muted-foreground">
                   <HugeiconsIcon
                     icon={ChevronDown}
-                    className={cn(
-                      "size-3.5 shrink-0",
-                      !isNestedEditorOpen && "-rotate-90"
-                    )}
+                    className={cn("size-3.5 shrink-0", !isNestedEditorOpen && "-rotate-90")}
                   />
-                  <span className="min-w-0 truncate">
-                    {getNestedEditorLabel(property)}
-                  </span>
+                  <span className="min-w-0 truncate">{getNestedEditorLabel(property)}</span>
                 </div>
                 {isNestedEditorOpen ? (
                   <div className="p-2">
                     <NestedEditorPreview
                       property={property}
-                      nestedEditorOpenByPropertyId={
-                        nestedEditorOpenByPropertyId
-                      }
+                      nestedEditorOpenByPropertyId={nestedEditorOpenByPropertyId}
                     />
                   </div>
                 ) : null}
               </div>
             ) : null}
           </div>
-        )
+        );
       })}
     </div>
-  )
+  );
 }
 
 export const SchemaJsonView = React.memo(function SchemaJsonView({
@@ -2167,31 +1842,28 @@ export const SchemaJsonView = React.memo(function SchemaJsonView({
   schema,
   theme,
 }: {
-  scrollResetKey?: React.Key
-  schema: SchemaBuilderSchema
-  theme?: SchemaBuilderTheme
+  scrollResetKey?: React.Key;
+  schema: SchemaBuilderSchema;
+  theme?: SchemaBuilderTheme;
 }) {
-  const codeThemeType = useResolvedCodeThemeType(theme)
+  const codeThemeType = useResolvedCodeThemeType(theme);
   const file = React.useMemo(() => {
-    const contents = formatJson(serializeSchema(schema))
+    const contents = formatJson(serializeSchema(schema));
 
     return {
       name: "schema.json",
       contents,
       lang: "json" as const,
       cacheKey: contents,
-    }
-  }, [schema])
+    };
+  }, [schema]);
 
   return (
     <div
       data-rehype-pretty-code-figure
       className="relative m-0! h-full overflow-hidden rounded-none! bg-code text-code-foreground"
     >
-      <WorkerPoolContextProvider
-        poolOptions={CODE_WORKER_POOL_OPTIONS}
-        highlighterOptions={CODE_HIGHLIGHTER_OPTIONS}
-      >
+      <WorkerPoolContextProvider poolOptions={CODE_WORKER_POOL_OPTIONS} highlighterOptions={CODE_HIGHLIGHTER_OPTIONS}>
         <ScrollAreaVirtualizer
           key={`${file.cacheKey}:${codeThemeType}:${String(scrollResetKey)}`}
           className="h-full min-w-0"
@@ -2216,8 +1888,8 @@ export const SchemaJsonView = React.memo(function SchemaJsonView({
         </ScrollAreaVirtualizer>
       </WorkerPoolContextProvider>
     </div>
-  )
-})
+  );
+});
 
 export function SchemaBuilderPanel({
   className,
@@ -2226,281 +1898,212 @@ export function SchemaBuilderPanel({
   onSchemaChange,
   theme,
 }: {
-  className?: string
-  defaultSchema?: SchemaBuilderSchema
-  schema?: SchemaBuilderSchema
-  onSchemaChange?: (schema: SchemaBuilderSchema) => void
-  theme?: SchemaBuilderTheme
+  className?: string;
+  defaultSchema?: SchemaBuilderSchema;
+  schema?: SchemaBuilderSchema;
+  onSchemaChange?: (schema: SchemaBuilderSchema) => void;
+  theme?: SchemaBuilderTheme;
 } = {}) {
-  const [activeTab, setActiveTab] = React.useState("form")
-  const [jsonScrollResetKey, setJsonScrollResetKey] = React.useState(0)
-  const sensors = useSchemaBuilderSensors()
-  const dndContextId = React.useId()
-  const lastSchemaOverIdRef = React.useRef<UniqueIdentifier | null>(null)
-  const [activeDragProperty, setActiveDragProperty] =
-    React.useState<SchemaBuilderProperty | null>(null)
+  const [activeTab, setActiveTab] = React.useState("form");
+  const [jsonScrollResetKey, setJsonScrollResetKey] = React.useState(0);
+  const sensors = useSchemaBuilderSensors();
+  const dndContextId = React.useId();
+  const lastSchemaOverIdRef = React.useRef<UniqueIdentifier | null>(null);
+  const [activeDragProperty, setActiveDragProperty] = React.useState<SchemaBuilderProperty | null>(null);
   const [activeSchemaDrag, setActiveSchemaDrag] = React.useState<{
-    activeId: string
-    overId: string | null
-  } | null>(null)
-  const [nestedEditorOpenByPropertyId, setNestedEditorOpenByPropertyId] =
-    React.useState<Record<string, boolean>>({})
-  const [uncontrolledSchema, setUncontrolledSchema] =
-    React.useState(defaultSchema)
-  const schema = controlledSchema ?? uncontrolledSchema
+    activeId: string;
+    overId: string | null;
+  } | null>(null);
+  const [nestedEditorOpenByPropertyId, setNestedEditorOpenByPropertyId] = React.useState<Record<string, boolean>>({});
+  const [uncontrolledSchema, setUncontrolledSchema] = React.useState(defaultSchema);
+  const schema = controlledSchema ?? uncontrolledSchema;
   // The JSON tab stays mounted, so feed it a schema frozen while it is
   // hidden; otherwise every form keystroke re-serializes and re-highlights
   // the code view. Syncing during render keeps it fresh once visible.
-  const [jsonViewSchema, setJsonViewSchema] = React.useState(schema)
+  const [jsonViewSchema, setJsonViewSchema] = React.useState(schema);
 
   if (activeTab === "json" && jsonViewSchema !== schema) {
-    setJsonViewSchema(schema)
+    setJsonViewSchema(schema);
   }
 
   const dropPreview = React.useMemo(() => {
-    if (!activeSchemaDrag?.overId) return null
+    if (!activeSchemaDrag?.overId) return null;
 
-    return getPropertyMovePreview(
-      schema.properties,
-      activeSchemaDrag.activeId,
-      activeSchemaDrag.overId
-    )
-  }, [activeSchemaDrag, schema.properties])
+    return getPropertyMovePreview(schema.properties, activeSchemaDrag.activeId, activeSchemaDrag.overId);
+  }, [activeSchemaDrag, schema.properties]);
 
   const updateSchema = React.useCallback(
     (nextSchema: SchemaBuilderSchema) => {
       if (!controlledSchema) {
-        setUncontrolledSchema(nextSchema)
+        setUncontrolledSchema(nextSchema);
       }
 
-      onSchemaChange?.(nextSchema)
+      onSchemaChange?.(nextSchema);
     },
-    [controlledSchema, onSchemaChange]
-  )
-  const handleNestedEditorOpenChange = React.useCallback(
-    (propertyId: string, open: boolean) => {
-      setNestedEditorOpenByPropertyId((current) => {
-        if ((current[propertyId] ?? true) === open) return current
+    [controlledSchema, onSchemaChange],
+  );
+  const handleNestedEditorOpenChange = React.useCallback((propertyId: string, open: boolean) => {
+    setNestedEditorOpenByPropertyId((current) => {
+      if ((current[propertyId] ?? true) === open) return current;
 
-        return {
-          ...current,
-          [propertyId]: open,
-        }
-      })
-    },
-    []
-  )
+      return {
+        ...current,
+        [propertyId]: open,
+      };
+    });
+  }, []);
   const schemaCollisionDetection = React.useCallback<CollisionDetection>(
     (args) => {
       if (args.active.data.current?.type !== SCHEMA_PROPERTY_DRAG_TYPE) {
-        return closestCenter(args)
+        return closestCenter(args);
       }
 
-      const pointerIntersections = pointerWithin(args)
+      const pointerIntersections = pointerWithin(args);
       const schemaPointerIntersections = pointerIntersections
-        .filter(({ id }) =>
-          isSchemaCollisionCandidate(
-            schema.properties,
-            id,
-            args.active.id,
-            args
-          )
-        )
+        .filter(({ id }) => isSchemaCollisionCandidate(schema.properties, id, args.active.id, args))
         .sort(
           (first, second) =>
-            getDroppableRectArea(args.droppableRects, first.id) -
-            getDroppableRectArea(args.droppableRects, second.id)
-        )
-      const isPointerOverActive = pointerIntersections.some(
-        ({ id }) => id === args.active.id
-      )
+            getDroppableRectArea(args.droppableRects, first.id) - getDroppableRectArea(args.droppableRects, second.id),
+        );
+      const isPointerOverActive = pointerIntersections.some(({ id }) => id === args.active.id);
 
-      if (
-        schemaPointerIntersections.length === 0 &&
-        isPointerOverActive &&
-        lastSchemaOverIdRef.current
-      ) {
-        return [{ id: lastSchemaOverIdRef.current }]
+      if (schemaPointerIntersections.length === 0 && isPointerOverActive && lastSchemaOverIdRef.current) {
+        return [{ id: lastSchemaOverIdRef.current }];
       }
 
       const intersections =
         schemaPointerIntersections.length > 0
           ? schemaPointerIntersections
           : rectIntersection(args).filter(({ id }) =>
-              isSchemaCollisionCandidate(
-                schema.properties,
-                id,
-                args.active.id,
-                args
-              )
-            )
-      let overId = getFirstCollision(intersections, "id")
+              isSchemaCollisionCandidate(schema.properties, id, args.active.id, args),
+            );
+      let overId = getFirstCollision(intersections, "id");
 
       if (overId != null) {
-        overId =
-          getProjectedPropertyChildContainerId(
-            schema.properties,
-            overId,
-            args
-          ) ?? overId
+        overId = getProjectedPropertyChildContainerId(schema.properties, overId, args) ?? overId;
 
         if (isPropertyContainerId(overId)) {
-          const containerProperties = getContainerProperties(
-            schema.properties,
-            String(overId)
-          )
+          const containerProperties = getContainerProperties(schema.properties, String(overId));
 
-          if (
-            containerProperties.length > 0 &&
-            !isPointerBelowLastContainerProperty(containerProperties, args)
-          ) {
+          if (containerProperties.length > 0 && !isPointerBelowLastContainerProperty(containerProperties, args)) {
             const closestChild = closestCenter({
               ...args,
               droppableContainers: args.droppableContainers.filter(
                 (container) =>
                   container.id !== overId &&
-                  containerProperties.some(
-                    (property) => property.id === container.id
-                  ) &&
-                  isSchemaCollisionCandidate(
-                    schema.properties,
-                    container.id,
-                    args.active.id,
-                    args
-                  )
+                  containerProperties.some((property) => property.id === container.id) &&
+                  isSchemaCollisionCandidate(schema.properties, container.id, args.active.id, args),
               ),
-            })
-            const closestChildId = getFirstCollision(closestChild, "id")
+            });
+            const closestChildId = getFirstCollision(closestChild, "id");
 
             overId = closestChildId
-              ? (getProjectedPropertyChildContainerId(
-                  schema.properties,
-                  closestChildId,
-                  args
-                ) ?? closestChildId)
-              : overId
+              ? (getProjectedPropertyChildContainerId(schema.properties, closestChildId, args) ?? closestChildId)
+              : overId;
           }
         }
 
-        overId = resolveCrossContainerPropertyInsertionId(
-          schema.properties,
-          args.active.id,
-          overId,
-          args
-        )
-        lastSchemaOverIdRef.current = overId
+        overId = resolveCrossContainerPropertyInsertionId(schema.properties, args.active.id, overId, args);
+        lastSchemaOverIdRef.current = overId;
 
-        return [{ id: overId }]
+        return [{ id: overId }];
       }
 
-      return lastSchemaOverIdRef.current
-        ? [{ id: lastSchemaOverIdRef.current }]
-        : []
+      return lastSchemaOverIdRef.current ? [{ id: lastSchemaOverIdRef.current }] : [];
     },
-    [schema.properties]
-  )
+    [schema.properties],
+  );
   const handleSchemaDragStart = React.useCallback(
     (event: DragStartEvent) => {
       if (event.active.data.current?.type !== SCHEMA_PROPERTY_DRAG_TYPE) {
-        return
+        return;
       }
 
-      lastSchemaOverIdRef.current = null
-      const activeId = String(event.active.id)
-      setActiveDragProperty(
-        findPropertyLocation(schema.properties, activeId)?.property ?? null
-      )
+      lastSchemaOverIdRef.current = null;
+      const activeId = String(event.active.id);
+      setActiveDragProperty(findPropertyLocation(schema.properties, activeId)?.property ?? null);
       setActiveSchemaDrag({
         activeId,
         overId: null,
-      })
+      });
     },
-    [schema.properties]
-  )
+    [schema.properties],
+  );
   const handleSchemaDragOver = React.useCallback(
     (event: DragOverEvent) => {
       if (event.active.data.current?.type !== SCHEMA_PROPERTY_DRAG_TYPE) {
-        return
+        return;
       }
 
-      const activeId = String(event.active.id)
-      const eventOverId = event.over ? String(event.over.id) : null
-      const candidateOverIds = [
-        eventOverId,
-        lastSchemaOverIdRef.current
-          ? String(lastSchemaOverIdRef.current)
-          : null,
-      ]
+      const activeId = String(event.active.id);
+      const eventOverId = event.over ? String(event.over.id) : null;
+      const candidateOverIds = [eventOverId, lastSchemaOverIdRef.current ? String(lastSchemaOverIdRef.current) : null];
       const overId =
         candidateOverIds.find(
           (candidateOverId) =>
             candidateOverId &&
             candidateOverId !== activeId &&
-            getPropertyMovePreview(schema.properties, activeId, candidateOverId)
-        ) ?? null
+            getPropertyMovePreview(schema.properties, activeId, candidateOverId),
+        ) ?? null;
 
       setActiveSchemaDrag((current) => {
         if (current?.activeId === activeId && current?.overId === overId) {
-          return current
+          return current;
         }
 
         return {
           activeId,
           overId,
-        }
-      })
+        };
+      });
     },
-    [schema.properties]
-  )
+    [schema.properties],
+  );
   const handleSchemaDragEnd = React.useCallback(
     (event: DragEndEvent) => {
-      setActiveDragProperty(null)
-      setActiveSchemaDrag(null)
+      setActiveDragProperty(null);
+      setActiveSchemaDrag(null);
 
-      const { active, over } = event
+      const { active, over } = event;
       if (active.data.current?.type !== SCHEMA_PROPERTY_DRAG_TYPE) {
-        lastSchemaOverIdRef.current = null
-        return
+        lastSchemaOverIdRef.current = null;
+        return;
       }
 
-      const activeId = String(active.id)
+      const activeId = String(active.id);
       const candidateOverIds = [
         over ? String(over.id) : null,
-        lastSchemaOverIdRef.current
-          ? String(lastSchemaOverIdRef.current)
-          : null,
-      ]
+        lastSchemaOverIdRef.current ? String(lastSchemaOverIdRef.current) : null,
+      ];
       const overId =
-        candidateOverIds.find(
-          (candidateOverId) => candidateOverId && candidateOverId !== activeId
-        ) ?? null
+        candidateOverIds.find((candidateOverId) => candidateOverId && candidateOverId !== activeId) ?? null;
 
-      lastSchemaOverIdRef.current = null
+      lastSchemaOverIdRef.current = null;
 
-      if (!overId) return
+      if (!overId) return;
 
-      const nextProperties = moveProperty(schema.properties, activeId, overId)
+      const nextProperties = moveProperty(schema.properties, activeId, overId);
 
-      if (nextProperties === schema.properties) return
+      if (nextProperties === schema.properties) return;
 
       updateSchema({
         properties: nextProperties,
-      })
+      });
     },
-    [schema.properties, updateSchema]
-  )
+    [schema.properties, updateSchema],
+  );
   const handleSchemaDragCancel = React.useCallback(() => {
-    lastSchemaOverIdRef.current = null
-    setActiveDragProperty(null)
-    setActiveSchemaDrag(null)
-  }, [])
+    lastSchemaOverIdRef.current = null;
+    setActiveDragProperty(null);
+    setActiveSchemaDrag(null);
+  }, []);
   const handleTabChange = React.useCallback((nextTab: string) => {
-    setActiveTab(nextTab)
+    setActiveTab(nextTab);
 
     if (nextTab === "json") {
-      setJsonScrollResetKey((current) => current + 1)
+      setJsonScrollResetKey((current) => current + 1);
     }
-  }, [])
+  }, []);
 
   return (
     <Tabs
@@ -2542,18 +2145,14 @@ export function SchemaBuilderPanel({
                 dropPreview={dropPreview}
                 nestedEditorOpenByPropertyId={nestedEditorOpenByPropertyId}
                 onNestedEditorOpenChange={handleNestedEditorOpenChange}
-                onPropertiesChange={(properties) =>
-                  updateSchema({ properties })
-                }
+                onPropertiesChange={(properties) => updateSchema({ properties })}
               />
             </div>
             <DragOverlay adjustScale={false}>
               {activeDragProperty ? (
                 <SchemaPropertyDragOverlay
                   property={activeDragProperty}
-                  isNestedEditorOpen={
-                    nestedEditorOpenByPropertyId[activeDragProperty.id] ?? true
-                  }
+                  isNestedEditorOpen={nestedEditorOpenByPropertyId[activeDragProperty.id] ?? true}
                   nestedEditorOpenByPropertyId={nestedEditorOpenByPropertyId}
                 />
               ) : null}
@@ -2562,13 +2161,8 @@ export function SchemaBuilderPanel({
         </ScrollArea>
       </TabsContent>
       <TabsContent value="json" keepMounted className="min-h-0 flex-1">
-        <SchemaJsonView
-          scrollResetKey={jsonScrollResetKey}
-          schema={jsonViewSchema}
-          theme={theme}
-        />
+        <SchemaJsonView scrollResetKey={jsonScrollResetKey} schema={jsonViewSchema} theme={theme} />
       </TabsContent>
     </Tabs>
-  )
+  );
 }
-

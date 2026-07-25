@@ -18,12 +18,20 @@ describe("mergeIntoAccumulator", () => {
   it("keeps both documents' pii + chunks and reseals a vault holding all entries", async () => {
     const a = await mergeIntoAccumulator(
       undefined,
-      { entries: [entry("{{PERSON_1}}", "Alice", 0)], pii: [span("docA", "{{PERSON_1}}", 0)], chunks: [chunk("docA", 0)] },
+      {
+        entries: [entry("{{PERSON_1}}", "Alice", 0)],
+        pii: [span("docA", "{{PERSON_1}}", 0)],
+        chunks: [chunk("docA", 0)],
+      },
       PASS,
     );
     const b = await mergeIntoAccumulator(
       a,
-      { entries: [entry("{{PERSON_1}}", "Bob", 3)], pii: [span("docB", "{{PERSON_1}}", 3)], chunks: [chunk("docB", 0)] },
+      {
+        entries: [entry("{{PERSON_1}}", "Bob", 3)],
+        pii: [span("docB", "{{PERSON_1}}", 3)],
+        chunks: [chunk("docB", 0)],
+      },
       PASS,
     );
 

@@ -1,20 +1,22 @@
 interface ViteImportMeta {
-	readonly env?: { readonly VITE_API_BASE?: string };
+  readonly env?: { readonly VITE_API_BASE?: string };
 }
 
 function resolveApiBase(): string {
-	const meta = import.meta as unknown as ViteImportMeta;
-	const viteValue = meta.env && meta.env.VITE_API_BASE;
-	const procValue = typeof process !== "undefined" && process.env && process.env["API_BASE"];
-	const envValue = viteValue || procValue || null;
-	if (envValue) return envValue;
-	// The mcp-server serves the API and the static UI from the same origin, on whatever port it's
-	// actually running on — not necessarily 8787. Falling back to a hardcoded port broke
-	// pushMirror/model downloads for every deployment on a different port; the browser's own
-	// origin is the correct default in the environment this code actually runs in (a page the
-	// server served).
-	if (typeof window !== "undefined" && window.location?.origin) return window.location.origin;
-	return "http://localhost:8787";
+  const meta = import.meta as unknown as ViteImportMeta;
+  const viteValue = meta.env && meta.env.VITE_API_BASE;
+  const procValue =
+    typeof process !== "undefined" && process.env && process.env["API_BASE"];
+  const envValue = viteValue || procValue || null;
+  if (envValue) return envValue;
+  // The mcp-server serves the API and the static UI from the same origin, on whatever port it's
+  // actually running on — not necessarily 8787. Falling back to a hardcoded port broke
+  // pushMirror/model downloads for every deployment on a different port; the browser's own
+  // origin is the correct default in the environment this code actually runs in (a page the
+  // server served).
+  if (typeof window !== "undefined" && window.location?.origin)
+    return window.location.origin;
+  return "http://localhost:8787";
 }
 
 export const API_BASE = resolveApiBase();
@@ -25,21 +27,21 @@ export const E5_TOKENIZER_CONFIG_URL = `${API_BASE}/models/e5.tokenizer_config.j
 
 export const GRANITE_EMBED_DIM = 384;
 export const GRANITE_EMBEDDING_IDENTITY =
-	"ibm-granite/granite-embedding-97m-multilingual-r2@835ad14087e140460703cf0fae09f97d469d65c2;bf16->f32;modernbert-384;cls;normalize=true";
+  "ibm-granite/granite-embedding-97m-multilingual-r2@835ad14087e140460703cf0fae09f97d469d65c2;bf16->f32;modernbert-384;cls;normalize=true";
 export const GRANITE_EMBEDDING_MANIFEST_NAMES = {
-	model: "granite-embedding-97m-multilingual-r2.weights",
-	tokenizer: "granite-embedding-97m-multilingual-r2.tokenizer",
-	config: "granite-embedding-97m-multilingual-r2.config",
+  model: "granite-embedding-97m-multilingual-r2.weights",
+  tokenizer: "granite-embedding-97m-multilingual-r2.tokenizer",
+  config: "granite-embedding-97m-multilingual-r2.config",
 } as const;
 export const GRANITE_EMBEDDING_FALLBACK_FILES = {
-	model: "granite/granite-embedding-97m-multilingual-r2/model.safetensors",
-	tokenizer: "granite/granite-embedding-97m-multilingual-r2/tokenizer.json",
-	config: "granite/granite-embedding-97m-multilingual-r2/config.json",
+  model: "granite/granite-embedding-97m-multilingual-r2/model.safetensors",
+  tokenizer: "granite/granite-embedding-97m-multilingual-r2/tokenizer.json",
+  config: "granite/granite-embedding-97m-multilingual-r2/config.json",
 } as const;
 export const GRANITE_EMBEDDING_FALLBACK_SHA256 = {
-	model: "f3ea88b230492811046145513710e76b4cc8c2ad49e8708da0e7247e548903be",
-	tokenizer: "4f2842d568e2724370aec203652a42ac783c7937f8347a1a2cc7506d71f1582f",
-	config: "de948b0bdc6f356afad7a84b276d8dd7e7fe10fb9add1bb5e610621c28e41ebc",
+  model: "f3ea88b230492811046145513710e76b4cc8c2ad49e8708da0e7247e548903be",
+  tokenizer: "4f2842d568e2724370aec203652a42ac783c7937f8347a1a2cc7506d71f1582f",
+  config: "de948b0bdc6f356afad7a84b276d8dd7e7fe10fb9add1bb5e610621c28e41ebc",
 } as const;
 
 // Bare repo-id (not a full URL): `@xenova/transformers`' `AutoTokenizer.from_pretrained()` always
@@ -55,11 +57,11 @@ export type Quant = "int8" | "int4" | "fp32";
 export type E5Variant = "e5-base" | "e5-small";
 
 export function e5ModelUrl(variant: E5Variant, quant: Quant): string {
-	// smallVariantsServed is gated OFF in scenario.ts; default path is e5-base.
-	const name = variant === "e5-small" ? "e5-small" : "e5";
-	return `${API_BASE}/models/${name}.${quant}.onnx`;
+  // smallVariantsServed is gated OFF in scenario.ts; default path is e5-base.
+  const name = variant === "e5-small" ? "e5-small" : "e5";
+  return `${API_BASE}/models/${name}.${quant}.onnx`;
 }
 
 export function glinerModelUrl(quant: Quant): string {
-	return `${API_BASE}/models/gliner-pii.${quant}.onnx`;
+  return `${API_BASE}/models/gliner-pii.${quant}.onnx`;
 }

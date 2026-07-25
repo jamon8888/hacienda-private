@@ -9,7 +9,7 @@ Polyglot SDKs plus a standalone CLI. Most packages ship **prebuilt binaries** fo
 
 <div class="cli-hero" markdown>
 
-##  CLI / Docker
+## CLI / Docker
 
 No SDK, no code — just your terminal.
 
@@ -87,7 +87,7 @@ Apple Silicon (arm64) macOS is fully supported across every package. On **Intel 
   ```
 
   [API Reference](/reference/api-python/)
-  [ Quick Start](/getting-started/quickstart/)
+  [Quick Start](/getting-started/quickstart/)
 
 -  **TypeScript (Node.js / Bun)**
 
@@ -98,7 +98,7 @@ Apple Silicon (arm64) macOS is fully supported across every package. On **Intel 
   ```
 
   [API Reference](/reference/api-typescript/)
-  [ Quick Start](#typescript)
+  [Quick Start](#typescript)
 
 -  **TypeScript (Browser / Edge)**
 
@@ -109,7 +109,7 @@ Apple Silicon (arm64) macOS is fully supported across every package. On **Intel 
   ```
 
   [API Reference](/reference/api-wasm/)
-  [ Quick Start](#typescript)
+  [Quick Start](#typescript)
 
 -  **Rust**
 
@@ -120,7 +120,7 @@ Apple Silicon (arm64) macOS is fully supported across every package. On **Intel 
   ```
 
   [API Reference](/reference/api-rust/)
-  [ Quick Start](/getting-started/quickstart/)
+  [Quick Start](/getting-started/quickstart/)
 
 -  **Go**
 
@@ -131,7 +131,7 @@ Apple Silicon (arm64) macOS is fully supported across every package. On **Intel 
   ```
 
   [API Reference](/reference/api-go/)
-  [ Quick Start](/getting-started/quickstart/)
+  [Quick Start](/getting-started/quickstart/)
 
 -  **Java**
 
@@ -142,7 +142,7 @@ Apple Silicon (arm64) macOS is fully supported across every package. On **Intel 
   ```
 
   [API Reference](/reference/api-java/)
-  [ Quick Start](#java)
+  [Quick Start](#java)
 
 -  **Kotlin Android**
 
@@ -153,7 +153,7 @@ Apple Silicon (arm64) macOS is fully supported across every package. On **Intel 
   ```
 
   [API Reference](/reference/api-kotlin-android/)
-  [ Quick Start](#kotlin)
+  [Quick Start](#kotlin)
 
 -  **Ruby**
 
@@ -164,7 +164,7 @@ Apple Silicon (arm64) macOS is fully supported across every package. On **Intel 
   ```
 
   [API Reference](/reference/api-ruby/)
-  [ Quick Start](/getting-started/quickstart/)
+  [Quick Start](/getting-started/quickstart/)
 
 -  **Swift**
 
@@ -175,7 +175,7 @@ Apple Silicon (arm64) macOS is fully supported across every package. On **Intel 
   ```
 
   [API Reference](/reference/api-swift/)
-  [ Quick Start](#swift)
+  [Quick Start](#swift)
 
 -  **C# / .NET**
 
@@ -186,7 +186,7 @@ Apple Silicon (arm64) macOS is fully supported across every package. On **Intel 
   ```
 
   [API Reference](/reference/api-csharp/)
-  [ Quick Start](/reference/api-csharp/)
+  [Quick Start](/reference/api-csharp/)
 
 -  **PHP**
 
@@ -197,7 +197,7 @@ Apple Silicon (arm64) macOS is fully supported across every package. On **Intel 
   ```
 
   [API Reference](/reference/api-php/)
-  [ Quick Start](/getting-started/quickstart/)
+  [Quick Start](/getting-started/quickstart/)
 
 -  **Elixir**
 
@@ -208,7 +208,7 @@ Apple Silicon (arm64) macOS is fully supported across every package. On **Intel 
   ```
 
   [API Reference](/reference/api-elixir/)
-  [ Quick Start](#elixir)
+  [Quick Start](#elixir)
 
 -  **C / C++**
 
@@ -219,7 +219,7 @@ Apple Silicon (arm64) macOS is fully supported across every package. On **Intel 
   ```
 
   [API Reference](/reference/api-c/)
-  [ Quick Start](#c-c)
+  [Quick Start](#c-c)
 
 -  **Dart / Flutter**
 
@@ -230,7 +230,7 @@ Apple Silicon (arm64) macOS is fully supported across every package. On **Intel 
   ```
 
   [API Reference](/reference/api-dart/)
-  [ Quick Start](#dart)
+  [Quick Start](#dart)
 
 -  **Zig**
 
@@ -241,7 +241,7 @@ Apple Silicon (arm64) macOS is fully supported across every package. On **Intel 
   ```
 
   [API Reference](/reference/api-zig/)
-  [ Quick Start](#zig)
+  [Quick Start](#zig)
 
 </div>
 
@@ -323,9 +323,11 @@ In monorepos, add this to your root `.npmrc` so platform-specific optional deps 
 ```ini
 auto-install-peers=true
 ```
+
 :::
 
 :::note[Wasm — Browser usage]
+
 ```html
 <script type="module">
   import { ExtractInputKind, initWasm, extract } from "@xberg-io/xberg-wasm";
@@ -349,9 +351,11 @@ auto-install-peers=true
 
 <input type="file" id="file" />
 ```
+
 :::
 
 :::note[Wasm — Deno]
+
 ```typescript
 import { ExtractInputKind, initWasm, extract } from "npm:@xberg-io/xberg-wasm";
 
@@ -362,9 +366,11 @@ const output = await extract({
 });
 console.log(output.results[0].content);
 ```
+
 :::
 
 :::note[Wasm — Cloudflare Workers]
+
 ```typescript
 import { ExtractInputKind, initWasm, extract } from "@xberg-io/xberg-wasm";
 
@@ -381,6 +387,7 @@ export default {
   },
 };
 ```
+
 :::
 
 **Supported runtimes:** Chrome 74+, Firefox 79+, Safari 14+, Edge 79+, Node.js 22+, Deno 1.35+, Cloudflare Workers.
