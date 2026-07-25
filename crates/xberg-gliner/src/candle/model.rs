@@ -2,10 +2,10 @@
 //! Adapted from `anno::backends::gliner2_fastino_candle::GLiNER2FastinoCandle`,
 //! trimmed to `extract_ner`-only scope (see plan Global Constraints).
 
+use std::collections::HashMap;
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
 use std::path::PathBuf;
-use std::collections::HashMap;
 
 use candle_core::Device;
 
@@ -55,7 +55,7 @@ impl Gliner2Candle {
         self.approx_bytes
     }
 
-/// Load from in-memory model bytes (browser/OPFS, wasm; no filesystem).
+    /// Load from in-memory model bytes (browser/OPFS, wasm; no filesystem).
     /// `encoder_config_json` is the `config.json` (or `encoder_config/config.json`)
     /// contents; `tokenizer_json` is the HF `tokenizer.json` contents;
     /// `safetensors` is the `model.safetensors` contents.
@@ -162,7 +162,8 @@ impl Gliner2Candle {
         if self.base_model_dir.as_os_str().is_empty() {
             return Err(GlinerCandleError::Backend(
                 "load_adapter: not supported for models loaded via `from_bytes` \
-                 (no base model directory available)".to_string(),
+                 (no base model directory available)"
+                    .to_string(),
             ));
         }
         let adapter = lora::LoraAdapter::load(adapter_dir, &self.device)?;
@@ -201,7 +202,8 @@ impl Gliner2Candle {
         if self.base_model_dir.as_os_str().is_empty() {
             return Err(GlinerCandleError::Backend(
                 "unload_adapter: not supported for models loaded via `from_bytes` \
-                 (no base model directory available)".to_string(),
+                 (no base model directory available)"
+                    .to_string(),
             ));
         }
         let weights_path = self.base_model_dir.join("model.safetensors");

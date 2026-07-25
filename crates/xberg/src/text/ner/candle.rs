@@ -159,22 +159,24 @@ impl NerBackend for CandleBackend {
         // requiring Send. wasm32 has no multi-threaded tokio runtime (and is single-threaded
         // regardless), so extract_ner is called directly; it is already synchronous.
         #[cfg(not(target_arch = "wasm32"))]
-        let spans =
-            tokio::task::block_in_place(|| {
-                let model = self.model.lock().map_err(|_| GlinerCandleError::Backend(
-                    "CandleBackend: model mutex poisoned".to_string()
-                ))?;
-                model.extract_ner(text, &labels, DEFAULT_THRESHOLD)
-            }).map_err(|e| crate::XbergError::Plugin {
-                message: format!("CandleBackend inference: {e}"),
-                plugin_name: "ner-candle".to_string(),
-            })?;
+        let spans = tokio::task::block_in_place(|| {
+            let model = self
+                .model
+                .lock()
+                .map_err(|_| GlinerCandleError::Backend("CandleBackend: model mutex poisoned".to_string()))?;
+            model.extract_ner(text, &labels, DEFAULT_THRESHOLD)
+        })
+        .map_err(|e| crate::XbergError::Plugin {
+            message: format!("CandleBackend inference: {e}"),
+            plugin_name: "ner-candle".to_string(),
+        })?;
 
         #[cfg(target_arch = "wasm32")]
         let spans = {
-            let model = self.model.lock().map_err(|_| GlinerCandleError::Backend(
-                "CandleBackend: model mutex poisoned".to_string()
-            ))?;
+            let model = self
+                .model
+                .lock()
+                .map_err(|_| GlinerCandleError::Backend("CandleBackend: model mutex poisoned".to_string()))?;
             model
                 .extract_ner(text, &labels, DEFAULT_THRESHOLD)
                 .map_err(|e| crate::XbergError::Plugin {

@@ -17,9 +17,9 @@ pub mod token_gather;
 /// see Global Constraints.
 pub(crate) const MAX_WIDTH: usize = 8;
 
+use std::collections::HashMap;
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
-use std::collections::HashMap;
 
 use candle_core::{Device, Tensor};
 use candle_nn::VarBuilder;
@@ -69,10 +69,7 @@ impl AllHeads {
         // Filter tensors with heads' prefixes (span_rep, count_embed, count_pred)
         let mut heads_tensors = HashMap::new();
         for (key, tensor) in tensors {
-            if key.starts_with("span_rep.")
-                || key.starts_with("count_embed.")
-                || key.starts_with("count_pred.")
-            {
+            if key.starts_with("span_rep.") || key.starts_with("count_embed.") || key.starts_with("count_pred.") {
                 heads_tensors.insert(key, tensor);
             }
         }
@@ -93,10 +90,7 @@ impl AllHeads {
         // Filter tensors with heads' prefixes (span_rep, count_embed, count_pred)
         let mut heads_tensors = HashMap::new();
         for (key, tensor) in tensors {
-            if key.starts_with("span_rep.")
-                || key.starts_with("count_embed.")
-                || key.starts_with("count_pred.")
-            {
+            if key.starts_with("span_rep.") || key.starts_with("count_embed.") || key.starts_with("count_pred.") {
                 heads_tensors.insert(key.clone(), tensor.clone());
             }
         }

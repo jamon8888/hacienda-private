@@ -4,9 +4,9 @@
 //! hidden states. Deliberately uses the upstream Candle implementation rather
 //! than rolling a custom DeBERTa-v2 disentangled-attention module.
 
+use std::collections::HashMap;
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
-use std::collections::HashMap;
 
 use candle_core::{Device, Tensor};
 use candle_nn::VarBuilder;
@@ -50,7 +50,7 @@ impl Encoder {
         Ok(Self { model, config })
     }
 
-/// Load the encoder from an already-built tensor map (shared loading path).
+    /// Load the encoder from an already-built tensor map (shared loading path).
     ///
     /// The caller is responsible for loading the safetensors file once and
     /// passing the relevant subset scoped to the `encoder.` prefix.
@@ -65,21 +65,21 @@ impl Encoder {
     }
 
     /// Load the encoder from an already-built [`VarBuilder`] + parsed config.
-        ///
-        /// Used by [`crate::candle::Gliner2Candle::load_adapter`] after the LoRA merge
-        /// has produced a `HashMap<String, Tensor>` that's wrapped into a
-        /// `VarBuilder::from_tensors`. The caller is responsible for scoping
-        /// into the `encoder.` prefix; this constructor calls `DebertaV2Model::load`
-        /// directly on the provided VarBuilder.
-        pub fn from_var_builder(vb: VarBuilder<'_>, config: &DebertaV2Config) -> crate::candle::Result<Self> {
-            let model = DebertaV2Model::load(vb, config).map_err(|e| {
-                crate::candle::GlinerCandleError::Backend(format!("encoder DebertaV2Model::load (vb): {e}"))
-            })?;
-            Ok(Self {
-                model,
-                config: config.clone(),
-            })
-        }
+    ///
+    /// Used by [`crate::candle::Gliner2Candle::load_adapter`] after the LoRA merge
+    /// has produced a `HashMap<String, Tensor>` that's wrapped into a
+    /// `VarBuilder::from_tensors`. The caller is responsible for scoping
+    /// into the `encoder.` prefix; this constructor calls `DebertaV2Model::load`
+    /// directly on the provided VarBuilder.
+    pub fn from_var_builder(vb: VarBuilder<'_>, config: &DebertaV2Config) -> crate::candle::Result<Self> {
+        let model = DebertaV2Model::load(vb, config).map_err(|e| {
+            crate::candle::GlinerCandleError::Backend(format!("encoder DebertaV2Model::load (vb): {e}"))
+        })?;
+        Ok(Self {
+            model,
+            config: config.clone(),
+        })
+    }
 
     /// Load the encoder from a pre-loaded tensor map (shared with heads).
     ///

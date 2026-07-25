@@ -119,9 +119,9 @@ impl LoraAdapter {
         // Walk keys, group by module path, slot lora_A/lora_B.
         // Keys: base_model.model.<path>.lora_{A,B}.weight
         let mut by_module: HashMap<String, (Option<Tensor>, Option<Tensor>)> = HashMap::new();
-for (key, view) in st.tensors() {
+        for (key, view) in st.tensors() {
             let (module_path, slot) = parse_lora_key(&key)?;
-            
+
             // Use candle_core's Load trait to load tensors from SafeTensors view
             // This supports F32, F16, BF16, F64, I64 without manual byte parsing.
             let tensor = candle_core::safetensors::Load::load(&view, device)
@@ -161,7 +161,9 @@ for (key, view) in st.tensors() {
             let b_out = lora_b.shape().dims()[0];
             if a_in == 0 || b_out == 0 {
                 return Err(crate::candle::GlinerCandleError::Backend(format!(
-                    "lora: module {path}: invalid A/B shapes A={:?} B={:?}", lora_a.shape(), lora_b.shape()
+                    "lora: module {path}: invalid A/B shapes A={:?} B={:?}",
+                    lora_a.shape(),
+                    lora_b.shape()
                 )));
             }
             modules.insert(path, LoraModule { lora_a, lora_b });
