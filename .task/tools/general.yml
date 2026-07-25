@@ -8,6 +8,41 @@ vars:
   SCRIPTS_DIR: "{{.TASKFILE_DIR}}/../../scripts"
 
 tasks:
+  build:accel:doctor:
+    desc: "Inspect local Rust build acceleration tooling (sccache, mold, cpu count)"
+    silent: false
+    cmds:
+      - cmd: bash {{.SCRIPTS_DIR}}/task/build-accel-env.sh doctor
+        ignore_error: false
+
+  doctor:rust:
+    desc: "Inspect the local Rust fast-build setup (target dir, cargo home, toolchain)"
+    silent: false
+    cmds:
+      - cmd: bash {{.SCRIPTS_DIR}}/task/build-accel-env.sh doctor
+        ignore_error: false
+
+  build:accel:env:
+    desc: "Print shell exports for optional local Rust build acceleration"
+    silent: false
+    cmds:
+      - cmd: bash {{.SCRIPTS_DIR}}/task/build-accel-env.sh env
+        ignore_error: false
+
+  build:accel:zram:doctor:
+    desc: "Inspect local zram status for low-memory build acceleration"
+    silent: false
+    cmds:
+      - cmd: bash {{.SCRIPTS_DIR}}/task/build-accel-env.sh zram-doctor
+        ignore_error: false
+
+  perf:local:
+    desc: "Measure local Rust/web/MCP command timings on this machine"
+    silent: false
+    cmds:
+      - cmd: bash {{.SCRIPTS_DIR}}/task/benchmark-local-builds.sh
+        ignore_error: false
+
   validate:config:
     desc: "Validate YAML task configuration files"
     silent: false

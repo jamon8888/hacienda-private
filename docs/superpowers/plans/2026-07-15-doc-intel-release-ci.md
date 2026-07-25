@@ -161,3 +161,17 @@ single root `package.json` `version` (mirrored by `apps/web/package.json` and
   wrapped binary embeds its own runtime so drift can't break it.
 - **Version drift** — single-source versioning enforced by `release.yml` precondition that fails the
   build if `package.json` versions differ.
+
+## 2026-07-23 GLiNER2 release amendment
+
+The official GLiNER2 privacy checkpoint must not be silently added to the
+default installer or offline bundle.
+
+- [ ] Publish exact model/tokenizer/config byte sizes, hashes, license,
+  immutable revision, and seven-language support metadata.
+- [ ] Make GLiNER2 an optional lazy component with resumable download and
+  disk/cache/memory preflight.
+- [ ] Produce a browser-specific F16 or quantized artifact before considering
+  default browser enablement.
+- [ ] Cache the real model only in dedicated native/WASM parity jobs; retain
+  invalid-byte and binding smoke coverage in ordinary CI.

@@ -277,3 +277,15 @@ Gated by: real models already pinned (T7 done) → no HF egress. Generous timeou
 - No HTTP MCP transport added (UI keeps REST; MCP stays stdio).
 - No mocked-ML fast gate (user chose real models only).
 - No changes to the Rust core or Alef bindings (covered by existing `task test`).
+
+## 2026-07-23 GLiNER2 test-topology amendment
+
+During migration, CI must identify whether it is testing legacy injected
+JavaScript NER or Xberg Candle GLiNER2. The target suite adds dispatch/binding
+presence, invalid-byte handling, real-model native-versus-WASM parity,
+canonical UTF-8 offsets, long-window overlap, seven supported-language
+fixtures, and unsupported-language UX.
+
+The full model is too large for every fast job. Keep invalid-input and binding
+smokes in the normal WASM matrix, and use one explicitly cached, checksum-pinned
+real-model job for parity and resource measurements.

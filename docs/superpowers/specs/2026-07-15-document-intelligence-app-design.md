@@ -313,3 +313,20 @@ model serving, light metadata, the key vault, the EdgeVec mirror, and the MCP ho
   `POST /rag/mirror` (EdgeVec index file), `GET/POST /matters`, `/folders`, `/consent`
 - Node service has **no engine features** — it does not compile/run xberg, ORT, or RAG.
 - WASM CI features: `["wasm-target","static-embeddings","url-ingestion"]`
+
+## 2026-07-23 NER architecture amendment
+
+Current state and target state must be represented separately:
+
+- Current browser: injected JavaScript GLiNER/ORT.
+- Current MCP ingest: Node `gliner@0.0.19`/ORT-Web, independent of Xberg NER.
+- Target browser: Xberg Candle GLiNER2 compiled to WASM and run in a Worker.
+- Target MCP: the same Xberg GLiNER2 implementation through the native Node
+  binding, not through the browser WASM binary.
+
+The official GLiNER2 privacy model is optional and lazy because its source
+checkpoint is approximately 1.23 GB. Its English, French, Spanish, German,
+Italian, Portuguese, and Dutch coverage must be disclosed; it cannot be
+described as all-EU-language PII protection. Model identity, checksums,
+thresholds, windowing, byte-offset semantics, and redaction taxonomy are shared
+across hosts even when native F32 and browser F16 artifacts differ.

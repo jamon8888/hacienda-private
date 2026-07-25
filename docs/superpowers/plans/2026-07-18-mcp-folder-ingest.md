@@ -2604,3 +2604,23 @@ directory and would have broken again under a `dist/` build. Fixed by giving
 and a self-relative `loadGlinerManifestEntries()` (Task 5 Step 6) — the plan
 text above already reflects the fix; this note records that it was a
 pre-flight change, not part of the original design doc.
+
+## 2026-07-23 GLiNER2 successor work
+
+Tasks 5, 6, and 8 describe the currently shipped legacy path:
+`gliner@0.0.19` plus `onnxruntime-web` and GLiNER v1 span ONNX. The model catalog
+uses v2.5 model names, but it is not the new GLiNER2 architecture.
+
+- [ ] Wire the imported Xberg Candle backend through `NerBackendKind`,
+  extraction/redaction dispatch, and the canonical Node binding inputs.
+- [ ] Regenerate the Node binding with Alef; do not edit generated package or
+  binding files manually.
+- [ ] Resolve model/tokenizer/encoder-config files through the existing
+  checksum-verifying `ModelCache`, with immutable revision and language
+  metadata.
+- [ ] Replace Node GLiNER.js inference with native Xberg GLiNER2 behind a
+  bounded worker queue; keep the old path only as a temporary fallback.
+- [ ] Add overlapping long-input windows, canonical UTF-8 byte offsets,
+  per-label thresholds, and native/browser golden parity fixtures.
+- [ ] Treat the official model's seven languages and 1.23 GB checkpoint as
+  explicit deployment constraints, not EU-wide coverage.

@@ -243,3 +243,13 @@
 ## Next Action
 
 Say **"build"** and I'll execute sequentially starting from Step 0.
+
+## 2026-07-23 GLiNER2 additions
+
+- [ ] Show model/backend identity and supported-language status in ingestion
+  and PII review.
+- [ ] Add optional huge-model download, progress, cancellation, quota/OOM, and
+  retry states.
+- [ ] Require human review outside the seven claimed GLiNER2 languages.
+- [ ] Keep the UI contract backend-neutral while browser inference migrates
+  from GLiNER.js to Xberg Candle WASM.

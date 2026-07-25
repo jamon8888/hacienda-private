@@ -196,3 +196,19 @@ Node service (`services/mcp-server`). No xberg crate, no ORT, no Rust in this la
 - Key vault (AES-GCM, browser owner + Node offline rehydration); `rehydrate_chunk` gated by consent.
 - Scoped tokens + matter/folder scoping enforced in handlers and all MCP tools.
 - Per-matter forget wipes browser IndexedDB + Node mirror + ciphertext; audit log contains no PII.
+
+## 2026-07-23 GLiNER2 privacy gates
+
+The existing GLiNER.js/v1 detector is transitional and is not itself a GDPR
+quality boundary. Before enabling the imported Xberg GLiNER2 engine by default:
+
+- [ ] Pin and verify model/tokenizer/config bytes and record `NerIdentity`.
+- [ ] Disclose the seven supported languages and require human review or a
+  validated fallback outside them.
+- [ ] Keep deterministic validated structured-PII detectors in front of
+  contextual NER.
+- [ ] Prove native/WASM span and offset parity, with F16 confidence tolerance.
+- [ ] Test corrupt artifacts, resource exhaustion, cache quota, cancellation,
+  long-document window boundaries, and unsupported-language behavior.
+- [ ] Do not persist raw detected entity text or claim automatic GDPR
+  compliance from model output.

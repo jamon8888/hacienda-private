@@ -182,3 +182,11 @@ API-driven `matter-nav` for the primary workspace sidebar.
 
 See `2026-07-20-web-ui-lawyer-enhancement-plan.md` for the granular STEP 0–11
 build sequence (e-signature excluded).
+
+## 2026-07-23 GLiNER2 review amendment
+
+The review UI must show contextual-NER backend/model identity and supported
+languages. The existing JS detector is transitional; the target is Xberg
+Candle GLiNER2 shared with native MCP. A pinned model alone is not assurance:
+outside English, French, Spanish, German, Italian, Portuguese, and Dutch the UI
+must warn and require human review or a validated fallback.

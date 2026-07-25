@@ -391,8 +391,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/node-pipeline
       '@xberg-io/xberg-wasm':
-        specifier: 1.0.0-rc.26
-        version: 1.0.0-rc.26
+        specifier: workspace:*
+        version: link:../../crates/xberg-wasm
       better-sqlite3:
         specifier: ^11.0.0
         version: 11.10.0

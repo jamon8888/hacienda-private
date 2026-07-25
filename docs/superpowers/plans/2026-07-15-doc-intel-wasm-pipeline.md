@@ -452,3 +452,21 @@ export async function queryRag(
   only a read-only replica for offline MCP. Verify the `EdgeVec` npm package name/API before build.
 - **Users never run cargo.** `@xberg-io/xberg-wasm` is a prebuilt npm package; ORT-Web/`gliner`/`edgevec`
   are npm deps.
+
+## 2026-07-23 GLiNER2 migration update
+
+The statement that Xberg cannot run NER in WASM is now time-qualified. Latest
+upstream `xberg-gliner` has a Candle GLiNER2 `from_bytes` path that compiles for
+WASM, but the published `xberg-wasm` binding still exposes only injected
+JavaScript NER and has no in-binary fallback.
+
+- [ ] Add the Candle feature through canonical Xberg/Alef inputs and expose a
+  stateful GLiNER2 model handle; do not hand-edit generated WASM files.
+- [ ] Fetch and verify safetensors, tokenizer, and encoder config before passing
+  bytes into WASM; run initialization/inference in a Worker.
+- [ ] Integrate the backend with extraction/redaction as well as direct NER.
+- [ ] Share labels, thresholds, windowing, UTF-8 offsets, and golden fixtures
+  with native MCP.
+- [ ] Gate cutover on real-model browser tests, download/init progress,
+  cancellation, cache quota, peak memory, and supported-language disclosure.
+- [ ] Keep GLiNER.js/ORT as a transitional fallback, not the target engine.

@@ -289,3 +289,12 @@ Plan 1 (`services/mcp-server` store, consent store, AES-GCM key vault, EdgeVec m
 - The Node service depends on the browser having pushed a fresh `/rag/mirror` for `rag_query` to
   return current results when the browser is closed; with the browser open, the browser serves its
   own live index and rehydration directly.
+
+## 2026-07-23 supersession note
+
+This plan predates MCP-triggered folder ingestion. Its "Node runs no engine"
+constraint remains historical for mirrored-query orchestration, but no longer
+describes the ingest path in
+`docs/superpowers/plans/2026-07-18-mcp-folder-ingest.md`. The successor work
+wires Xberg Candle GLiNER2 through the native Node binding while keeping model
+identity and results compatible with the browser WASM implementation.

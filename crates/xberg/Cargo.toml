@@ -344,6 +344,7 @@ diff = ["dep:similar"]
 # Each feature lands in its own module under `crates/xberg/src/text/` (or
 # `crates/xberg/src/extractors/` for QR) and is wired through a built-in
 # post-processor under `crates/xberg/src/plugins/processor/builtin/`.
+ner-candle = ["ner", "dep:xberg-gliner", "xberg-gliner/candle", "tokio-runtime"]
 ner = [] # NER result types only; safe on every target.
 ner-llm-types = [
     "ner",

@@ -618,6 +618,7 @@ impl ExtractionOverrides {
             if chunk_flag {
                 let max_characters = self.chunk_size.unwrap_or(1000);
                 let overlap = self.chunk_overlap.unwrap_or(200);
+                #[cfg_attr(not(feature = "chunking-tokenizers"), allow(unused_mut))]
                 let mut chunking_config = ChunkingConfig {
                     max_characters,
                     overlap,

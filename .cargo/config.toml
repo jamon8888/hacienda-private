@@ -3,7 +3,7 @@
 # Re-generate with: alef scaffold
 
 [build]
-incremental = true
+incremental = false
 jobs = 4
 
 [net]

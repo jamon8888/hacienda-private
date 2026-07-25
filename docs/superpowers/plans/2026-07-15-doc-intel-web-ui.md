@@ -176,3 +176,11 @@ dir) → matters list → matter folders → folder documents → document viewe
   Folder → Process (full browser pipeline) → PII panel → reversible in-browser redaction → RAG
   search with citations (browser EdgeVec, mirrored for offline MCP).
 - PII detection, embeddings, RAG, and redaction all happen in the browser; UI never reimplements them.
+
+## 2026-07-23 GLiNER2 UI amendment
+
+PII remains backend-neutral at the UI boundary. Today it is supplied by
+GLiNER.js; the target is Xberg Candle GLiNER2 in a Worker. Add visible states
+for optional model installation, verified download, initialization,
+cancellation/failure, and unsupported document language. Human review is
+mandatory outside the model's seven claimed languages.

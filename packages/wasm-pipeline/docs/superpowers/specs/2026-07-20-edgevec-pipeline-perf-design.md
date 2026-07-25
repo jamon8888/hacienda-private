@@ -216,3 +216,16 @@ Budgets are acceptance criteria — harness fails CI on regression.
 - Exact BM25/idf weighting for the sparse leg (start with simple tf-idf over chunk vocabulary, tune against legal fixtures).
 - Whether to default memory-constrained matters to `searchBQ` (recommend: yes when `scenario.lowRam`).
 - Whether to encrypt the IndexedDB blob at rest (privacy win, small perf cost) — out of scope v1.
+
+## 2026-07-23 GLiNER2 performance amendment
+
+The existing NER analysis and `<600ms/50 chunks` budget describe injected
+JavaScript GLiNER v1. Latest upstream Xberg supplies a Candle GLiNER2 core for
+native and WASM byte loading, but not a wired browser binding.
+
+The successor NerStage must benchmark cold artifact transfer, verification,
+model construction, peak memory, Worker responsiveness, and steady-state
+windowed inference independently. Its conformance gate compares native F32 and
+WASM F16 spans with tolerance and canonical UTF-8 offsets. The 1.23 GB source
+checkpoint and approximately 614 MB converted weights prohibit assuming that
+the legacy latency or memory budget remains valid.

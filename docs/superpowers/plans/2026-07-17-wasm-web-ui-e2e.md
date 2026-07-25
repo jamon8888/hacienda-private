@@ -1045,3 +1045,15 @@ Expected: all existing unit tests still pass.
 git add docs/superpowers/specs/2026-07-17-wasm-web-ui-e2e-design.md
 git commit -m "docs: align spec with implementation plan (adapter deviation)"
 ```
+
+## 2026-07-23 GLiNER2 E2E extension
+
+- [ ] Let the adapter select legacy injected JS NER or the wired Xberg Candle
+  WASM backend during migration.
+- [ ] Add a binding-presence smoke test and corrupt/truncated `from_bytes`
+  cases without downloading the full model.
+- [ ] Add a separately cached real-model job for native/WASM span parity,
+  Unicode offsets, long-window boundaries, the seven supported languages, and
+  explicit unsupported-language behavior.
+- [ ] Exercise Worker cancellation, initialization progress, cache quota, and
+  recovery without blocking the page.

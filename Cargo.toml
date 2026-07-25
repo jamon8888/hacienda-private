@@ -148,7 +148,22 @@ opt-level = "z"
 
 [profile.dev]
 opt-level = 0
-debug = true
+debug = "line-tables-only"
+
+[profile.dev.build-override]
+debug = false
+
+[profile.dev.package."*"]
+debug = false
+
+[profile.test]
+debug = "line-tables-only"
+
+[profile.test.build-override]
+debug = false
+
+[profile.test.package."*"]
+debug = false
 
 [profile.profiling]
 inherits = "release"

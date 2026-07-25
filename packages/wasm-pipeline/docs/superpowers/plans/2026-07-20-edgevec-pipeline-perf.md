@@ -355,3 +355,17 @@ This is the **hard precondition** (spec Section 5): confirm EdgeVec's hybrid/spa
 - **Kept `bbox`** on `IndexedChunk` (old rewrite dropped it, regressing citation bounding boxes).
 - **Corrected Task 7 signatures** to match real `ingestFolder`/`queryRag` and made `store` an explicit extension.
 - **Corrected versions:** `onnxruntime-web@^1.24.2` (not 1.26.0), `@xberg-io/xberg-wasm@1.0.0-rc.26` (not “xberg-wasm”).
+
+## 2026-07-23 GLiNER2 benchmark successor
+
+Task 4 optimizes the legacy injected JavaScript GLiNER path and remains useful
+only during migration. Add a separate Xberg Candle GLiNER2 cutover benchmark:
+
+- [ ] Build and smoke the real model through the WASM `from_bytes` path.
+- [ ] Measure download bytes, checksum time, initialization, peak JS/WASM
+  memory, cache quota, and cancellation separately from steady-state inference.
+- [ ] Run inference in a Worker and test main-thread responsiveness.
+- [ ] Compare native F32 and WASM F16 spans on shared multilingual, Unicode,
+  repeated-entity, and long-window fixtures.
+- [ ] Replace the `<600ms/50 chunks` target only after measuring the new model;
+  do not carry the legacy budget forward as evidence.

@@ -1693,3 +1693,17 @@ git commit -m "feat(web): gate search and ingest on model warmup readiness"
 ## Follow-up (explicitly out of scope for this plan)
 
 - Backend `Cache-Control` header tuning on the Node model-cache service's `/models/*` routes — not required by this plan (the scoped-fetch-override makes GLiNER model caching independent of server headers), but would further speed up cold CDN-level fetches.
+
+## 2026-07-23 GLiNER2 replacement task
+
+The `Gliner` JavaScript constructor, scoped fetch override, and current GLiNER
+progress weight remain valid only for the legacy model.
+
+- [ ] Add a separate lazy GLiNER2 state machine for verified
+  safetensors/tokenizer/config bytes and the Xberg WASM model handle.
+- [ ] Initialize in a Worker with cancellation and explicit model revision.
+- [ ] Do not eagerly warm the approximately 1.23 GB source artifact.
+- [ ] Add quota/disk/memory preflight, corrupt-cache eviction, retry, and OOM
+  recovery tests.
+- [ ] Report download and initialization separately from steady-state
+  inference, and disclose the model's seven supported languages.

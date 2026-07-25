@@ -251,3 +251,18 @@ packages/core/
 - **Non-goal:** cloud deployment, multi-tenant SaaS, or any network egress of document content. Fully local, single machine.
 - **Resolved:** npm package is `edgevec` (v0.9.0; `import init, { EdgeVec } from "edgevec"`). It natively provides dense + sparse (BM25) + hybrid RRF + persistence, so FlexSearch/MiniSearch are not required. Browser PII pkg is `gliner` (GLiNER.js); `@lmoe/gliner-onnx` is the Node alternative.
 - **Risk:** Node server holds an encrypted copy of the curtain vault for offline rehydration — it must be AES-GCM and owner-only; loss of the key = no rehydration.
+
+## 2026-07-23 GLiNER2 architecture update
+
+The current published `xberg-wasm` package still does not export an in-binary
+NER engine. Latest upstream Xberg now contains a Candle GLiNER2 core with native
+directory loading and WASM-compatible byte loading, but dispatch and generated
+Node/WASM bindings remain unwired.
+
+The target architecture supersedes the permanent "no engine in Node" rule for
+contextual NER: MCP should call the native Xberg binding while the browser calls
+the WASM build of the same Rust implementation. The model manifest/cache must
+support three checksum-pinned files, immutable revision, exact byte sizes,
+license, and supported languages. The approximately 1.23 GB source checkpoint
+must remain optional and lazy; it must not silently enter the default installer
+or startup warmup.
