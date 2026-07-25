@@ -64,6 +64,13 @@ tasks:
     desc: "Fast local build for the xberg core crate"
     cmds:
       - task: build:fast
+    platforms: [linux, darwin]
+
+  build:windows:
+    desc: "Fast local build for the xberg core crate (Windows)"
+    cmds:
+      - task: rust:build:fast:windows
+    platforms: [windows]
 
   build:release:
     desc: "Build Rust core library only (release)"
@@ -78,15 +85,26 @@ tasks:
   build:core:
     desc: "Fast local build for the xberg core crate"
     cmds:
-      - task: rust:build:fast
+      - task: build:fast
+    platforms: [linux, darwin]
+
+  build:core:windows:
+    desc: "Fast local build for the xberg core crate (Windows)"
+    cmds:
+      - task: rust:build:fast:windows
+    platforms: [windows]
 
   build:fast:
     desc: "Fast local Rust build for the xberg core crate"
     cmds:
       - task: rust:build:fast
+    platforms: [linux, darwin]
 
-  build:fast:cranelift:
-    desc: "Fast local Rust build for the xberg core crate with nightly Cranelift"
+  build:fast:windows:
+    desc: "Fast local Rust build for the xberg core crate (Windows)"
+    cmds:
+      - task: rust:build:fast:windows
+    platforms: [windows]
     cmds:
       - task: rust:build:fast:cranelift
 
@@ -121,6 +139,12 @@ tasks:
     cmds:
       - task: rust:cli:build:fast
 
+  build:cli:fast:windows:
+    desc: "Build a lighter local CLI shape (Windows)"
+    cmds:
+      - task: rust:cli:build:fast:windows
+    platforms: [windows]
+
   test:
     desc: "Run fast local xberg core tests"
     cmds:
@@ -130,6 +154,12 @@ tasks:
     desc: "Run fast local xberg core tests"
     cmds:
       - task: rust:test:fast
+
+  test:fast:windows:
+    desc: "Run fast local xberg core tests (Windows)"
+    cmds:
+      - task: rust:test:fast:windows
+    platforms: [windows]
 
   test:fast:cranelift:
     desc: "Run fast local xberg core tests with nightly Cranelift"
@@ -203,6 +233,12 @@ tasks:
     desc: "Fast local cargo check for the xberg core crate"
     cmds:
       - task: rust:check:fast
+
+  check:rust:fast:windows:
+    desc: "Fast local cargo check for the xberg core crate (Windows)"
+    cmds:
+      - task: rust:check:fast:windows
+    platforms: [windows]
 
   check:rust:fast:cranelift:
     desc: "Fast local cargo check for the xberg core crate with nightly Cranelift"

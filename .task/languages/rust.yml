@@ -39,12 +39,20 @@ tasks:
         platforms: [windows]
 
   build:fast:
-    desc: "Build the xberg core crate for local iteration"
+    desc: "Build the xberg core crate for local iteration (POSIX only; uses cargo-local.sh)"
+    platforms: [linux, darwin]
     cmds:
       - env -u CARGO_INCREMENTAL -u CARGO_BUILD_INCREMENTAL RUSTC_WRAPPER= bash scripts/task/cargo-local.sh --config build.incremental=false build --locked -p xberg
 
+  build:fast:windows:
+    desc: "Build the xberg core crate for local iteration (Windows)"
+    platforms: [windows]
+    cmds:
+      - cargo build --locked -p xberg
+
   build:fast:cranelift:
-    desc: "Build the xberg core crate with nightly Cranelift"
+    desc: "Build the xberg core crate with nightly Cranelift (POSIX only)"
+    platforms: [linux, darwin]
     cmds:
       - env -u CARGO_INCREMENTAL -u CARGO_BUILD_INCREMENTAL RUSTC_WRAPPER= bash scripts/task/cargo-cranelift.sh build --locked --config build.incremental=false --config 'build.rustc-wrapper=""' -p xberg
 
@@ -138,12 +146,20 @@ tasks:
       - cargo test --locked --lib --workspace --exclude xberg-php --exclude xberg-node --exclude xberg-wasm
 
   test:fast:
-    desc: "Run xberg core library tests for local iteration"
+    desc: "Run xberg core library tests for local iteration (POSIX only; uses cargo-local.sh)"
+    platforms: [linux, darwin]
     cmds:
       - env -u CARGO_INCREMENTAL -u CARGO_BUILD_INCREMENTAL RUSTC_WRAPPER= bash scripts/task/cargo-local.sh --config build.incremental=false test --locked -p xberg --lib
 
+  test:fast:windows:
+    desc: "Run xberg core library tests for local iteration (Windows)"
+    platforms: [windows]
+    cmds:
+      - cargo test --locked -p xberg --lib
+
   test:fast:cranelift:
-    desc: "Run xberg core library tests with nightly Cranelift"
+    desc: "Run xberg core library tests with nightly Cranelift (POSIX only)"
+    platforms: [linux, darwin]
     cmds:
       - env -u CARGO_INCREMENTAL -u CARGO_BUILD_INCREMENTAL RUSTC_WRAPPER= bash scripts/task/cargo-cranelift.sh test --locked --config build.incremental=false --config 'build.rustc-wrapper=""' -p xberg --lib
 
@@ -170,17 +186,32 @@ tasks:
       - cargo fmt --all -- --check
 
   check:fast:
-    desc: "Fast local cargo check for the xberg core crate"
+    desc: "Fast local cargo check for the xberg core crate (POSIX only; uses cargo-local.sh)"
+    platforms: [linux, darwin]
     cmds:
       - env -u CARGO_INCREMENTAL -u CARGO_BUILD_INCREMENTAL RUSTC_WRAPPER= bash scripts/task/cargo-local.sh --config build.incremental=false check --locked -p xberg
 
+  check:fast:windows:
+    desc: "Fast local cargo check for the xberg core crate (Windows)"
+    platforms: [windows]
+    cmds:
+      - cargo check --locked -p xberg
+
   cli:build:fast:
-    desc: "Build a lighter local CLI shape without heavy default features"
+    desc: "Build a lighter local CLI shape without heavy default features (POSIX only; uses cargo-local.sh)"
+    platforms: [linux, darwin]
     cmds:
       - env -u CARGO_INCREMENTAL -u CARGO_BUILD_INCREMENTAL RUSTC_WRAPPER= bash scripts/task/cargo-local.sh --config build.incremental=false build --locked -p xberg-cli --no-default-features --features html,url-ingestion
 
+  cli:build:fast:windows:
+    desc: "Build a lighter local CLI shape without heavy default features (Windows)"
+    platforms: [windows]
+    cmds:
+      - cargo build --locked -p xberg-cli --no-default-features --features html,url-ingestion
+
   check:fast:cranelift:
-    desc: "Fast local cargo check for the xberg core crate with nightly Cranelift"
+    desc: "Fast local cargo check for the xberg core crate with nightly Cranelift (POSIX only)"
+    platforms: [linux, darwin]
     cmds:
       - env -u CARGO_INCREMENTAL -u CARGO_BUILD_INCREMENTAL RUSTC_WRAPPER= bash scripts/task/cargo-cranelift.sh check --locked --config build.incremental=false --config 'build.rustc-wrapper=""' -p xberg
 
