@@ -119,12 +119,12 @@ impl LoraAdapter {
         // Walk keys, group by module path, slot lora_A/lora_B.
         // Keys: base_model.model.<path>.lora_{A,B}.weight
         let mut by_module: HashMap<String, (Option<Tensor>, Option<Tensor>)> = HashMap::new();
-        for (key, view) in st.tensors() {
+for (key, view) in st.tensors() {
             let (module_path, slot) = parse_lora_key(&key)?;
-
+            
             // Use candle_core's Load trait to load tensors from SafeTensors view
             // This supports F32, F16, BF16, F64, I64 without manual byte parsing.
-            let tensor = Tensor::load(&view, device)
+            let tensor = candle_core::safetensors::Load::load(&view, device)
                 .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("lora: tensor {key}: {e}")))?;
             let entry = by_module.entry(module_path).or_default();
             match slot {
@@ -144,8 +144,8 @@ impl LoraAdapter {
                 crate::candle::GlinerCandleError::Backend(format!("lora: missing lora_B for module {path}"))
             })?;
             // Validate LoRA matrix ranks against config.r
-            let a_rank = lora_a.shape().get(0).copied().unwrap_or(0);
-            let b_rank = lora_b.shape().get(1).copied().unwrap_or(0);
+            let a_rank = lora_a.shape().dims()[0];
+            let b_rank = lora_b.shape().dims()[1];
             if a_rank != r {
                 return Err(crate::candle::GlinerCandleError::Backend(format!(
                     "lora: module {path}: lora_A rank {a_rank} != config.r {r}"
@@ -157,8 +157,8 @@ impl LoraAdapter {
                 )));
             }
             // Validate A/B multiplication dimensions are compatible: A=[r, in], B=[out, r]
-            let a_in = lora_a.shape().get(1).copied().unwrap_or(0);
-            let b_out = lora_b.shape().get(0).copied().unwrap_or(0);
+            let a_in = lora_a.shape().dims()[1];
+            let b_out = lora_b.shape().dims()[0];
             if a_in == 0 || b_out == 0 {
                 return Err(crate::candle::GlinerCandleError::Backend(format!(
                     "lora: module {path}: invalid A/B shapes A={:?} B={:?}", lora_a.shape(), lora_b.shape()
@@ -229,7 +229,7 @@ pub(crate) fn merge_into_base(
 
     for (key, view) in st.tensors() {
         // Decode safetensors view to a Candle tensor using candle's Load trait.
-        let mut tensor = Tensor::load(&view, device)
+        let mut tensor = candle_core::safetensors::Load::load(&view, device)
             .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("lora_merge: decode {key}: {e}")))?;
 
         // Match key against adapter modules: strip `.weight` suffix, look up.

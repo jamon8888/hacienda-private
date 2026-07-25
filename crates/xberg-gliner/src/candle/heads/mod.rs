@@ -19,8 +19,9 @@ pub(crate) const MAX_WIDTH: usize = 8;
 
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
+use std::collections::HashMap;
 
-use candle_core::Device;
+use candle_core::{Device, Tensor};
 use candle_nn::VarBuilder;
 
 /// Container for the three parametric inference heads.
@@ -46,12 +47,60 @@ impl AllHeads {
         Self::load(vb, device)
     }
 
-    /// Load all heads from an already-built [`VarBuilder`] (post-LoRA-merge path).
+    /// Load all heads' weights from an already-built [`VarBuilder`] (post-LoRA-merge path).
     ///
     /// Only used by [`crate::candle::Gliner2Candle::load_adapter`]; dead weight on
     /// wasm32 (no filesystem, and LoRA merge is fs-driven).
     #[cfg(not(target_arch = "wasm32"))]
     pub fn from_var_builder(vb: VarBuilder<'_>, device: &Device) -> crate::candle::Result<Self> {
+        Self::load(vb, device)
+    }
+
+    /// Load all heads from a pre-loaded tensor map (shared with encoder).
+    ///
+    /// This avoids loading the entire safetensors file twice when both encoder
+    /// and heads are loaded from the same file. The tensor map should contain
+    /// all tensors, and this function scopes it to the heads' prefixes.
+    pub fn from_tensors(
+        tensors: HashMap<String, Tensor>,
+        device: &Device,
+        dtype: candle_core::DType,
+    ) -> crate::candle::Result<Self> {
+        // Filter tensors with heads' prefixes (span_rep, count_embed, count_pred)
+        let mut heads_tensors = HashMap::new();
+        for (key, tensor) in tensors {
+            if key.starts_with("span_rep.")
+                || key.starts_with("count_embed.")
+                || key.starts_with("count_pred.")
+            {
+                heads_tensors.insert(key, tensor);
+            }
+        }
+        let vb = VarBuilder::from_tensors(heads_tensors, dtype, device);
+        Self::load(vb, device)
+    }
+
+    /// Load all heads from a pre-loaded tensor map (shared with encoder).
+    ///
+    /// This avoids loading the entire safetensors file twice when both encoder
+    /// and heads are loaded from the same file. The tensor map should contain
+    /// all tensors, and this function scopes it to the heads' prefixes.
+    pub fn from_tensor_map(
+        tensors: &HashMap<String, Tensor>,
+        device: &Device,
+        dtype: candle_core::DType,
+    ) -> crate::candle::Result<Self> {
+        // Filter tensors with heads' prefixes (span_rep, count_embed, count_pred)
+        let mut heads_tensors = HashMap::new();
+        for (key, tensor) in tensors {
+            if key.starts_with("span_rep.")
+                || key.starts_with("count_embed.")
+                || key.starts_with("count_pred.")
+            {
+                heads_tensors.insert(key.clone(), tensor.clone());
+            }
+        }
+        let vb = VarBuilder::from_tensors(heads_tensors, dtype, device);
         Self::load(vb, device)
     }
 

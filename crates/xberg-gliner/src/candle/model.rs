@@ -5,6 +5,7 @@
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
 use std::path::PathBuf;
+use std::collections::HashMap;
 
 use candle_core::Device;
 
@@ -54,7 +55,7 @@ impl Gliner2Candle {
         self.approx_bytes
     }
 
-    /// Load from in-memory model bytes (browser/OPFS, wasm; no filesystem).
+/// Load from in-memory model bytes (browser/OPFS, wasm; no filesystem).
     /// `encoder_config_json` is the `config.json` (or `encoder_config/config.json`)
     /// contents; `tokenizer_json` is the HF `tokenizer.json` contents;
     /// `safetensors` is the `model.safetensors` contents.
@@ -77,8 +78,32 @@ impl Gliner2Candle {
         let dtype = candle_core::DType::F16;
         #[cfg(not(target_arch = "wasm32"))]
         let dtype = candle_core::DType::F32;
-        let encoder = encoder::Encoder::from_buffered_safetensors(safetensors, &config, &device, dtype)?;
-        let heads_loaded = heads::AllHeads::from_buffered_safetensors(safetensors, &device, dtype)?;
+
+        // Load the safetensors file ONCE into a shared tensor map to avoid
+        // doubling peak memory: both the encoder and heads would otherwise
+        // independently load the full file via `load_buffer_streaming`,
+        // duplicating the transient F32 map and the converted tensors.
+        // Instead, we load once, split the tensor map by key prefix, and
+        // build both components from the shared map.
+        let all_tensors = crate::candle::streaming_load::load_buffer_streaming(safetensors, &device, dtype)?;
+
+        // Split the shared tensor map into encoder-scoped and heads-scoped subsets.
+        // Encoder tensors live under the `encoder.` prefix; everything else
+        // (heads: `span_rep.`, `scorer.`, `count_lstm.`, `count_pred.`, etc.) goes to heads.
+        let mut encoder_tensors = HashMap::new();
+        let mut heads_tensors = HashMap::new();
+        for (key, tensor) in all_tensors {
+            if key.starts_with("encoder.") {
+                encoder_tensors.insert(key, tensor);
+            } else {
+                heads_tensors.insert(key, tensor);
+            }
+        }
+
+        // Build encoder from its scoped tensor map
+        let encoder = encoder::Encoder::from_tensors(encoder_tensors, &config, &device, dtype)?;
+        // Build heads from its scoped tensor map
+        let heads_loaded = heads::AllHeads::from_tensors(heads_tensors, &device, dtype)?;
 
         Ok(Self {
             tokenizer,
@@ -132,6 +157,14 @@ impl Gliner2Candle {
 impl Gliner2Candle {
     /// Load a PEFT-format LoRA adapter and merge it into the base weights.
     pub fn load_adapter(&mut self, name: &str, adapter_dir: &Path) -> Result<()> {
+        // Guard against models created by `from_bytes`, where `base_model_dir` is empty.
+        // On such instances, filesystem-based adapter load is not supported.
+        if self.base_model_dir.as_os_str().is_empty() {
+            return Err(GlinerCandleError::Backend(
+                "load_adapter: not supported for models loaded via `from_bytes` \
+                 (no base model directory available)".to_string(),
+            ));
+        }
         let adapter = lora::LoraAdapter::load(adapter_dir, &self.device)?;
 
         if let Some(adapter_base) = adapter.config.base_model_name_or_path.as_deref()
@@ -163,6 +196,13 @@ impl Gliner2Candle {
     pub fn unload_adapter(&mut self) -> Result<()> {
         if self.active_adapter.is_none() {
             return Ok(());
+        }
+        // Guard against models created by `from_bytes`, where `base_model_dir` is empty.
+        if self.base_model_dir.as_os_str().is_empty() {
+            return Err(GlinerCandleError::Backend(
+                "unload_adapter: not supported for models loaded via `from_bytes` \
+                 (no base model directory available)".to_string(),
+            ));
         }
         let weights_path = self.base_model_dir.join("model.safetensors");
         let config_path = resolve_encoder_config_path(&self.base_model_dir);
