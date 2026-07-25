@@ -5,12 +5,18 @@ export interface FetchProgress {
   bytesTotal: number;
 }
 
-async function readWithProgress(response: Response, onProgress?: (p: FetchProgress) => void): Promise<Uint8Array> {
+async function readWithProgress(
+  response: Response,
+  onProgress?: (p: FetchProgress) => void,
+): Promise<Uint8Array> {
   const total = Number(response.headers.get("content-length") ?? 0);
   const reader = response.body?.getReader();
   if (!reader) {
     const buf = new Uint8Array(await response.arrayBuffer());
-    onProgress?.({ bytesLoaded: buf.byteLength, bytesTotal: total || buf.byteLength });
+    onProgress?.({
+      bytesLoaded: buf.byteLength,
+      bytesTotal: total || buf.byteLength,
+    });
     return buf;
   }
 
@@ -46,7 +52,10 @@ async function openCache(): Promise<Cache | undefined> {
   }
 }
 
-export async function cachedFetchBuffer(url: string, onProgress?: (p: FetchProgress) => void): Promise<ArrayBuffer> {
+export async function cachedFetchBuffer(
+  url: string,
+  onProgress?: (p: FetchProgress) => void,
+): Promise<ArrayBuffer> {
   const cache = await openCache();
   let cached: Response | undefined;
   try {
@@ -72,22 +81,27 @@ export async function cachedFetchBuffer(url: string, onProgress?: (p: FetchProgr
     // Caching is best-effort: a full Cache Storage (e.g. Safari/iOS quota limits) must
     // never fail an otherwise-successful download.
   }
-  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  return bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength,
+  ) as ArrayBuffer;
 }
 
 /** Fetch an immutable model artifact and verify its content hash before use. */
 export async function cachedFetchVerifiedBuffer(
-	url: string,
-	expectedSha256: string,
-	onProgress?: (p: FetchProgress) => void,
+  url: string,
+  expectedSha256: string,
+  onProgress?: (p: FetchProgress) => void,
 ): Promise<ArrayBuffer> {
-	const bytes = new Uint8Array(await cachedFetchBuffer(url, onProgress));
-	const digest = await crypto.subtle.digest("SHA-256", bytes);
-	const actual = Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join("");
-	if (actual !== expectedSha256.toLowerCase()) {
-		throw new Error(`model artifact checksum mismatch for ${url}`);
-	}
-	return bytes.buffer;
+  const bytes = new Uint8Array(await cachedFetchBuffer(url, onProgress));
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const actual = Array.from(new Uint8Array(digest), (value) =>
+    value.toString(16).padStart(2, "0"),
+  ).join("");
+  if (actual !== expectedSha256.toLowerCase()) {
+    throw new Error(`model artifact checksum mismatch for ${url}`);
+  }
+  return bytes.buffer;
 }
 
 export async function cachedFetchJson(url: string): Promise<unknown> {
@@ -131,7 +145,12 @@ export async function withScopedFetchOverride<T>(
   if (!originalFetch) {
     originalFetch = globalThis.fetch;
     globalThis.fetch = (input, init) => {
-      const requestUrl = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      const requestUrl =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
       const override = fetchOverrides.get(requestUrl);
       if (override) {
         return Promise.resolve(new Response(override.buffer.slice(0)));

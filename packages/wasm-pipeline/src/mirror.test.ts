@@ -16,9 +16,21 @@ describe("serializeMirror", () => {
   });
 
   it("serializes to JSON bytes carrying index, vault, and vaultSalt", () => {
-    const bytes = serializeMirrorToBytes(new Uint8Array([1, 2]), new Uint8Array([7]), new Uint8Array([3]));
+    const bytes = serializeMirrorToBytes(
+      new Uint8Array([1, 2]),
+      new Uint8Array([7]),
+      new Uint8Array([3]),
+    );
     const parsed = JSON.parse(new TextDecoder().decode(bytes));
-    expect(parsed).toEqual({ version: 2, embedding_identity: GRANITE_EMBEDDING_IDENTITY, index: [1, 2], vault: [7], vaultSalt: [3], pii: [], chunks: [] });
+    expect(parsed).toEqual({
+      version: 2,
+      embedding_identity: GRANITE_EMBEDDING_IDENTITY,
+      index: [1, 2],
+      vault: [7],
+      vaultSalt: [3],
+      pii: [],
+      chunks: [],
+    });
   });
 });
 
@@ -34,7 +46,10 @@ describe("pushMirror", () => {
     let capturedContentType = "";
     let capturedAuth = "";
 
-    vi.stubGlobal("fetch", (async (url: string | URL | Request, init?: RequestInit) => {
+    vi.stubGlobal("fetch", (async (
+      url: string | URL | Request,
+      init?: RequestInit,
+    ) => {
       capturedUrl = String(url);
       capturedBody = (init?.body as unknown as Uint8Array) ?? new Uint8Array(0);
       const headers = init?.headers as Record<string, string | undefined>;
@@ -49,16 +64,34 @@ describe("pushMirror", () => {
     expect(capturedContentType).toBe("application/octet-stream");
     expect(capturedAuth).toBe("Bearer tok");
     const parsed = JSON.parse(new TextDecoder().decode(capturedBody));
-    expect(parsed).toEqual({ version: 2, embedding_identity: GRANITE_EMBEDDING_IDENTITY, index: [1, 2, 3], vault: [9], vaultSalt: [4], pii: [], chunks: [] });
+    expect(parsed).toEqual({
+      version: 2,
+      embedding_identity: GRANITE_EMBEDDING_IDENTITY,
+      index: [1, 2, 3],
+      vault: [9],
+      vaultSalt: [4],
+      pii: [],
+      chunks: [],
+    });
 
     vi.unstubAllGlobals();
   });
 
   it("throws on non-ok response", async () => {
     const matter = { id: "m-1" } as never;
-    const payload = serializeMirrorToBytes(new Uint8Array([1]), new Uint8Array([2]), new Uint8Array([3]));
-    vi.stubGlobal("fetch", (async () => new Response(null, { status: 500 })) as unknown as typeof fetch);
-    await expect(pushMirror(matter, payload, "tok")).rejects.toThrow("mirror failed: 500");
+    const payload = serializeMirrorToBytes(
+      new Uint8Array([1]),
+      new Uint8Array([2]),
+      new Uint8Array([3]),
+    );
+    vi.stubGlobal(
+      "fetch",
+      (async () =>
+        new Response(null, { status: 500 })) as unknown as typeof fetch,
+    );
+    await expect(pushMirror(matter, payload, "tok")).rejects.toThrow(
+      "mirror failed: 500",
+    );
     vi.unstubAllGlobals();
   });
 });

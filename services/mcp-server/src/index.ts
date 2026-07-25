@@ -1,8 +1,19 @@
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
 import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { basename, dirname, extname, join, normalize, resolve as resolvePath } from "node:path";
+import {
+  basename,
+  dirname,
+  extname,
+  join,
+  normalize,
+  resolve as resolvePath,
+} from "node:path";
 import { fileURLToPath } from "node:url";
 import { AppConfig, buildConfig, parseArgs } from "./config.js";
 import { AppError, isAppError } from "./error.js";
@@ -11,20 +22,31 @@ import { MetadataStore, openStore } from "./store.js";
 import { ModelCache } from "./models.js";
 import { MirrorStore } from "./mirror.js";
 import { KeyVault } from "./vault.js";
-import { PLACEHOLDER_HTML, resolveUiDir, resolveWasmPackageDir, resolveEmbedPdfiumDir, injectToken } from "./static.js";
+import {
+  PLACEHOLDER_HTML,
+  resolveUiDir,
+  resolveWasmPackageDir,
+  resolveEmbedPdfiumDir,
+  injectToken,
+} from "./static.js";
 import { runMcp } from "./mcp/mod.js";
 import type { IngestDeps } from "@xberg-io/node-pipeline";
 import {
-	DEFAULT_GLINER_MODEL,
-	GLINER2_MANIFEST_NAMES,
-	RUST_ALIGNED_PII_TYPES,
-	configureGliner2NativeFacade,
-	detectGliner2,
-	detectPii,
-	embedText,
-	type Gliner2ArtifactPaths,
+  DEFAULT_GLINER_MODEL,
+  GLINER2_MANIFEST_NAMES,
+  RUST_ALIGNED_PII_TYPES,
+  configureGliner2NativeFacade,
+  detectGliner2,
+  detectPii,
+  embedText,
+  type Gliner2ArtifactPaths,
 } from "@xberg-io/node-pipeline";
-import { loadOrCreateSessionToken, resolveLaunchScopes, authenticateHttp, ownerPrincipal } from "./auth.js";
+import {
+  loadOrCreateSessionToken,
+  resolveLaunchScopes,
+  authenticateHttp,
+  ownerPrincipal,
+} from "./auth.js";
 import type { Principal } from "./principal.js";
 import { authorize } from "./mcp/scopes.js";
 import { requireConsent } from "./mcp/consent.js";
@@ -52,45 +74,63 @@ export interface AppContext {
  * JS implementation of Candle inference.
  */
 export function ensureGliner2ModelArtifacts(
-	ctx: AppContext,
-	names: { weights: string; tokenizer: string; encoderConfig: string } = GLINER2_MANIFEST_NAMES,
+  ctx: AppContext,
+  names: {
+    weights: string;
+    tokenizer: string;
+    encoderConfig: string;
+  } = GLINER2_MANIFEST_NAMES,
 ): Promise<Gliner2ArtifactPaths> {
-	return ctx.models.ensureGliner2Artifacts(names);
+  return ctx.models.ensureGliner2Artifacts(names);
 }
 
 let nativeGliner2Ready: Promise<boolean> | undefined;
 
 type NativeGliner2Module = typeof import("@xberg-io/xberg") & {
-	detectCandleEntities(
-		text: string,
-		modelDir: string,
-		adapterDir: string | undefined,
-		categories: unknown[],
-		customLabels: string[],
-	): Promise<ReadonlyArray<{ category: unknown; start: number; end: number; text: string }>>;
+  detectCandleEntities(
+    text: string,
+    modelDir: string,
+    adapterDir: string | undefined,
+    categories: unknown[],
+    customLabels: string[],
+  ): Promise<
+    ReadonlyArray<{
+      category: unknown;
+      start: number;
+      end: number;
+      text: string;
+    }>
+  >;
 };
 
 async function configureNativeGliner2(): Promise<boolean> {
-	nativeGliner2Ready ??= (async () => {
-		try {
-			const native = (await import("@xberg-io/xberg")) as unknown as NativeGliner2Module;
-			configureGliner2NativeFacade({
-				detectGliner2: async (text, modelDir, labels) => {
-					const entities = await native.detectCandleEntities(text, modelDir, undefined, [], [...labels]);
-					return entities.map((entity) => ({
-						kind: String(entity.category),
-						start: entity.start,
-						end: entity.end,
-						text: entity.text,
-					}));
-				},
-			});
-			return true;
-		} catch {
-			return false;
-		}
-	})();
-	return nativeGliner2Ready;
+  nativeGliner2Ready ??= (async () => {
+    try {
+      const native =
+        (await import("@xberg-io/xberg")) as unknown as NativeGliner2Module;
+      configureGliner2NativeFacade({
+        detectGliner2: async (text, modelDir, labels) => {
+          const entities = await native.detectCandleEntities(
+            text,
+            modelDir,
+            undefined,
+            [],
+            [...labels],
+          );
+          return entities.map((entity) => ({
+            kind: String(entity.category),
+            start: entity.start,
+            end: entity.end,
+            text: entity.text,
+          }));
+        },
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+  return nativeGliner2Ready;
 }
 
 // Extensions walkFolder() will hand us — kept in sync with node-pipeline's own
@@ -98,7 +138,8 @@ async function configureNativeGliner2(): Promise<boolean> {
 // empty/unknown MIME types, so every supported extension needs an explicit entry here.
 const MIME_TYPES_BY_EXTENSION: Record<string, string> = {
   ".pdf": "application/pdf",
-  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".docx":
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   ".doc": "application/msword",
   ".txt": "text/plain",
   ".md": "text/markdown",
@@ -120,7 +161,8 @@ const MIME_TYPES_BY_EXTENSION: Record<string, string> = {
 // (resolved via Node's own module resolution against the installed package, not a hardcoded
 // node_modules layout) and hand the bytes directly to the init function, which accepts a
 // `BufferSource` and skips the fetch path entirely.
-let xbergWasmReady: Promise<typeof import("@xberg-io/xberg-wasm")> | null = null;
+let xbergWasmReady: Promise<typeof import("@xberg-io/xberg-wasm")> | null =
+  null;
 async function getXbergWasm(): Promise<typeof import("@xberg-io/xberg-wasm")> {
   if (!xbergWasmReady) {
     xbergWasmReady = (async () => {
@@ -194,7 +236,11 @@ function serveFile(res: ServerResponse, filePath: string): void {
   // giant-model serves to look like a multi-minute stall. createReadStream().pipe() yields between
   // chunks and streams straight to the socket.
   const size = statSync(filePath).size;
-  res.writeHead(200, { "content-type": ct, "content-length": String(size), ...ISOLATION_HEADERS });
+  res.writeHead(200, {
+    "content-type": ct,
+    "content-length": String(size),
+    ...ISOLATION_HEADERS,
+  });
   const stream = createReadStream(filePath);
   stream.on("error", () => {
     // Headers are already sent, so we can't switch to a 5xx — just tear the connection down so
@@ -205,7 +251,12 @@ function serveFile(res: ServerResponse, filePath: string): void {
   stream.pipe(res);
 }
 
-function serveHtmlWithToken(res: ServerResponse, filePath: string, token: string, status = 200): void {
+function serveHtmlWithToken(
+  res: ServerResponse,
+  filePath: string,
+  token: string,
+  status = 200,
+): void {
   const html = injectToken(readFileSync(filePath, "utf8"), token);
   res.writeHead(status, {
     "content-type": "text/html; charset=utf-8",
@@ -215,10 +266,18 @@ function serveHtmlWithToken(res: ServerResponse, filePath: string, token: string
   res.end(html);
 }
 
-function serveStaticDir(res: ServerResponse, rootDir: string, relPath: string): void {
+function serveStaticDir(
+  res: ServerResponse,
+  rootDir: string,
+  relPath: string,
+): void {
   const safe = normalize(relPath).replace(/^(\.\.[/\\])+/, "");
   const filePath = join(rootDir, safe);
-  if (!filePath.startsWith(rootDir) || !existsSync(filePath) || statSync(filePath).isDirectory()) {
+  if (
+    !filePath.startsWith(rootDir) ||
+    !existsSync(filePath) ||
+    statSync(filePath).isDirectory()
+  ) {
     res.writeHead(404, { "content-type": "text/plain" });
     res.end("not found");
     return;
@@ -226,7 +285,11 @@ function serveStaticDir(res: ServerResponse, rootDir: string, relPath: string): 
   serveFile(res, filePath);
 }
 
-async function handleModels(ctx: AppContext, res: ServerResponse, file: string): Promise<void> {
+async function handleModels(
+  ctx: AppContext,
+  res: ServerResponse,
+  file: string,
+): Promise<void> {
   const entry = ctx.models.resolveByFile(file);
   if (!entry) {
     res.writeHead(404, { "content-type": "text/plain" });
@@ -245,8 +308,16 @@ async function handleModels(ctx: AppContext, res: ServerResponse, file: string):
   }
 }
 
-async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext, auth: HttpAuth): Promise<void> {
-  const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+async function handle(
+  req: IncomingMessage,
+  res: ServerResponse,
+  ctx: AppContext,
+  auth: HttpAuth,
+): Promise<void> {
+  const url = new URL(
+    req.url ?? "/",
+    `http://${req.headers.host ?? "localhost"}`,
+  );
   const pathname = url.pathname;
   const method = req.method ?? "GET";
 
@@ -311,7 +382,11 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
     const uiDir = resolveUiDir();
     if (uiDir) {
       const assetPath = join(uiDir, decodeURIComponent(pathname));
-      if (assetPath.startsWith(uiDir) && existsSync(assetPath) && !statSync(assetPath).isDirectory()) {
+      if (
+        assetPath.startsWith(uiDir) &&
+        existsSync(assetPath) &&
+        !statSync(assetPath).isDirectory()
+      ) {
         serveFile(res, assetPath);
         return;
       }
@@ -333,7 +408,10 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
       const segments = pathname.split("/").filter(Boolean);
       const candidates =
         segments.length === 2
-          ? [join(uiDir, ...segments) + ".html", join(uiDir, segments[0]!, "_.html")]
+          ? [
+              join(uiDir, ...segments) + ".html",
+              join(uiDir, segments[0]!, "_.html"),
+            ]
           : segments.length === 1
             ? [join(uiDir, `${segments[0]}.html`)]
             : [];
@@ -365,7 +443,12 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
     const body = await readJson<{ name: string }>(req);
     if (!body.name) throw new AppError("bad_request", "name is required");
     const matter = ctx.store.createMatter(body.name);
-    ctx.store.recordAudit(principal.subject, "ingest", "create_matter", matter.id);
+    ctx.store.recordAudit(
+      principal.subject,
+      "ingest",
+      "create_matter",
+      matter.id,
+    );
     sendJson(res, 201, matter);
     return;
   }
@@ -390,8 +473,13 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
   }
   if (pathname === "/api/folders" && method === "POST") {
     authorize(principal.scopes, "ingest");
-    const body = await readJson<{ matter_id: string; name: string; path?: string }>(req);
-    if (!body.matter_id || !body.name) throw new AppError("bad_request", "matter_id and name are required");
+    const body = await readJson<{
+      matter_id: string;
+      name: string;
+      path?: string;
+    }>(req);
+    if (!body.matter_id || !body.name)
+      throw new AppError("bad_request", "matter_id and name are required");
     const folder = ctx.store.createFolder(body.matter_id, body.name, body.path);
     sendJson(res, 201, folder);
     return;
@@ -406,12 +494,27 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
   }
   if (pathname === "/api/consent" && method === "POST") {
     authorize(principal.scopes, "admin");
-    const body = await readJson<{ subject: string; matter_id: string; scope: string; expires_at?: string }>(req);
+    const body = await readJson<{
+      subject: string;
+      matter_id: string;
+      scope: string;
+      expires_at?: string;
+    }>(req);
     if (!body.subject || !body.matter_id || !body.scope) {
-      throw new AppError("bad_request", "subject, matter_id and scope are required");
+      throw new AppError(
+        "bad_request",
+        "subject, matter_id and scope are required",
+      );
     }
-    if (!VALID_CONSENT_SCOPES.includes(body.scope as (typeof VALID_CONSENT_SCOPES)[number])) {
-      throw new AppError("bad_request", `unsupported consent scope: ${body.scope}`);
+    if (
+      !VALID_CONSENT_SCOPES.includes(
+        body.scope as (typeof VALID_CONSENT_SCOPES)[number],
+      )
+    ) {
+      throw new AppError(
+        "bad_request",
+        `unsupported consent scope: ${body.scope}`,
+      );
     }
     sendJson(
       res,
@@ -444,13 +547,16 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
     authorize(principal.scopes, "read");
     const matterId = decodeURIComponent(mirrorStatus[1] ?? "");
     const status = ctx.mirror.status(matterId);
-    if (!status) throw new AppError("not_found", `no mirror for matter ${matterId}`);
+    if (!status)
+      throw new AppError("not_found", `no mirror for matter ${matterId}`);
     sendJson(res, 200, status);
     return;
   }
 
   // Folder documents + PII routes (for Web UI polling)
-  const folderDocsMatch = pathname.match(/^\/api\/folders\/([^/]+)\/documents$/);
+  const folderDocsMatch = pathname.match(
+    /^\/api\/folders\/([^/]+)\/documents$/,
+  );
   if (folderDocsMatch && method === "GET") {
     authorize(principal.scopes, "read");
     const folderId = decodeURIComponent(folderDocsMatch[1] ?? "");
@@ -464,7 +570,8 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
     authorize(principal.scopes, "ingest");
     const folderId = decodeURIComponent(folderDocsMatch[1] ?? "");
     const folder = ctx.store.getFolder(folderId);
-    if (!folder) throw new AppError("not_found", `folder ${folderId} not found`);
+    if (!folder)
+      throw new AppError("not_found", `folder ${folderId} not found`);
     const body = await readJson<{ path: string; content_hash: string }>(req);
     if (!body.path || !body.content_hash) {
       throw new AppError("bad_request", "path and content_hash are required");
@@ -476,7 +583,12 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
       content_hash: body.content_hash,
       ingested_via: "browser",
     });
-    ctx.store.recordAudit(principal.subject, "ingest", "create_document", folder.matter_id);
+    ctx.store.recordAudit(
+      principal.subject,
+      "ingest",
+      "create_document",
+      folder.matter_id,
+    );
     sendJson(res, 201, doc);
     return;
   }
@@ -486,7 +598,8 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
     authorize(principal.scopes, "read");
     const documentId = decodeURIComponent(docStatusMatch[1] ?? "");
     const doc = ctx.store.getDocument(documentId);
-    if (!doc) throw new AppError("not_found", `document ${documentId} not found`);
+    if (!doc)
+      throw new AppError("not_found", `document ${documentId} not found`);
     sendJson(res, 200, doc);
     return;
   }
@@ -497,7 +610,8 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
     authorize(principal.scopes, "ingest");
     const documentId = decodeURIComponent(docStatusMatch[1] ?? "");
     const existing = ctx.store.getDocument(documentId);
-    if (!existing) throw new AppError("not_found", `document ${documentId} not found`);
+    if (!existing)
+      throw new AppError("not_found", `document ${documentId} not found`);
     const body = await readJson<{
       status: "processing" | "done" | "error";
       pages?: number;
@@ -515,7 +629,12 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
       pii_count: body.pii_count,
       error_message: body.error_message,
     });
-    ctx.store.recordAudit(principal.subject, "ingest", "update_document_status", existing.matter_id);
+    ctx.store.recordAudit(
+      principal.subject,
+      "ingest",
+      "update_document_status",
+      existing.matter_id,
+    );
     sendJson(res, 200, ctx.store.getDocument(documentId));
     return;
   }
@@ -525,9 +644,11 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
     authorize(principal.scopes, "read");
     const documentId = decodeURIComponent(docPiiMatch[1] ?? "");
     const doc = ctx.store.getDocument(documentId);
-    if (!doc) throw new AppError("not_found", `document ${documentId} not found`);
+    if (!doc)
+      throw new AppError("not_found", `document ${documentId} not found`);
     const matter = ctx.store.getMatter(doc.matter_id);
-    if (!matter) throw new AppError("not_found", `matter ${doc.matter_id} not found`);
+    if (!matter)
+      throw new AppError("not_found", `matter ${doc.matter_id} not found`);
     // Mirrors the MCP list_pii tool's gating — this route returns the same raw PII text, so it
     // must not skip the consent check just because it's reached over HTTP instead of MCP.
     requireConsent(ctx.store, matter, "pii_read", principal.subject);
@@ -547,14 +668,20 @@ export function createAppContext(config: AppConfig): AppContext {
 
   // Launch-time scopes from XBERG_SCOPES env (default: all). HTTP auth derives per-request Principal.
   const launchScopes = resolveLaunchScopes(process.env);
-  const httpAuth: HttpAuth = { token: config.sessionToken, scopes: launchScopes };
+  const httpAuth: HttpAuth = {
+    token: config.sessionToken,
+    scopes: launchScopes,
+  };
 
   // ModelCache.ensureModel() re-hashes the full cached model file on every call, even on a cache
   // hit — embed()/detectPii() are called once per chunk/document, so resolving these paths fresh
   // each time would make repeated hashing dominate ingestion cost far more than actual inference.
   // Memoized once per AppContext (mirrors the getXbergWasm lazy-promise pattern above), not
   // module-level, so a fresh createAppContext (e.g. in tests) doesn't reuse another context's cache.
-  let e5PathsPromise: Promise<{ modelPath: string; tokenizerPath: string }> | null = null;
+  let e5PathsPromise: Promise<{
+    modelPath: string;
+    tokenizerPath: string;
+  }> | null = null;
   const e5Paths = () => {
     e5PathsPromise ??= (async () => ({
       modelPath: await models.ensureModel("e5-fp32"),
@@ -562,11 +689,16 @@ export function createAppContext(config: AppConfig): AppContext {
     }))();
     return e5PathsPromise;
   };
-  let glinerPathsPromise: Promise<{ modelPath: string; tokenizerPath: string }> | null = null;
+  let glinerPathsPromise: Promise<{
+    modelPath: string;
+    tokenizerPath: string;
+  }> | null = null;
   const glinerPaths = () => {
     glinerPathsPromise ??= (async () => ({
       modelPath: await models.ensureModel(`${DEFAULT_GLINER_MODEL}.model`),
-      tokenizerPath: await models.ensureModel(`${DEFAULT_GLINER_MODEL}.tokenizer`),
+      tokenizerPath: await models.ensureModel(
+        `${DEFAULT_GLINER_MODEL}.tokenizer`,
+      ),
     }))();
     return glinerPathsPromise;
   };
@@ -584,12 +716,21 @@ export function createAppContext(config: AppConfig): AppContext {
     extract: async (path: string) => {
       const wasm = await getXbergWasm();
       const bytes = await readFile(path);
-      const mimeType = MIME_TYPES_BY_EXTENSION[extname(path).toLowerCase()] ?? "application/octet-stream";
-      const input = wasm.WasmExtractInput.fromBytes(new Uint8Array(bytes), mimeType, basename(path));
+      const mimeType =
+        MIME_TYPES_BY_EXTENSION[extname(path).toLowerCase()] ??
+        "application/octet-stream";
+      const input = wasm.WasmExtractInput.fromBytes(
+        new Uint8Array(bytes),
+        mimeType,
+        basename(path),
+      );
       const output = await wasm.extract(input, undefined);
       const first = output.results[0];
       if (!first) throw new Error(`extraction produced no result for ${path}`);
-      return { content: first.content ?? "", pageCount: first.metadata?.pages?.totalCount ?? 1 };
+      return {
+        content: first.content ?? "",
+        pageCount: first.metadata?.pages?.totalCount ?? 1,
+      };
     },
     chunk: (content: string) => {
       const CHUNK_SIZE = 1024;
@@ -614,7 +755,10 @@ export function createAppContext(config: AppConfig): AppContext {
         }
       }
       if (backend === "candle") {
-        throw new AppError("model", "native GLiNER2 backend is unavailable or its artifacts are not pinned");
+        throw new AppError(
+          "model",
+          "native GLiNER2 backend is unavailable or its artifacts are not pinned",
+        );
       }
       const { modelPath, tokenizerPath } = await glinerPaths();
       return detectPii(text, modelPath, tokenizerPath, RUST_ALIGNED_PII_TYPES);
@@ -632,7 +776,11 @@ export function createHttpServer(ctx: AppContext, authOverride?: HttpAuth) {
         sendJson(res, err.status, err.toJSON());
       } else {
         const msg = err instanceof Error ? err.message : "internal error";
-        sendJson(res, 500, { error: "InternalError", code: "store", message: msg });
+        sendJson(res, 500, {
+          error: "InternalError",
+          code: "store",
+          message: msg,
+        });
       }
     });
   });
@@ -642,7 +790,9 @@ async function main(): Promise<void> {
   const args = parseArgs(process.argv);
 
   if (args.version) {
-    const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+    const pkg = JSON.parse(
+      readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+    );
     console.log(`xberg-mcp ${pkg.version}`);
     return;
   }
@@ -661,7 +811,9 @@ async function main(): Promise<void> {
   server.listen(config.port, config.host, () => {
     console.log(`[xberg-mcp] serving http://${config.host}:${config.port}`);
     console.log(`[xberg-mcp] data dir: ${config.dataDir}`);
-    console.log(`[xberg-mcp] session token: ${config.sessionToken} (also at ${config.dataDir}/session.token)`);
+    console.log(
+      `[xberg-mcp] session token: ${config.sessionToken} (also at ${config.dataDir}/session.token)`,
+    );
   });
 }
 
@@ -670,7 +822,9 @@ async function main(): Promise<void> {
 // server. Without this guard, merely importing the module (as every mcp-server test does) would
 // parse the importing process's own argv, build a real config, and bind a real port as a side
 // effect of the import.
-const isMainModule = process.argv[1] !== undefined && fileURLToPath(import.meta.url) === resolvePath(process.argv[1]);
+const isMainModule =
+  process.argv[1] !== undefined &&
+  fileURLToPath(import.meta.url) === resolvePath(process.argv[1]);
 if (isMainModule) {
   main().catch((err) => {
     console.error(err instanceof Error ? err.message : err);

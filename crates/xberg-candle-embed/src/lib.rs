@@ -123,7 +123,9 @@ pub struct GraniteEmbedder {
 
 impl std::fmt::Debug for GraniteEmbedder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("GraniteEmbedder").field("identity", &self.identity).finish_non_exhaustive()
+        f.debug_struct("GraniteEmbedder")
+            .field("identity", &self.identity)
+            .finish_non_exhaustive()
     }
 }
 
@@ -133,7 +135,10 @@ impl GraniteEmbedder {
     pub fn from_safetensors_bytes(weights: &[u8], tokenizer_json: &[u8], config_json: &[u8]) -> Result<Self> {
         let config: ModernBertConfig = serde_json::from_slice(config_json)?;
         if config.hidden_size != DIMENSION {
-            return Err(EmbedError::Dimension { got: config.hidden_size, expected: DIMENSION });
+            return Err(EmbedError::Dimension {
+                got: config.hidden_size,
+                expected: DIMENSION,
+            });
         }
         let tokenizer = Tokenizer::from_bytes(tokenizer_json).map_err(|e| EmbedError::Tokenizer(e.to_string()))?;
         let device = Device::Cpu;
@@ -153,7 +158,11 @@ impl GraniteEmbedder {
 
     /// Load a checkpoint directory on native hosts.
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn from_files(weights: impl AsRef<std::path::Path>, tokenizer: impl AsRef<std::path::Path>, config: impl AsRef<std::path::Path>) -> Result<Self> {
+    pub fn from_files(
+        weights: impl AsRef<std::path::Path>,
+        tokenizer: impl AsRef<std::path::Path>,
+        config: impl AsRef<std::path::Path>,
+    ) -> Result<Self> {
         Self::from_safetensors_bytes(
             &std::fs::read(weights)?,
             &std::fs::read(tokenizer)?,
@@ -204,14 +213,20 @@ impl GraniteEmbedder {
             .map_err(|e| EmbedError::Tensor(e.to_string()))?
             .unsqueeze(0)
             .map_err(|e| EmbedError::Tensor(e.to_string()))?;
-        let hidden = self.model.forward(&ids, &mask).map_err(|e| EmbedError::Tensor(e.to_string()))?;
+        let hidden = self
+            .model
+            .forward(&ids, &mask)
+            .map_err(|e| EmbedError::Tensor(e.to_string()))?;
         let vector = hidden
             .i((0, 0))
             .map_err(|e| EmbedError::Tensor(e.to_string()))?
             .to_vec1::<f32>()
             .map_err(|e| EmbedError::Tensor(e.to_string()))?;
         if vector.len() != DIMENSION {
-            return Err(EmbedError::Dimension { got: vector.len(), expected: DIMENSION });
+            return Err(EmbedError::Dimension {
+                got: vector.len(),
+                expected: DIMENSION,
+            });
         }
         let norm = vector.iter().map(|value| value * value).sum::<f32>().sqrt();
         let norm = if norm > 0.0 { norm } else { 1.0 };
@@ -225,7 +240,7 @@ impl GraniteEmbedder {
 
 #[cfg(test)]
 mod tests {
-    use super::{EmbedderIdentity, DIMENSION};
+    use super::{DIMENSION, EmbedderIdentity};
 
     #[test]
     fn identity_is_serializable_and_explicit() {

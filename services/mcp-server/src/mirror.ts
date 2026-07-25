@@ -1,4 +1,11 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { randomUUID } from "node:crypto";
 import type { PiiEntity, RetrievedChunk } from "@xberg-io/core";
 import { AppError } from "./error.js";
@@ -31,8 +38,8 @@ interface MirrorChunk {
 }
 
 interface MirrorBundle {
-	version: number;
-	embedding_identity: string;
+  version: number;
+  embedding_identity: string;
   index: number[];
   vault: number[];
   vaultSalt: number[];
@@ -83,7 +90,10 @@ export class MirrorStore {
 
   private validateMatterId(matterId: string): void {
     if (matterId === "" || matterId === "." || matterId === "..") {
-      throw new AppError("bad_request", "matter_id must not be empty, '.' or '..'");
+      throw new AppError(
+        "bad_request",
+        "matter_id must not be empty, '.' or '..'",
+      );
     }
   }
 
@@ -130,7 +140,10 @@ export class MirrorStore {
     mkdirSync(staging, { recursive: true });
     writeFileSync(`${staging}/index.bin`, body);
     writeFileSync(`${staging}/bundle.json`, body);
-    writeFileSync(`${staging}/meta.json`, JSON.stringify({ matter_id: matterId, synced_at: syncedAt }));
+    writeFileSync(
+      `${staging}/meta.json`,
+      JSON.stringify({ matter_id: matterId, synced_at: syncedAt }),
+    );
 
     const finalDir = this.matterDir(matterId);
     if (existsSync(finalDir)) {
@@ -157,16 +170,27 @@ export class MirrorStore {
   // one) and re-saves via saveMirror. index/vault are deliberately left untouched — those are
   // browser-owned EdgeVec/curtain-privacy bytes this Node-side code never constructs (see the
   // "server NEVER imports edgevec" note above).
-  appendMirror(matterId: string, additions: { pii: MirrorPiiSpanInput[]; chunks: MirrorChunkInput[] }): MirrorStatus {
+  appendMirror(
+    matterId: string,
+    additions: { pii: MirrorPiiSpanInput[]; chunks: MirrorChunkInput[] },
+  ): MirrorStatus {
     this.validateMatterId(matterId);
     const bundleFile = this.bundlePath(matterId);
     const existing: MirrorBundle = existsSync(bundleFile)
       ? this.parseBundle(matterId, readFileSync(bundleFile))
-      : { version: 2, embedding_identity: SHARED_EMBEDDING_IDENTITY, index: [], vault: [], vaultSalt: [], pii: [], chunks: [] };
+      : {
+          version: 2,
+          embedding_identity: SHARED_EMBEDDING_IDENTITY,
+          index: [],
+          vault: [],
+          vaultSalt: [],
+          pii: [],
+          chunks: [],
+        };
 
     const merged: MirrorBundle = {
-	  version: 2,
-	  embedding_identity: existing.embedding_identity,
+      version: 2,
+      embedding_identity: existing.embedding_identity,
       index: existing.index,
       vault: existing.vault,
       vaultSalt: existing.vaultSalt,
@@ -174,14 +198,20 @@ export class MirrorStore {
       chunks: [...existing.chunks, ...additions.chunks],
     };
 
-    return this.saveMirror(matterId, Buffer.from(JSON.stringify(merged), "utf8"));
+    return this.saveMirror(
+      matterId,
+      Buffer.from(JSON.stringify(merged), "utf8"),
+    );
   }
 
   status(matterId: string): MirrorStatus | null {
     this.validateMatterId(matterId);
     const meta = this.metaPath(matterId);
     if (!existsSync(meta)) return null;
-    const raw = JSON.parse(readFileSync(meta, "utf8")) as { matter_id: string; synced_at: string };
+    const raw = JSON.parse(readFileSync(meta, "utf8")) as {
+      matter_id: string;
+      synced_at: string;
+    };
     const idx = this.indexPath(matterId);
     const bytes = existsSync(idx) ? readFileSync(idx).length : 0;
     return { matter_id: raw.matter_id, synced_at: raw.synced_at, bytes };
@@ -192,21 +222,28 @@ export class MirrorStore {
     try {
       parsed = JSON.parse(bytes.toString("utf8"));
     } catch {
-      throw new AppError("store", `mirror for matter ${matterId} is not a valid JSON MirrorBundle`);
+      throw new AppError(
+        "store",
+        `mirror for matter ${matterId} is not a valid JSON MirrorBundle`,
+      );
     }
     if (
       typeof parsed !== "object" ||
       parsed === null ||
       !("version" in parsed) ||
       (parsed as MirrorBundle).version !== 2 ||
-      (parsed as MirrorBundle).embedding_identity !== SHARED_EMBEDDING_IDENTITY ||
+      (parsed as MirrorBundle).embedding_identity !==
+        SHARED_EMBEDDING_IDENTITY ||
       !Array.isArray((parsed as MirrorBundle).index) ||
       !Array.isArray((parsed as MirrorBundle).vault) ||
       !Array.isArray((parsed as MirrorBundle).vaultSalt) ||
       !Array.isArray((parsed as MirrorBundle).pii) ||
       !Array.isArray((parsed as MirrorBundle).chunks)
     ) {
-      throw new AppError("store", `mirror for matter ${matterId} has an unexpected bundle shape`);
+      throw new AppError(
+        "store",
+        `mirror for matter ${matterId} has an unexpected bundle shape`,
+      );
     }
     return parsed as MirrorBundle;
   }
@@ -236,7 +273,8 @@ export class MirrorStore {
         matter_id: matterId,
         bytes: bytes.length,
         loaded: false,
-        reason: err instanceof Error ? err.message : "mirror bundle parse failed",
+        reason:
+          err instanceof Error ? err.message : "mirror bundle parse failed",
       };
     }
   }
@@ -246,7 +284,10 @@ export class MirrorStore {
     if (bundle) return bundle;
     const bundleFile = this.bundlePath(matterId);
     if (!existsSync(bundleFile)) {
-      throw new AppError("not_found", `no mirror loaded for matter ${matterId}`);
+      throw new AppError(
+        "not_found",
+        `no mirror loaded for matter ${matterId}`,
+      );
     }
     const bundle2 = this.parseBundle(matterId, readFileSync(bundleFile));
     this.bundles.set(matterId, bundle2);
@@ -267,7 +308,9 @@ export class MirrorStore {
           text: s.token,
         };
         if (s.ciphertext) {
-          entity.ciphertext = new Uint8Array(Buffer.from(s.ciphertext, "base64"));
+          entity.ciphertext = new Uint8Array(
+            Buffer.from(s.ciphertext, "base64"),
+          );
         }
         return entity;
       });
@@ -306,14 +349,22 @@ export class MirrorStore {
     const docId = chunkId.slice(0, sep);
     const ref = chunkId.slice(sep + 1);
 
-    const span = bundle.pii.find((s) => s.doc_id === docId && s.token === ref && s.ciphertext !== undefined);
+    const span = bundle.pii.find(
+      (s) =>
+        s.doc_id === docId && s.token === ref && s.ciphertext !== undefined,
+    );
     if (span?.ciphertext) {
       return new Uint8Array(Buffer.from(span.ciphertext, "base64"));
     }
 
     const asIndex = Number.parseInt(ref, 10);
     if (Number.isInteger(asIndex)) {
-      const byIndex = bundle.pii.find((s) => s.doc_id === docId && s.start === asIndex && s.ciphertext !== undefined);
+      const byIndex = bundle.pii.find(
+        (s) =>
+          s.doc_id === docId &&
+          s.start === asIndex &&
+          s.ciphertext !== undefined,
+      );
       if (byIndex?.ciphertext) {
         return new Uint8Array(Buffer.from(byIndex.ciphertext, "base64"));
       }

@@ -131,7 +131,5 @@ pub async fn detect_candle_entities(
     let adapter = adapter_dir.as_deref();
     let backend = candle::CandleBackend::get_or_init(&model_dir, adapter)?;
     let custom_labels = custom_labels.unwrap_or_default();
-    backend
-        .detect_with_custom(text, categories, &custom_labels)
-        .await
+    backend.detect_with_custom(text, categories, &custom_labels).await
 }

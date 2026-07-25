@@ -1,7 +1,21 @@
 import type { PiiEntity } from "@xberg-io/core";
-import type { Gliner, IEntityResult, InitConfig, IONNXWebSettings, ITransformersSettings } from "gliner";
-import { API_BASE, GLINER_TOKENIZER_REPO_ID, glinerModelUrl } from "./constants";
-import { cachedFetchBuffer, withScopedFetchOverride, type FetchProgress } from "./model-cache";
+import type {
+  Gliner,
+  IEntityResult,
+  InitConfig,
+  IONNXWebSettings,
+  ITransformersSettings,
+} from "gliner";
+import {
+  API_BASE,
+  GLINER_TOKENIZER_REPO_ID,
+  glinerModelUrl,
+} from "./constants";
+import {
+  cachedFetchBuffer,
+  withScopedFetchOverride,
+  type FetchProgress,
+} from "./model-cache";
 import type { ModelScenario } from "./scenario";
 import { detectGliner2 as detectGliner2Native } from "./gliner2";
 
@@ -32,12 +46,48 @@ async function disableRemoteModels(): Promise<void> {
 }
 
 const PII_TYPES = [
-  "person", "full_name", "first_name", "middle_name", "last_name", "date_of_birth",
-  "email", "phone_number", "address", "street_address", "city", "state_or_region", "postal_code", "country",
-  "government_id", "national_id_number", "passport_number", "drivers_license_number", "license_number", "tax_id", "tax_number",
-  "bank_account", "account_number", "routing_number", "iban", "payment_card", "card_number", "card_expiry", "card_cvv",
-  "username", "ip_address", "account_id", "sensitive_account_id", "password", "secret", "api_key", "access_token", "recovery_code",
-  "sensitive_date", "document_date", "expiration_date", "transaction_date",
+  "person",
+  "full_name",
+  "first_name",
+  "middle_name",
+  "last_name",
+  "date_of_birth",
+  "email",
+  "phone_number",
+  "address",
+  "street_address",
+  "city",
+  "state_or_region",
+  "postal_code",
+  "country",
+  "government_id",
+  "national_id_number",
+  "passport_number",
+  "drivers_license_number",
+  "license_number",
+  "tax_id",
+  "tax_number",
+  "bank_account",
+  "account_number",
+  "routing_number",
+  "iban",
+  "payment_card",
+  "card_number",
+  "card_expiry",
+  "card_cvv",
+  "username",
+  "ip_address",
+  "account_id",
+  "sensitive_account_id",
+  "password",
+  "secret",
+  "api_key",
+  "access_token",
+  "recovery_code",
+  "sensitive_date",
+  "document_date",
+  "expiration_date",
+  "transaction_date",
 ] as const;
 
 export function listPiiTypes(): readonly string[] {
@@ -103,7 +153,9 @@ export async function ensurePiiModel(
         };
         const model = new GlinerClass(config);
         const modelBytes = await cachedFetchBuffer(modelUrl, onProgress);
-        await withScopedFetchOverride(modelUrl, modelBytes, () => model.initialize());
+        await withScopedFetchOverride(modelUrl, modelBytes, () =>
+          model.initialize(),
+        );
         return model;
       } catch (err) {
         // Don't cache a rejected promise: callers outside warmup's retry loop (e.g. detectPii)
@@ -131,15 +183,22 @@ export async function detectPii(
       "[wasm-pipeline] detectPii called without a ModelScenario — using DEFAULT_SCENARIO; callers should pass selectScenario() output (see plan task 4-5)",
     );
   }
-  const backend = (typeof import.meta !== "undefined" && (import.meta as unknown as { env?: Record<string, string> }).env?.["VITE_NER_BACKEND"])
-    ?? (typeof process !== "undefined" ? process.env["NER_BACKEND"] : undefined)
-    ?? "auto";
+  const backend =
+    (typeof import.meta !== "undefined" &&
+      (import.meta as unknown as { env?: Record<string, string> }).env?.[
+        "VITE_NER_BACKEND"
+      ]) ??
+    (typeof process !== "undefined" ? process.env["NER_BACKEND"] : undefined) ??
+    "auto";
   if (backend !== "legacy") {
     try {
       return await detectGliner2Native(text, types);
     } catch (error) {
       if (backend === "gliner2") throw error;
-      console.warn("[wasm-pipeline] GLiNER2 unavailable; falling back to legacy GLiNER", error);
+      console.warn(
+        "[wasm-pipeline] GLiNER2 unavailable; falling back to legacy GLiNER",
+        error,
+      );
     }
   }
   const model = await ensurePiiModel(scenario);
