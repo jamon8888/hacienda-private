@@ -81,6 +81,19 @@ pub struct CacheWarmParams {
     pub ner_model: Option<String>,
 }
 
+#[cfg_attr(alef, alef(skip))]
+/// Request parameters for a live RAG query over an indexed matter.
+#[derive(Debug, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
+pub struct RagQueryParams {
+    /// Matter id whose index should be searched.
+    pub matter_id: String,
+    /// Natural-language query. Embedded and matched against the matter's vectors.
+    pub query: String,
+    /// Maximum number of chunks to return (default 8, clamped to 1..=100).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub top_k: Option<usize>,
+}
+
 fn extract_input_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
     schemars::json_schema!({
         "type": "object",

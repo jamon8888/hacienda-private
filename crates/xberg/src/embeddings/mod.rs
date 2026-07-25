@@ -182,11 +182,6 @@ pub struct EmbeddingPreset {
 /// All available embedding presets.
 /// SHA-256 manifest pinning every hosted embedding preset file, verified at
 /// download time by [`crate::onnx::download_model_files`].
-#[cfg(any(
-    feature = "embeddings",
-    all(feature = "static-embeddings", not(target_arch = "wasm32")),
-    test
-))]
 pub(crate) const EMBEDDING_SHA256_MANIFEST: &str = include_str!("presets.sha256sum");
 
 pub static EMBEDDING_PRESETS: LazyLock<Vec<EmbeddingPreset>> = LazyLock::new(|| {

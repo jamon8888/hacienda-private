@@ -375,6 +375,79 @@ enum Commands {
         #[arg(value_enum)]
         shell: clap_complete::Shell,
     },
+
+    /// Index and query documents with the native RAG engine
+    ///
+    /// Chunks, embeds, and indexes text files into an on-disk matter store, then
+    /// answers live similarity queries against the actual vectors.
+    Rag {
+        #[command(subcommand)]
+        action: RagAction,
+    },
+}
+
+#[derive(clap::Subcommand)]
+enum RagAction {
+    /// Chunk, embed, and index every text file under a path
+    Index {
+        /// Matter id the documents belong to
+        #[arg(long)]
+        matter: String,
+        /// File or directory to index
+        #[arg(long)]
+        input: PathBuf,
+        /// Mirrors root (defaults to $XBERG_DATA_DIR/mirrors, else ~/.xberg/mirrors)
+        #[arg(long)]
+        mirrors_dir: Option<PathBuf>,
+        /// Embedding backend: preset (real model) or mock (tests only)
+        #[arg(long, value_enum, default_value = "preset")]
+        embedder: commands::EmbedderKind,
+        /// Embedding preset name when --embedder preset
+        #[arg(long, default_value = "lightweight")]
+        preset: String,
+        /// Maximum characters per chunk
+        #[arg(long, default_value_t = 512)]
+        chunk_size: usize,
+    },
+    /// Search a matter's index
+    Query {
+        /// Matter id to search
+        #[arg(long)]
+        matter: String,
+        /// Query text
+        #[arg(long)]
+        text: String,
+        /// Number of results
+        #[arg(long, default_value_t = 8)]
+        top_k: usize,
+        /// Mirrors root (defaults to $XBERG_DATA_DIR/mirrors, else ~/.xberg/mirrors)
+        #[arg(long)]
+        mirrors_dir: Option<PathBuf>,
+        /// Embedding backend: preset (real model) or mock (tests only)
+        #[arg(long, value_enum, default_value = "preset")]
+        embedder: commands::EmbedderKind,
+        /// Embedding preset name when --embedder preset
+        #[arg(long, default_value = "lightweight")]
+        preset: String,
+        /// Output format for results (text or json)
+        #[arg(short, long, default_value = "text")]
+        format: WireFormat,
+    },
+    /// Rebuild a matter's index from a legacy JSON MirrorBundle
+    ImportLegacy {
+        /// Matter id whose bundle.json should be re-embedded
+        #[arg(long)]
+        matter: String,
+        /// Mirrors root (defaults to $XBERG_DATA_DIR/mirrors, else ~/.xberg/mirrors)
+        #[arg(long)]
+        mirrors_dir: Option<PathBuf>,
+        /// Embedding backend: preset (real model) or mock (tests only)
+        #[arg(long, value_enum, default_value = "preset")]
+        embedder: commands::EmbedderKind,
+        /// Embedding preset name when --embedder preset
+        #[arg(long, default_value = "lightweight")]
+        preset: String,
+    },
 }
 
 #[cfg(feature = "api")]
@@ -874,6 +947,45 @@ fn main() -> Result<()> {
             let mut cmd = Cli::command();
             clap_complete::generate(shell, &mut cmd, "xberg", &mut std::io::stdout());
         }
+
+        Commands::Rag { action } => match action {
+            RagAction::Index {
+                matter,
+                input,
+                mirrors_dir,
+                embedder,
+                preset,
+                chunk_size,
+            } => commands::rag_index_command(&matter, &input, mirrors_dir, embedder, &preset, chunk_size)?,
+            RagAction::Query {
+                matter,
+                text,
+                top_k,
+                mirrors_dir,
+                embedder,
+                preset,
+                format,
+            } => {
+                if matches!(format, WireFormat::Toon) {
+                    anyhow::bail!("TOON output is not supported for 'xberg rag query'; use 'text' or 'json'");
+                }
+                commands::rag_query_command(
+                    &matter,
+                    &text,
+                    top_k,
+                    mirrors_dir,
+                    embedder,
+                    &preset,
+                    matches!(format, WireFormat::Json),
+                )?;
+            }
+            RagAction::ImportLegacy {
+                matter,
+                mirrors_dir,
+                embedder,
+                preset,
+            } => commands::rag_import_legacy_command(&matter, mirrors_dir, embedder, &preset)?,
+        },
     }
 
     Ok(())

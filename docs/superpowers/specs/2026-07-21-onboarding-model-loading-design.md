@@ -1,7 +1,7 @@
 # Design: Background Model Warmup + Loading Indicator
 
 **Date:** 2026-07-21
-**Status:** Draft (design spec, no code yet)
+**Status:** Implemented on `feat/isomorphic-rag-core`
 **Author:** brainstorm session
 **Depends on:** `docs/superpowers/specs/2026-07-20-web-ui-lawyer-enhancement.md` (the Onboarding screen there only covers auth token + vault passphrase — this spec adds the model-loading concern that plan doesn't cover)
 
@@ -34,9 +34,9 @@ happens on a user's genuinely first visit (or after a model version bump).
 ## Decisions (from brainstorming)
 
 1. **Trigger:** Warmup starts automatically as soon as the app loads (no button, no separate onboarding page/step). The user reaches `/matters` immediately; warmup runs in the background.
-2. **Gating:** Only the ingest dropzone (upload/drop files) is disabled while warmup is in progress, since it needs both models. Search also requires the E5 model for query embedding — if attempted before warmup finishes, it's blocked with a toast rather than hanging, but is not proactively disabled in the UI. Matters list, browsing, and viewing existing documents are unaffected.
+2. **Gating:** The ingest dropzone and search view are replaced with a preparation placeholder while warmup is in progress, since both require models. Matters list, browsing, and viewing existing documents are unaffected.
 3. **Indicator:** A status pill in the app-shell top bar, next to the planned vault-lock indicator (per the 2026-07-20 plan's App Shell screen): `⏳ Preparing on-device models… 42%` → `✓ Models ready` → `⚠ Models unavailable — Retry`.
-4. **Failure handling:** 3 automatic retries per failing model with exponential backoff (1s / 2s / 4s). On exhaustion, the pill shows an error state with a manual "Retry" action that restarts the whole warmup sequence (including re-running capability detection, in case the failure was scenario-specific).
+4. **Failure handling:** 3 total attempts per failing model (the initial attempt plus 2 automatic retries) with exponential backoff between failures (1s, then 2s). On exhaustion, the pill shows an error state with a manual "Retry" action that restarts the whole warmup sequence (including re-running capability detection, in case the failure was scenario-specific).
 5. **Caching:** Enabled for all four fetched assets, so warmup only takes meaningful time on a genuinely first visit (or after a model version bump). See table below — each asset uses whichever mechanism is simplest given who owns its fetch.
 
 ## Caching Mechanism (per asset)
@@ -54,18 +54,18 @@ fetch-you-already-own or flipping an existing library flag.
 
 ## Architecture
 
-- **`packages/wasm-pipeline/src/warmup.ts`** (new) — `warmupModels(onProgress): Promise<void>`. Runs `detectCapabilities()` → `selectScenario()`, then warms the E5 session/tokenizer and the GLiNER model/tokenizer (parallel where independent), reporting `{ model: "e5" | "gliner", stage, bytesLoaded, bytesTotal }` via `onProgress`. Internally owns the Cache Storage wrapping and the scoped-fetch-override described above.
-- **`apps/web/lib/engine/warmup-store.ts`** (new) — a module-level singleton store (subscribe/getSnapshot pattern, `useSyncExternalStore`-compatible) holding `{ stage: "idle" | "loading" | "ready" | "error", progress: number, error?: string, attempt: number }`. Module-level singleton guarantees warmup runs exactly once per tab even under React strict-mode double-mount, and lets multiple components (pill, ingest dropzone, search) subscribe without prop drilling.
-- **`apps/web/hooks/use-model-warmup.ts`** (new) — thin hook wrapping the store, plus a `retry()` action.
-- **Kickoff** — a small client component mounted once in the root app-shell/layout calls `warmupModels()` on mount (guarded so it only ever fires once per store lifetime).
+- **`packages/wasm-pipeline/src/model-cache.ts`** — owns the Cache Storage wrapper and narrowly scoped fetch override described above.
+- **`packages/wasm-pipeline/src/warmup.ts`** — `warmupModels(onProgress): Promise<WarmupResult>`. Runs `detectCapabilities()` → `selectScenario()`, warms the WASM engine, then warms the E5 and GLiNER sessions in parallel, reporting `{ stage: "engine" | "e5" | "gliner", overall }` via `onProgress`.
+- **`apps/web/lib/engine/warmup-store.ts`** — a module-level singleton store (subscribe/getSnapshot pattern, `useSyncExternalStore`-compatible) holding `{ stage: "idle" | "loading" | "ready" | "error", progress: number, error: string | null, attempt: number }`. It also exports `useModelWarmup()`, `startModelWarmup()`, and the manual retry action; there is no separate hook module.
+- **Kickoff** — `AppShell` calls `startModelWarmup()` on mount. The store's `started` guard makes this idempotent under React strict-mode double-mount.
 - **Consumers:**
   - App-shell top bar renders the status pill from `useModelWarmup()`.
-  - `file-dropzone` (ingest) reads `stage !== "ready"` to disable + show a tooltip reason.
-  - `queryRagForUi` callers check `stage !== "ready"` before querying and show a toast instead of calling through (avoids a hang on the embed call).
+  - `FolderView` reads `stage !== "ready"` and renders a preparation placeholder instead of the ingest dropzone.
+  - `SearchPageInner` reads `stage !== "ready"` and renders the same preparation state instead of calling `queryRag` (avoids a hang on the embed call).
 
 ## Error Handling
 
-- Per-model retry: 3 attempts, backoff 1s/2s/4s, independent per model (E5 failing doesn't block GLiNER retries or vice versa).
+- Per-model retry: 3 total attempts, with 1s/2s backoff before the two retries, independent per model (E5 failing doesn't block GLiNER retries or vice versa).
 - On exhaustion of either model's retries, overall stage → `"error"`; pill shows the error state with a manual retry.
 - Manual retry re-runs the full `warmupModels()` sequence from capability detection, not just the failed model, since a bad scenario pick (e.g. wrong execution provider) could be the actual cause.
 
@@ -74,7 +74,7 @@ fetch-you-already-own or flipping an existing library flag.
 - Unit tests for `warmup.ts` progress math and retry/backoff, mocking `fetch` (colocated `warmup.test.ts`, matching existing `*.test.ts` files in `wasm-pipeline`).
 - Unit test specifically for the scoped-fetch-override: verify `globalThis.fetch` is restored to the original even when the pre-fetch or `model.initialize()` throws.
 - Unit test for the Cache Storage wrap: second call with the same URL doesn't hit the network.
-- Playwright e2e smoke test: app loads → pill shows loading → ingest disabled → (mocked fast model responses) → pill shows ready → ingest enabled.
+- Vitest + Testing Library integration coverage verifies loading → ready transitions and the search/ingest gates. A web Playwright harness was not added because this repository has no root/app-level Playwright configuration.
 
 ## Out of Scope
 
