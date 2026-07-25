@@ -144,8 +144,15 @@ impl LoraAdapter {
                 crate::candle::GlinerCandleError::Backend(format!("lora: missing lora_B for module {path}"))
             })?;
             // Validate LoRA matrix ranks against config.r
-            let a_rank = lora_a.shape().dims()[0];
-            let b_rank = lora_b.shape().dims()[1];
+            let a_dims = lora_a.shape().dims();
+            let b_dims = lora_b.shape().dims();
+            if a_dims.len() != 2 || b_dims.len() != 2 {
+                return Err(crate::candle::GlinerCandleError::Backend(format!(
+                    "lora: module {path}: expected rank-2 A/B tensors, got A={a_dims:?} B={b_dims:?}"
+                )));
+            }
+            let a_rank = a_dims[0];
+            let b_rank = b_dims[1];
             if a_rank != r {
                 return Err(crate::candle::GlinerCandleError::Backend(format!(
                     "lora: module {path}: lora_A rank {a_rank} != config.r {r}"
@@ -157,8 +164,8 @@ impl LoraAdapter {
                 )));
             }
             // Validate A/B multiplication dimensions are compatible: A=[r, in], B=[out, r]
-            let a_in = lora_a.shape().dims()[1];
-            let b_out = lora_b.shape().dims()[0];
+            let a_in = a_dims[1];
+            let b_out = b_dims[0];
             if a_in == 0 || b_out == 0 {
                 return Err(crate::candle::GlinerCandleError::Backend(format!(
                     "lora: module {path}: invalid A/B shapes A={:?} B={:?}",

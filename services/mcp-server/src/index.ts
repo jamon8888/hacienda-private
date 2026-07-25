@@ -1,7 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { createRequire } from "node:module";
 import { basename, dirname, extname, join, normalize, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AppConfig, buildConfig, parseArgs } from "./config.js";
@@ -97,11 +96,29 @@ async function configureNativeGliner2(): Promise<boolean> {
         },
       });
       return true;
-    } catch {
+    } catch (error) {
+      console.warn(
+        `[xberg-mcp] native Candle GLiNER2 backend unavailable, falling back to legacy ONNX NER: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
       return false;
     }
   })();
   return nativeGliner2Ready;
+}
+
+const NER_BACKENDS = ["auto", "legacy", "candle"] as const;
+type NerBackendSetting = (typeof NER_BACKENDS)[number];
+
+function resolveNerBackendSetting(): NerBackendSetting {
+  const raw = process.env.HACIENDA_NER_BACKEND;
+  if (raw === undefined) return "auto";
+  if ((NER_BACKENDS as readonly string[]).includes(raw)) return raw as NerBackendSetting;
+  throw new AppError(
+    "bad_request",
+    `invalid HACIENDA_NER_BACKEND '${raw}': expected one of ${NER_BACKENDS.join(", ")}`,
+  );
 }
 
 // Extensions walkFolder() will hand us — kept in sync with node-pipeline's own
@@ -136,8 +153,11 @@ async function getXbergWasm(): Promise<typeof import("@xberg-io/xberg-wasm")> {
   if (!xbergWasmReady) {
     xbergWasmReady = (async () => {
       const wasm = await import("@xberg-io/xberg-wasm");
-      const wasmRequire = createRequire(import.meta.url);
-      const entryPath = wasmRequire.resolve("@xberg-io/xberg-wasm");
+      // Resolve via import.meta.resolve (ESM resolution), not createRequire(...).resolve
+      // (CJS resolution): Vitest's `resolve.alias` only rewrites ESM import specifiers, so a
+      // CJS-resolved path would point at the installed package instead of the aliased
+      // workspace build under test, pairing the wrong .wasm binary with the aliased JS.
+      const entryPath = fileURLToPath(import.meta.resolve("@xberg-io/xberg-wasm"));
       const wasmBinaryPath = join(dirname(entryPath), "xberg_wasm_bg.wasm");
       const wasmBytes = await readFile(wasmBinaryPath);
       await wasm.default(wasmBytes);
@@ -640,13 +660,18 @@ export function createAppContext(config: AppConfig): AppContext {
       return embedText(text, modelPath, tokenizerPath);
     },
     detectPii: async (text: string) => {
-      const backend = process.env.HACIENDA_NER_BACKEND ?? "auto";
+      const backend = resolveNerBackendSetting();
       if (backend !== "legacy" && (await configureNativeGliner2())) {
         try {
           const { modelDir } = await gliner2Paths();
           return detectGliner2(text, modelDir, RUST_ALIGNED_PII_TYPES);
         } catch (error) {
           if (backend === "candle") throw error;
+          console.warn(
+            `[xberg-mcp] Candle GLiNER2 detection failed, falling back to legacy ONNX NER: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
         }
       }
       if (backend === "candle") {

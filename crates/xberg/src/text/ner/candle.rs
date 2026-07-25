@@ -156,16 +156,30 @@ impl NerBackend for CandleBackend {
 
         // extract_ner is CPU-bound (tensor inference). On native targets, block_in_place
         // signals tokio to move other tasks off this thread for the duration without
-        // requiring Send. wasm32 has no multi-threaded tokio runtime (and is single-threaded
-        // regardless), so extract_ner is called directly; it is already synchronous.
+        // requiring Send. block_in_place panics outside a multi-threaded Tokio runtime
+        // (current-thread runtimes, or no runtime at all), so it's only used when we can
+        // confirm we're on one; otherwise inference runs directly on the calling task,
+        // same as wasm32. wasm32 has no multi-threaded tokio runtime (and is
+        // single-threaded regardless), so extract_ner is called directly there too; it
+        // is already synchronous.
         #[cfg(not(target_arch = "wasm32"))]
-        let spans = tokio::task::block_in_place(|| {
-            let model = self
-                .model
-                .lock()
-                .map_err(|_| GlinerCandleError::Backend("CandleBackend: model mutex poisoned".to_string()))?;
-            model.extract_ner(text, &labels, DEFAULT_THRESHOLD)
-        })
+        let spans = {
+            let extract = || {
+                let model = self
+                    .model
+                    .lock()
+                    .map_err(|_| GlinerCandleError::Backend("CandleBackend: model mutex poisoned".to_string()))?;
+                model.extract_ner(text, &labels, DEFAULT_THRESHOLD)
+            };
+            let on_multi_thread_runtime = tokio::runtime::Handle::try_current()
+                .map(|handle| handle.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread)
+                .unwrap_or(false);
+            if on_multi_thread_runtime {
+                tokio::task::block_in_place(extract)
+            } else {
+                extract()
+            }
+        }
         .map_err(|e| crate::XbergError::Plugin {
             message: format!("CandleBackend inference: {e}"),
             plugin_name: "ner-candle".to_string(),

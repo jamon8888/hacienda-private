@@ -53,7 +53,10 @@ impl Encoder {
     /// Load the encoder from an already-built tensor map (shared loading path).
     ///
     /// The caller is responsible for loading the safetensors file once and
-    /// passing the relevant subset scoped to the `encoder.` prefix.
+    /// passing the relevant subset; keys keep their original `encoder.`
+    /// prefix (see [`crate::candle::Gliner2Candle::from_bytes`]'s split by
+    /// `starts_with("encoder.")`), so this scopes into that prefix itself
+    /// rather than expecting pre-stripped keys.
     pub fn from_tensors(
         tensors: HashMap<String, Tensor>,
         config: &DebertaV2Config,
@@ -61,7 +64,7 @@ impl Encoder {
         dtype: candle_core::DType,
     ) -> crate::candle::Result<Self> {
         let vb = VarBuilder::from_tensors(tensors, dtype, device);
-        Self::from_var_builder(vb, config)
+        Self::from_var_builder(vb.pp("encoder"), config)
     }
 
     /// Load the encoder from an already-built [`VarBuilder`] + parsed config.

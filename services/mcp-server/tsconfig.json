@@ -14,7 +14,7 @@
     "types": ["node"],
     "paths": {
       "@xberg-io/node-pipeline": ["../../packages/node-pipeline/src/index.ts"],
-      "@xberg-io/xberg-wasm": ["./src/xberg-wasm-shim.d.ts"]
+      "@xberg-io/xberg-wasm": ["../../crates/xberg-wasm/pkg/web/xberg_wasm.d.ts", "./src/xberg-wasm-shim.d.ts"]
     }
   },
   "include": ["src"]
