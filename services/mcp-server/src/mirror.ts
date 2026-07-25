@@ -189,7 +189,10 @@ export class MirrorStore {
     this.validateMatterId(matterId);
     const meta = this.metaPath(matterId);
     if (!existsSync(meta)) return null;
-    const raw = JSON.parse(readFileSync(meta, "utf8")) as { matter_id: string; synced_at: string };
+    const raw = JSON.parse(readFileSync(meta, "utf8")) as {
+      matter_id: string;
+      synced_at: string;
+    };
     const idx = this.indexPath(matterId);
     const bytes = existsSync(idx) ? readFileSync(idx).length : 0;
     return { matter_id: raw.matter_id, synced_at: raw.synced_at, bytes };

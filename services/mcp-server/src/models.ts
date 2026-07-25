@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { chmodSync } from "node:fs";
 import { dirname } from "node:path";
 import type { ModelManifest, ModelManifestEntry } from "@xberg-io/core";
@@ -170,12 +170,17 @@ export class ModelCache {
         this.verified.set(cachePath, stamp);
         return cachePath;
       }
+      // Remove the invalid cache entry so the next request re-downloads instead of
+      // hitting this same mismatch on every call, requiring manual cache cleanup.
+      this.verified.delete(cachePath);
+      rmSync(cachePath, { force: true });
       throw new AppError("model", `cached model '${name}' SHA256 mismatch — refusing to serve`);
     }
 
     const downloaded = await this.download(entry, cachePath);
     const actual = await sha256File(downloaded);
     if (actual !== entry.sha256) {
+      rmSync(downloaded, { force: true });
       throw new AppError("model", `downloaded model '${name}' SHA256 mismatch — refusing to serve`);
     }
     this.verified.set(downloaded, this.fileStamp(downloaded));

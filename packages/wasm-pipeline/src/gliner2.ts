@@ -1,12 +1,5 @@
-import { API_BASE } from "./constants";
-import { cachedFetchBuffer, type FetchProgress } from "./model-cache";
-
-const MODEL_BASE = `${API_BASE}/models/gliner2/gliner2-guardrails-pii-multi`;
-const MODEL_URLS = {
-  weights: `${MODEL_BASE}/model.safetensors`,
-  tokenizer: `${MODEL_BASE}/tokenizer.json`,
-  encoderConfig: `${MODEL_BASE}/encoder_config/config.json`,
-} as const;
+import { GLINER2_MODEL_SHA256, GLINER2_MODEL_URLS } from "./constants";
+import { cachedFetchVerifiedBuffer, type FetchProgress } from "./model-cache";
 
 interface Gliner2Session {
   loadBytes(weights: Uint8Array, tokenizer: Uint8Array, encoderConfig: Uint8Array): void;
@@ -35,7 +28,9 @@ class Gliner2WorkerSession implements Gliner2Session {
   private readonly pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>();
 
   constructor() {
-    this.worker = new Worker(new URL("./gliner2-worker.ts", import.meta.url), { type: "module" });
+    this.worker = new Worker(new URL("./gliner2-worker.ts", import.meta.url), {
+      type: "module",
+    });
     this.worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
       const request = this.pending.get(event.data.id);
       if (!request) return;
@@ -86,18 +81,49 @@ class Gliner2WorkerSession implements Gliner2Session {
       this.worker.postMessage({ id, command, args }, transfer);
     });
   }
+
+  /** Reject any in-flight requests and terminate the worker (and its loaded model). */
+  dispose(): void {
+    for (const request of this.pending.values()) request.reject(new Error("GLiNER2 Worker session was reset"));
+    this.pending.clear();
+    this.worker.terminate();
+  }
 }
 
 let sessionPromise: Promise<Gliner2Session> | null = null;
+// Tracked separately from sessionPromise: set synchronously as soon as the worker is
+// constructed (not once `ready` resolves), so a reset can terminate a worker that's still
+// loading — or hung — instead of waiting on a promise that may never settle.
+let activeWorkerSession: Gliner2WorkerSession | null = null;
 
 export function resetGliner2Model(): void {
+  const previousPromise = sessionPromise;
+  const previousWorker = activeWorkerSession;
   sessionPromise = null;
+  activeWorkerSession = null;
+  if (previousWorker) {
+    previousWorker.dispose();
+    return;
+  }
+  if (!previousPromise) return;
+  // Dispose asynchronously: a dedicated worker (and its loaded model) must not be left
+  // running just because the session promise reference was cleared.
+  void previousPromise
+    .then((session) => {
+      if (session instanceof Gliner2WorkerSession) session.dispose();
+    })
+    .catch(() => {
+      // A session that failed to load has nothing to dispose of.
+    });
 }
 
 export async function ensureGliner2Model(onProgress?: (progress: FetchProgress) => void): Promise<Gliner2Session> {
-  sessionPromise ??= (async () => {
+  if (sessionPromise) return sessionPromise;
+  let worker: Gliner2WorkerSession | null = null;
+  const attempt: Promise<Gliner2Session> = (async () => {
     if (typeof Worker !== "undefined" && typeof window !== "undefined") {
-      const worker = new Gliner2WorkerSession();
+      worker = new Gliner2WorkerSession();
+      activeWorkerSession = worker;
       await worker.ready;
       return worker;
     }
@@ -106,18 +132,21 @@ export async function ensureGliner2Model(onProgress?: (progress: FetchProgress) 
       throw new Error("GLiNER2 is unavailable in this WASM package; regenerate xberg-wasm first");
     }
     const [weights, tokenizer, encoderConfig] = await Promise.all([
-      cachedFetchBuffer(MODEL_URLS.weights, onProgress),
-      cachedFetchBuffer(MODEL_URLS.tokenizer, onProgress),
-      cachedFetchBuffer(MODEL_URLS.encoderConfig, onProgress),
+      cachedFetchVerifiedBuffer(GLINER2_MODEL_URLS.weights, GLINER2_MODEL_SHA256.weights, onProgress),
+      cachedFetchVerifiedBuffer(GLINER2_MODEL_URLS.tokenizer, GLINER2_MODEL_SHA256.tokenizer, onProgress),
+      cachedFetchVerifiedBuffer(GLINER2_MODEL_URLS.encoderConfig, GLINER2_MODEL_SHA256.encoderConfig, onProgress),
     ]);
     const model = new wasm.Gliner2Model();
     model.loadBytes(new Uint8Array(weights), new Uint8Array(tokenizer), new Uint8Array(encoderConfig));
     return model;
   })().catch((error) => {
-    sessionPromise = null;
+    // Only clear shared state if a reset (or a newer session) hasn't already replaced it.
+    if (sessionPromise === attempt) sessionPromise = null;
+    if (worker && activeWorkerSession === worker) activeWorkerSession = null;
     throw error;
   });
-  return sessionPromise;
+  sessionPromise = attempt;
+  return attempt;
 }
 
 export async function detectGliner2(
@@ -130,5 +159,10 @@ export async function detectGliner2(
     model instanceof Gliner2WorkerSession
       ? await model.extract(text, [...labels], threshold)
       : model.extractNer(text, [...labels], threshold);
-  return spans.map((span) => ({ kind: span.label, start: span.start, end: span.end, text: span.text }));
+  return spans.map((span) => ({
+    kind: span.label,
+    start: span.start,
+    end: span.end,
+    text: span.text,
+  }));
 }

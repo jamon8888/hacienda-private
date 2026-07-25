@@ -135,7 +135,10 @@ export async function ingestFolder(ctx: AppContext, principal: Principal, args: 
         ingestedVia: "mcp",
       });
       if (doc.status === "error") {
-        errors.push({ path: file.path, message: doc.error_message ?? "unknown error" });
+        errors.push({
+          path: file.path,
+          message: doc.error_message ?? "unknown error",
+        });
       } else {
         processed += 1;
         piiFound += doc.pii_count;
@@ -193,7 +196,11 @@ export function createMatter(ctx: AppContext, principal: Principal, args: Create
 export function registerTools(server: McpServer, ctx: AppContext, principal: Principal): void {
   server.tool(
     "rag_query",
-    { matter_id: z.string(), query: z.string(), top_k: z.number().int().min(1).optional() },
+    {
+      matter_id: z.string(),
+      query: z.string(),
+      top_k: z.number().int().min(1).optional(),
+    },
     async (args) => ragQuery(ctx, principal, args),
   );
 
@@ -209,7 +216,11 @@ export function registerTools(server: McpServer, ctx: AppContext, principal: Pri
 
   server.tool(
     "redact",
-    { matter_id: z.string(), doc_id: z.string(), entity_ids: z.array(z.string()).optional() },
+    {
+      matter_id: z.string(),
+      doc_id: z.string(),
+      entity_ids: z.array(z.string()).optional(),
+    },
     async (args) => redact(ctx, principal, args),
   );
 

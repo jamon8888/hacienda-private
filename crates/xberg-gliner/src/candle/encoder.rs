@@ -4,6 +4,7 @@
 //! hidden states. Deliberately uses the upstream Candle implementation rather
 //! than rolling a custom DeBERTa-v2 disentangled-attention module.
 
+use std::collections::HashMap;
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
 
@@ -49,19 +50,19 @@ impl Encoder {
         Ok(Self { model, config })
     }
 
-    /// Load the encoder from in-memory safetensors bytes + parsed config
-    /// (wasm/no-fs path). Mirrors [`Self::from_safetensors`] but reads the
-    /// weights from a buffer instead of mmap'ing a path. `dtype` lets wasm32
-    /// callers request `DType::F16` to halve resident memory after loading;
-    /// the source safetensors bytes are always F32, so this only affects
-    /// in-memory footprint, not download size.
-    pub fn from_buffered_safetensors(
-        bytes: &[u8],
+    /// Load the encoder from an already-built tensor map (shared loading path).
+    ///
+    /// The caller is responsible for loading the safetensors file once and
+    /// passing the relevant subset; keys keep their original `encoder.`
+    /// prefix (see [`crate::candle::Gliner2Candle::from_bytes`]'s split by
+    /// `starts_with("encoder.")`), so this scopes into that prefix itself
+    /// rather than expecting pre-stripped keys.
+    pub fn from_tensors(
+        tensors: HashMap<String, Tensor>,
         config: &DebertaV2Config,
         device: &Device,
         dtype: candle_core::DType,
     ) -> crate::candle::Result<Self> {
-        let tensors = crate::candle::streaming_load::load_buffer_streaming(bytes, device, dtype)?;
         let vb = VarBuilder::from_tensors(tensors, dtype, device);
         Self::from_var_builder(vb.pp("encoder"), config)
     }
@@ -81,6 +82,28 @@ impl Encoder {
             model,
             config: config.clone(),
         })
+    }
+
+    /// Load the encoder from a pre-loaded tensor map (shared with heads).
+    ///
+    /// This avoids loading the entire safetensors file twice when both encoder
+    /// and heads are loaded from the same file. The tensor map should contain
+    /// all tensors, and this function scopes it to the `encoder.` prefix.
+    pub fn from_tensor_map(
+        tensors: &HashMap<String, Tensor>,
+        config: &DebertaV2Config,
+        device: &Device,
+        dtype: candle_core::DType,
+    ) -> crate::candle::Result<Self> {
+        // Filter tensors with "encoder." prefix and strip it
+        let mut encoder_tensors = HashMap::new();
+        for (key, tensor) in tensors {
+            if let Some(stripped) = key.strip_prefix("encoder.") {
+                encoder_tensors.insert(stripped.to_string(), tensor.clone());
+            }
+        }
+        let vb = VarBuilder::from_tensors(encoder_tensors, dtype, device);
+        Self::from_var_builder(vb, config)
     }
 
     /// Run the encoder forward pass. Returns hidden states of shape

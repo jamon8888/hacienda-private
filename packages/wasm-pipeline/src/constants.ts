@@ -42,6 +42,21 @@ export const GRANITE_EMBEDDING_FALLBACK_SHA256 = {
   config: "de948b0bdc6f356afad7a84b276d8dd7e7fe10fb9add1bb5e610621c28e41ebc",
 } as const;
 
+// GLiNER2 Guardrails PII Multi model artifacts (Candle/WASM NER backend). Shared between
+// gliner2.ts (main-thread loading path) and gliner2-worker.ts (dedicated-worker path) so both
+// verify the same pinned digests instead of drifting independently.
+export const GLINER2_MODEL_BASE = `${API_BASE}/models/gliner2/gliner2-guardrails-pii-multi`;
+export const GLINER2_MODEL_URLS = {
+  weights: `${GLINER2_MODEL_BASE}/model.safetensors`,
+  tokenizer: `${GLINER2_MODEL_BASE}/tokenizer.json`,
+  encoderConfig: `${GLINER2_MODEL_BASE}/encoder_config/config.json`,
+} as const;
+export const GLINER2_MODEL_SHA256 = {
+  weights: "82ee0ed2483aa7eae3483e95b8622139f5bc7697de3294aec4d0d7088bdb7658",
+  tokenizer: "f6df10ec83bea993035b2dd7c39345a3d4fcf23421c2adb6cb4ffc1e6d1bc4b5",
+  encoderConfig: "f27dd63cc43a248d2566f0b6ad7a115db353676ce0561dcbca45bac766464c1a",
+} as const;
+
 // Bare repo-id (not a full URL): `@xenova/transformers`' `AutoTokenizer.from_pretrained()` always
 // appends "/tokenizer.json" itself, so this is joined with `env.localModelPath` (see ner.ts) to
 // produce `${API_BASE}/models/gliner-pii/tokenizer.json` — matching manifest.json's

@@ -88,6 +88,14 @@ export async function cachedFetchVerifiedBuffer(
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   const actual = Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join("");
   if (actual !== expectedSha256.toLowerCase()) {
+    // Evict the bad entry so the next call refetches instead of failing on this same
+    // stale/corrupt cached response forever.
+    try {
+      const cache = await openCache();
+      await cache?.delete(url);
+    } catch {
+      // Best-effort: if eviction fails, the caller still sees the mismatch error below.
+    }
     throw new Error(`model artifact checksum mismatch for ${url}`);
   }
   return bytes.buffer;

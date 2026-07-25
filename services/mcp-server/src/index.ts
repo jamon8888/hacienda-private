@@ -1,7 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { createRequire } from "node:module";
 import { basename, dirname, extname, join, normalize, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AppConfig, buildConfig, parseArgs } from "./config.js";
@@ -53,7 +52,11 @@ export interface AppContext {
  */
 export function ensureGliner2ModelArtifacts(
   ctx: AppContext,
-  names: { weights: string; tokenizer: string; encoderConfig: string } = GLINER2_MANIFEST_NAMES,
+  names: {
+    weights: string;
+    tokenizer: string;
+    encoderConfig: string;
+  } = GLINER2_MANIFEST_NAMES,
 ): Promise<Gliner2ArtifactPaths> {
   return ctx.models.ensureGliner2Artifacts(names);
 }
@@ -67,7 +70,14 @@ type NativeGliner2Module = typeof import("@xberg-io/xberg") & {
     adapterDir: string | undefined,
     categories: unknown[],
     customLabels: string[],
-  ): Promise<ReadonlyArray<{ category: unknown; start: number; end: number; text: string }>>;
+  ): Promise<
+    ReadonlyArray<{
+      category: unknown;
+      start: number;
+      end: number;
+      text: string;
+    }>
+  >;
 };
 
 async function configureNativeGliner2(): Promise<boolean> {
@@ -86,11 +96,29 @@ async function configureNativeGliner2(): Promise<boolean> {
         },
       });
       return true;
-    } catch {
+    } catch (error) {
+      console.warn(
+        `[xberg-mcp] native Candle GLiNER2 backend unavailable, falling back to legacy ONNX NER: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
       return false;
     }
   })();
   return nativeGliner2Ready;
+}
+
+const NER_BACKENDS = ["auto", "legacy", "candle"] as const;
+type NerBackendSetting = (typeof NER_BACKENDS)[number];
+
+function resolveNerBackendSetting(): NerBackendSetting {
+  const raw = process.env.HACIENDA_NER_BACKEND;
+  if (raw === undefined) return "auto";
+  if ((NER_BACKENDS as readonly string[]).includes(raw)) return raw as NerBackendSetting;
+  throw new AppError(
+    "bad_request",
+    `invalid HACIENDA_NER_BACKEND '${raw}': expected one of ${NER_BACKENDS.join(", ")}`,
+  );
 }
 
 // Extensions walkFolder() will hand us — kept in sync with node-pipeline's own
@@ -125,8 +153,11 @@ async function getXbergWasm(): Promise<typeof import("@xberg-io/xberg-wasm")> {
   if (!xbergWasmReady) {
     xbergWasmReady = (async () => {
       const wasm = await import("@xberg-io/xberg-wasm");
-      const wasmRequire = createRequire(import.meta.url);
-      const entryPath = wasmRequire.resolve("@xberg-io/xberg-wasm");
+      // Resolve via import.meta.resolve (ESM resolution), not createRequire(...).resolve
+      // (CJS resolution): Vitest's `resolve.alias` only rewrites ESM import specifiers, so a
+      // CJS-resolved path would point at the installed package instead of the aliased
+      // workspace build under test, pairing the wrong .wasm binary with the aliased JS.
+      const entryPath = fileURLToPath(import.meta.resolve("@xberg-io/xberg-wasm"));
       const wasmBinaryPath = join(dirname(entryPath), "xberg_wasm_bg.wasm");
       const wasmBytes = await readFile(wasmBinaryPath);
       await wasm.default(wasmBytes);
@@ -194,7 +225,11 @@ function serveFile(res: ServerResponse, filePath: string): void {
   // giant-model serves to look like a multi-minute stall. createReadStream().pipe() yields between
   // chunks and streams straight to the socket.
   const size = statSync(filePath).size;
-  res.writeHead(200, { "content-type": ct, "content-length": String(size), ...ISOLATION_HEADERS });
+  res.writeHead(200, {
+    "content-type": ct,
+    "content-length": String(size),
+    ...ISOLATION_HEADERS,
+  });
   const stream = createReadStream(filePath);
   stream.on("error", () => {
     // Headers are already sent, so we can't switch to a 5xx — just tear the connection down so
@@ -390,7 +425,11 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
   }
   if (pathname === "/api/folders" && method === "POST") {
     authorize(principal.scopes, "ingest");
-    const body = await readJson<{ matter_id: string; name: string; path?: string }>(req);
+    const body = await readJson<{
+      matter_id: string;
+      name: string;
+      path?: string;
+    }>(req);
     if (!body.matter_id || !body.name) throw new AppError("bad_request", "matter_id and name are required");
     const folder = ctx.store.createFolder(body.matter_id, body.name, body.path);
     sendJson(res, 201, folder);
@@ -406,7 +445,12 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
   }
   if (pathname === "/api/consent" && method === "POST") {
     authorize(principal.scopes, "admin");
-    const body = await readJson<{ subject: string; matter_id: string; scope: string; expires_at?: string }>(req);
+    const body = await readJson<{
+      subject: string;
+      matter_id: string;
+      scope: string;
+      expires_at?: string;
+    }>(req);
     if (!body.subject || !body.matter_id || !body.scope) {
       throw new AppError("bad_request", "subject, matter_id and scope are required");
     }
@@ -547,14 +591,20 @@ export function createAppContext(config: AppConfig): AppContext {
 
   // Launch-time scopes from XBERG_SCOPES env (default: all). HTTP auth derives per-request Principal.
   const launchScopes = resolveLaunchScopes(process.env);
-  const httpAuth: HttpAuth = { token: config.sessionToken, scopes: launchScopes };
+  const httpAuth: HttpAuth = {
+    token: config.sessionToken,
+    scopes: launchScopes,
+  };
 
   // ModelCache.ensureModel() re-hashes the full cached model file on every call, even on a cache
   // hit — embed()/detectPii() are called once per chunk/document, so resolving these paths fresh
   // each time would make repeated hashing dominate ingestion cost far more than actual inference.
   // Memoized once per AppContext (mirrors the getXbergWasm lazy-promise pattern above), not
   // module-level, so a fresh createAppContext (e.g. in tests) doesn't reuse another context's cache.
-  let e5PathsPromise: Promise<{ modelPath: string; tokenizerPath: string }> | null = null;
+  let e5PathsPromise: Promise<{
+    modelPath: string;
+    tokenizerPath: string;
+  }> | null = null;
   const e5Paths = () => {
     e5PathsPromise ??= (async () => ({
       modelPath: await models.ensureModel("e5-fp32"),
@@ -562,7 +612,10 @@ export function createAppContext(config: AppConfig): AppContext {
     }))();
     return e5PathsPromise;
   };
-  let glinerPathsPromise: Promise<{ modelPath: string; tokenizerPath: string }> | null = null;
+  let glinerPathsPromise: Promise<{
+    modelPath: string;
+    tokenizerPath: string;
+  }> | null = null;
   const glinerPaths = () => {
     glinerPathsPromise ??= (async () => ({
       modelPath: await models.ensureModel(`${DEFAULT_GLINER_MODEL}.model`),
@@ -589,7 +642,10 @@ export function createAppContext(config: AppConfig): AppContext {
       const output = await wasm.extract(input, undefined);
       const first = output.results[0];
       if (!first) throw new Error(`extraction produced no result for ${path}`);
-      return { content: first.content ?? "", pageCount: first.metadata?.pages?.totalCount ?? 1 };
+      return {
+        content: first.content ?? "",
+        pageCount: first.metadata?.pages?.totalCount ?? 1,
+      };
     },
     chunk: (content: string) => {
       const CHUNK_SIZE = 1024;
@@ -604,13 +660,18 @@ export function createAppContext(config: AppConfig): AppContext {
       return embedText(text, modelPath, tokenizerPath);
     },
     detectPii: async (text: string) => {
-      const backend = process.env.HACIENDA_NER_BACKEND ?? "auto";
+      const backend = resolveNerBackendSetting();
       if (backend !== "legacy" && (await configureNativeGliner2())) {
         try {
           const { modelDir } = await gliner2Paths();
-          return detectGliner2(text, modelDir, RUST_ALIGNED_PII_TYPES);
+          return await detectGliner2(text, modelDir, RUST_ALIGNED_PII_TYPES);
         } catch (error) {
           if (backend === "candle") throw error;
+          console.warn(
+            `[xberg-mcp] Candle GLiNER2 detection failed, falling back to legacy ONNX NER: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
         }
       }
       if (backend === "candle") {
@@ -632,7 +693,11 @@ export function createHttpServer(ctx: AppContext, authOverride?: HttpAuth) {
         sendJson(res, err.status, err.toJSON());
       } else {
         const msg = err instanceof Error ? err.message : "internal error";
-        sendJson(res, 500, { error: "InternalError", code: "store", message: msg });
+        sendJson(res, 500, {
+          error: "InternalError",
+          code: "store",
+          message: msg,
+        });
       }
     });
   });

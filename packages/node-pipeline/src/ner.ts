@@ -154,13 +154,20 @@ async function getModel(modelPath: string, tokenizerPath: string): Promise<Gline
     cached = (async () => {
       const { Gliner: GlinerClass } = await import("gliner");
       await disableRemoteModels();
-      const transformersSettings: ITransformersSettings = { allowLocalModels: true, useBrowserCache: false };
+      const transformersSettings: ITransformersSettings = {
+        allowLocalModels: true,
+        useBrowserCache: false,
+      };
       const onnxSettings: IONNXWebSettings = {
         modelPath,
         executionProvider: "wasm",
         wasmPaths: resolveLocalOnnxWasmPaths(),
       };
-      const config: InitConfig = { tokenizerPath, onnxSettings, transformersSettings };
+      const config: InitConfig = {
+        tokenizerPath,
+        onnxSettings,
+        transformersSettings,
+      };
       const model = new GlinerClass(config);
       await model.initialize();
       return model;
@@ -182,7 +189,17 @@ export async function detectPii(
   types: readonly string[] = RUST_ALIGNED_PII_TYPES,
 ): Promise<DetectedEntity[]> {
   const model = await getModel(modelPath, tokenizerPath);
-  const result = await model.inference({ texts: [text], entities: [...types], flatNer: true, threshold: 0.5 });
+  const result = await model.inference({
+    texts: [text],
+    entities: [...types],
+    flatNer: true,
+    threshold: 0.5,
+  });
   const ents = result[0] ?? [];
-  return ents.map((e: IEntityResult) => ({ kind: e.label, start: e.start, end: e.end, text: e.spanText }));
+  return ents.map((e: IEntityResult) => ({
+    kind: e.label,
+    start: e.start,
+    end: e.end,
+    text: e.spanText,
+  }));
 }

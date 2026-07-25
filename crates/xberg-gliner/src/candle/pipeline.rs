@@ -92,7 +92,7 @@ pub(crate) fn run_pipeline(
     // 7. Count LSTM (GRU): struct_proj [pred_count, F, H].
     let struct_proj = heads
         .count_lstm
-        .forward(&sg_out.field_embs, pred_count, device)
+        .forward(&sg_out.field_embs, pred_count)
         .map_err(|e| crate::candle::GlinerCandleError::Backend(format!("[pipeline:7 count_lstm] {e}")))?;
 
     // 8. Scorer: [pred_count, F, num_words, MAX_WIDTH] sigmoid scores.

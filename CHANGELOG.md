@@ -77,7 +77,9 @@ compile for end users.
   heads, runtime PEFT LoRA adapter merge-at-load, and a streaming safetensors loader that
   converts F32 to F16 from raw bytes. Enable `ner-candle` and construct
   `text::ner::candle::CandleBackend` from a model directory; the redaction pipeline and the NER
-  post-processor consume it through the existing `NerBackend` trait.
+  post-processor consume it through the existing `NerBackend` trait. Public
+  `NerConfig` dispatch and generated Node/WASM binding exposure remain
+  follow-up work.
 
 - **Scanned PDFs are now detectable, and can be OCR'd without forcing OCR on the whole file.**
   PDF metadata gains `scanned_confidence` (0.0–1.0) and `scanned_pages`, so you can tell whether a

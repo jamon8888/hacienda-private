@@ -1,8 +1,8 @@
 [workspace]
 members = [
     "crates/xberg",
-    "crates/xberg-candle-ocr",
     "crates/xberg-candle-embed",
+    "crates/xberg-candle-ocr",
     "crates/xberg-cli",
     "crates/xberg-ffi",
     "crates/xberg-gliner",
@@ -122,8 +122,8 @@ web-sys = { version = "0.3", features = [
     "Response",
 ] }
 xberg = { path = "./crates/xberg", version = "1.0.0-rc.29", default-features = false }
-xberg-gliner = { path = "./crates/xberg-gliner", version = "1.0.0-rc.29", default-features = false }
 xberg-candle-embed = { path = "./crates/xberg-candle-embed", version = "1.0.0-rc.29", default-features = false }
+xberg-gliner = { path = "./crates/xberg-gliner", version = "1.0.0-rc.29", default-features = false }
 xberg-rag = { path = "./crates/xberg-rag", version = "1.0.0-rc.29", default-features = false }
 
 [patch.crates-io]
@@ -154,7 +154,22 @@ opt-level = "z"
 
 [profile.dev]
 opt-level = 0
-debug = true
+debug = "line-tables-only"
+
+[profile.dev.build-override]
+debug = false
+
+[profile.dev.package."*"]
+debug = false
+
+[profile.test]
+debug = "line-tables-only"
+
+[profile.test.build-override]
+debug = false
+
+[profile.test.package."*"]
+debug = false
 
 [profile.profiling]
 inherits = "release"
