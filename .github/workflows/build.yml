@@ -24,6 +24,19 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.95"
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/xberg-wasm
+
+      - uses: jetli/wasm-pack-action@v0.4.0
+        with:
+          version: v0.15.0
+
       - name: Install dependencies
         run: |
           if [ -f pnpm-lock.yaml ]; then
@@ -31,6 +44,12 @@ jobs:
           else
             pnpm install
           fi
+
+      # apps/web imports @xberg-io/xberg-wasm as a workspace package (crates/xberg-wasm),
+      # so its wasm-pack output (pkg/web/*.js + *.d.ts) must exist before the web build
+      # can resolve or typecheck it. Default features only — no libheif/wasi-sdk needed.
+      - name: Build @xberg-io/xberg-wasm (wasm-pack)
+        run: pnpm --filter @xberg-io/xberg-wasm build
 
       - name: Build web UI (static export)
         run: pnpm --filter web build
