@@ -102,10 +102,9 @@ tasks:
 
   build:fast:windows:
     desc: "Fast local Rust build for the xberg core crate (Windows)"
-    cmds:
-      - task: rust:build:fast:windows
     platforms: [windows]
     cmds:
+      - task: rust:build:fast:windows
       - task: rust:build:fast:cranelift
 
   build:full:
