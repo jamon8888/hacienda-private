@@ -93,8 +93,8 @@ build_wasm_fast() {
       export CARGO_PROFILE_RELEASE_INCREMENTAL=false
       export CARGO_ENCODED_RUSTFLAGS=
       bash "$CARGO_LOCAL_SH" metadata --format-version=1 >/dev/null
-      # Use a single-token wrapper path to avoid multi-token CARGO issues
-      export CARGO_WRAPPER="$CARGO_LOCAL_SH"
+      # Use the executable wrapper as single-token CARGO for wasm-pack
+      export CARGO="$CARGO_LOCAL_SH"
       run_pnpm "$node_bin" --dir "$REPO_ROOT/crates/xberg-wasm" run build:wasm:web
     )
     "$node_bin" "$REPO_ROOT/crates/xberg-wasm/scripts/fix-wasi-imports.mjs"
