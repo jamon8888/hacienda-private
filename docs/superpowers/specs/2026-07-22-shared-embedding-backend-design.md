@@ -196,12 +196,18 @@ the official safetensors/tokenizer/config from a native directory or from bytes
 on WASM. This removes the previous architectural assumption that contextual NER
 must permanently remain a JavaScript/ORT concern.
 
+**Status update (this PR):** The `ner-candle` feature and `CandleBackend`
+implementing `NerBackend` are now wired through Xberg configuration/dispatch
+in `crates/xberg/src/text/ner/candle.rs`. This integrates the Candle GLiNER2
+core into the native extraction pipeline. Generated Node/WASM bindings for the
+new surface are pending (Alef generation required). Hacienda's browser and MCP
+paths still use the legacy JavaScript GLiNER runtime; migration will switch
+them to the unified Candle/WASM path once bindings are generated and parity
+is verified.
+
 This does not change this spec's separation between embedding identity and NER
 identity. GLiNER2 remains a companion migration with its own model lifecycle,
-thresholds, supported languages, persistence, and audit policy. The upstream
-core is not yet wired through Xberg configuration/dispatch or generated
-Node/WASM bindings, and Hacienda's browser and MCP paths still use the legacy
-JavaScript GLiNER runtime.
+thresholds, supported languages, persistence, and audit policy.
 
 The target is one Rust implementation and one conformance contract, compiled
 to native code for MCP and to WASM for the browser. Native F32 and browser F16

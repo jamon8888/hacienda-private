@@ -1046,14 +1046,24 @@ git add docs/superpowers/specs/2026-07-17-wasm-web-ui-e2e-design.md
 git commit -m "docs: align spec with implementation plan (adapter deviation)"
 ```
 
-## 2026-07-23 GLiNER2 E2E extension
+## 2026-07-23 GLiNER2 E2E extension (revised to resolve Alef-binding contradiction)
 
-- [ ] Let the adapter select legacy injected JS NER or the wired Xberg Candle
-  WASM backend during migration.
-- [ ] Add a binding-presence smoke test and corrupt/truncated `from_bytes`
-  cases without downloading the full model.
-- [ ] Add a separately cached real-model job for native/WASM span parity,
-  Unicode offsets, long-window boundaries, the seven supported languages, and
-  explicit unsupported-language behavior.
-- [ ] Exercise Worker cancellation, initialization progress, cache quota, and
-  recovery without blocking the page.
+The original plan contained a contradictory constraint: "no changes to Rust core or Alef bindings" while simultaneously requiring "binding-presence smoke tests" and "GLiNER2 dispatch tests" that would need those exact changes. This section replaces that with a split-gate approach.
+
+### Split-gate testing strategy
+
+**Gate 1: Legacy fast-gate (no Alef changes required)**
+- [ ] Adapter selects legacy injected JS NER or wired Xberg Candle WASM backend during migration (feature-flagged, no binding changes)
+- [ ] Corrupt/truncated `from_bytes` cases tested via in-memory fixtures (no model download)
+- [ ] Worker cancellation, initialization progress, cache quota, recovery tested without blocking the page
+
+**Gate 2: Target migration gate (Alef binding changes REQUIRED)**
+- [ ] **Alef binding generation explicitly included**: Run `alef generate` as part of this gate's CI job so GLiNER2 Candle types flow into Node/Python/Go/Ruby/PHP/Java/C#/Elixir/WASM/Dart/Kotlin/Swift/Zig/R bindings
+- [ ] **Binding freshness verification**: CI step runs `alef generate && git diff --exit-code packages/ crates/xberg-node/ crates/xberg-wasm/ crates/xberg-ffi/` to fail if generated bindings drift
+- [ ] Binding-presence smoke test: each generated language package compiles and the GLiNER2 entry point is resolvable
+- [ ] Separately cached real-model job for native/WASM span parity, Unicode offsets, long-window boundaries, seven supported languages, explicit unsupported-language behavior
+
+### Migration rule
+- Legacy fast-gate tests MUST NOT depend on Alef-generated bindings
+- Target migration gate tests MUST run after `alef generate` and freshness check passes
+- The "no changes to Alef bindings" restriction is LIFTED for Gate 2 — it is the explicit goal

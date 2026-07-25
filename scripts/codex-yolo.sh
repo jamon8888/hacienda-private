@@ -30,23 +30,27 @@ command_path() {
 
 write_shim() {
   local name="$1"
-  local target="$2"
+  shift
+  local target="$1"
   mkdir -p "$SHIM_DIR"
   cat >"$SHIM_DIR/$name" <<EOF
 #!/usr/bin/env bash
-exec "$target" "\$@"
+exec $(printf '%q ' "$target" "$@")"\$@"
 EOF
   chmod +x "$SHIM_DIR/$name"
 }
 
-append_path_if_dir "$REAL_HOME/.cargo/bin"
-append_path_if_dir "$REAL_HOME/.local/node/bin"
-append_path_if_dir "$REAL_HOME/.local/share/pnpm"
-append_path_if_dir "$REAL_HOME/.npm-global/bin"
-append_path_if_dir "$REAL_HOME/.local/bin"
-append_path_if_dir "$REAL_HOME/.volta/bin"
-append_path_if_dir "$REAL_HOME/.fnm"
+# System/sandbox paths first (prepended first = end up LAST in PATH = lowest precedence)
 append_path_if_dir "/snap/bin"
+
+# Real-home toolchain paths last (prepended last = end up FIRST in PATH = highest precedence)
+append_path_if_dir "$REAL_HOME/.fnm"
+append_path_if_dir "$REAL_HOME/.volta/bin"
+append_path_if_dir "$REAL_HOME/.local/bin"
+append_path_if_dir "$REAL_HOME/.npm-global/bin"
+append_path_if_dir "$REAL_HOME/.local/share/pnpm"
+append_path_if_dir "$REAL_HOME/.local/node/bin"
+append_path_if_dir "$REAL_HOME/.cargo/bin"
 
 for nvm_bin_dir in "$REAL_HOME"/.nvm/versions/node/*/bin; do
   append_path_if_dir "$nvm_bin_dir"
@@ -60,12 +64,7 @@ fi
 
 if ! command -v pnpm >/dev/null 2>&1; then
   if corepack_path="$(command_path corepack)"; then
-    mkdir -p "$SHIM_DIR"
-    cat >"$SHIM_DIR/pnpm" <<EOF
-#!/usr/bin/env bash
-exec "$corepack_path" pnpm "\$@"
-EOF
-    chmod +x "$SHIM_DIR/pnpm"
+    write_shim pnpm "$corepack_path" pnpm
   fi
 fi
 

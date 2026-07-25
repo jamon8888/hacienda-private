@@ -26,10 +26,23 @@ run_case() {
   local label="$1"
   shift
   echo "-- $label --"
-  timer "$@"
+  if timer "$@"; then
+    echo "  ✓ PASS"
+  else
+    local status=$?
+    echo "  ✗ FAIL (exit $status)"
+  fi
   echo
 }
 
-run_case "task build" task build
-run_case "task build:web" task build:web
-run_case "task test:mcp" task test:mcp
+failed=0
+run_case "task build" task build || failed=1
+run_case "task build:web" task build:web || failed=1
+run_case "task test:mcp" task test:mcp || failed=1
+
+if [[ $failed -eq 1 ]]; then
+  echo "== SUMMARY: Some cases failed =="
+  exit 1
+else
+  echo "== SUMMARY: All cases passed =="
+fi

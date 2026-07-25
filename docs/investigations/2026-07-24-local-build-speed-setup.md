@@ -14,7 +14,9 @@ This repo now has a local fast-path setup tuned for low-memory Linux machines an
 ## Recommended Session Start
 
 ```bash
-cd /home/jamin/Documents/hacienda-private
+cd /path/to/your/hacienda-private
+# Or, when already inside the checkout:
+# cd "$(git rev-parse --show-toplevel)"
 eval "$(task build:accel:env)"
 task doctor:rust
 task doctor:web

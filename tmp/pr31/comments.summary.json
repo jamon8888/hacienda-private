@@ -1,0 +1,110 @@
+{
+  "id": 3629345431,
+  "user": "coderabbitai[bot]",
+  "path": "crates/xberg-cli/src/main.rs",
+  "line": 435,
+  "original_line": 435,
+  "side": "RIGHT",
+  "in_reply_to_id": null,
+  "body": "_🎯 Functional Correctness_ | _🟠 Major_ | _⚡ Quick win_\n\n**`--format toon` on `rag query` silently degrades to text output.**\n\n`RagAction::Query::format` is typed as the full `WireFormat` (Text/Json/Toon), but the dispatch only distinguishes Json vs. everything-else (`matches!(format, WireFormat::Json)`), so `Toon` is accepted by clap yet silently rendered as plain text. Every other command in this file handles all three `WireFormat` variants explicitly. Either restrict `--format` here to a smaller Text/Json enum, or wire `rag_query_command` to actually support TOON.\n\n\n\n\n<details>\n<summary>Proposed fix (restrict to a query-specific format enum)</summary>\n\n```diff\n-        /// Output format for results (text or json)\n-        #[arg(short, long, default_value = \"text\")]\n-        format: WireFormat,\n+        /// Output format for results (text or json)\n+        #[arg(short, long, default_value = \"text\")]\n+        format: RagQueryFormat,\n```\nAnd reject/handle `Toon` explicitly in `rag_query_command`, or map it to an error rather than silently falling back to text.\n</details>\n\n\nAlso applies to: 960-976\n\n<details>\n<summary>🤖 Prompt for AI Agents</summary>\n\n```\nVerify each finding against current code. Fix only still-valid issues, skip the\nrest with a brief reason, keep changes minimal, and validate.\n\nIn `@crates/xberg-cli/src/main.rs` around lines 432 - 435, Update\nRagAction::Query::format and rag_query_command so --format toon cannot silently\nfall back to text: either use a query-specific Text/Json format type, or\nexplicitly reject/map WireFormat::Toon to an error before rendering. Preserve\nthe existing text and JSON behavior while handling all accepted variants\nexplicitly.\n```\n\n</details>\n\n<!-- fingerprinting:phantom:medusa:beignet -->\n\n<!-- cr-indicator-types:refactor_suggestion -->\n\n<!-- cr-comment:v1:07113c5a28136dec3deccb51 -->\n\n<!-- This is an auto-generated comment by CodeRabbit -->"
+}
+{
+  "id": 3629345442,
+  "user": "coderabbitai[bot]",
+  "path": "crates/xberg-rag/src/engine.rs",
+  "line": 115,
+  "original_line": 115,
+  "side": "RIGHT",
+  "in_reply_to_id": null,
+  "body": "_🗄️ Data Integrity & Integration_ | _🟠 Major_ | _🏗️ Heavy lift_\n\n**Lost-update race on concurrent indexing of the same matter.**\n\n`index_documents`/`import_legacy` do read-modify-write against the on-disk snapshot (`load_or_empty` → `ingest` → `save`) with no locking. Two concurrent processes indexing the same `matter_id` will both load the pre-existing snapshot, and the later `save` silently overwrites the other's additions. The shared, non-unique `rag.snapshot.tmp` filename in `save` (Line 65) makes this worse: concurrent writers can clobber each other's staged temp file before either rename executes.\n\nGiven the CLI can be invoked repeatedly (and this same engine backs the MCP query path per `crates/xberg/src/mcp/rag.rs`), this is worth guarding — e.g. a per-matter file lock (`fs2`/`fslock`) around the read-modify-write, or at minimum a unique tmp filename (PID/UUID suffix) to avoid the staging-file collision.\n\n\n\n\n\nAlso applies to: 136-175\n\n<details>\n<summary>🤖 Prompt for AI Agents</summary>\n\n```\nVerify each finding against current code. Fix only still-valid issues, skip the\nrest with a brief reason, keep changes minimal, and validate.\n\nIn `@crates/xberg-rag/src/engine.rs` around lines 60 - 115, Protect the entire\nper-matter read-modify-write sequence in index_documents and import_legacy with\na per-matter file lock, acquired before load_or_empty and released after save,\nso concurrent writers cannot lose updates. Also replace save’s shared\nrag.snapshot.tmp staging path with a unique per-write temporary filename,\npreserving atomic rename behavior.\n```\n\n</details>\n\n<!-- fingerprinting:phantom:medusa:beignet -->\n\n<!-- cr-indicator-types:potential_issue -->\n\n<!-- cr-comment:v1:1ad53b76bd1cb79df3865591 -->\n\n<!-- This is an auto-generated comment by CodeRabbit -->"
+}
+{
+  "id": 3629345448,
+  "user": "coderabbitai[bot]",
+  "path": "crates/xberg-rag/src/paths.rs",
+  "line": 35,
+  "original_line": 35,
+  "side": "RIGHT",
+  "in_reply_to_id": null,
+  "body": "_🔒 Security & Privacy_ | _🔴 Critical_ | _🏗️ Heavy lift_\n\n**Reject dot-segment and empty matter IDs before joining the path.**\n\n`encode_uri_component(\"..\")` remains `..`, so `mirrors_dir.join(...)` can target `mirrors_dir/../rag.snapshot` outside the configured root. Empty and `\".\"` IDs also alias the mirror root. Validate these IDs before constructing `MatterPaths` and add regression tests; apply the same guard in the Node path builder for parity.\n\n\n\n\n\n\n\nAlso applies to: 66-90\n\n<details>\n<summary>🤖 Prompt for AI Agents</summary>\n\n```\nVerify each finding against current code. Fix only still-valid issues, skip the\nrest with a brief reason, keep changes minimal, and validate.\n\nIn `@crates/xberg-rag/src/paths.rs` around lines 32 - 35, Validate matter_id in\nMatterPaths::new before joining the encoded component, rejecting empty, \".\" and\n\"..\" values so they cannot alias or escape the configured mirrors directory; add\nregression coverage for each rejected value. Apply the equivalent validation in\nthe Node path builder to keep both implementations consistent.\n```\n\n</details>\n\n<!-- fingerprinting:phantom:poseidon:luna -->\n\n<!-- cr-indicator-types:potential_issue -->\n\n<!-- cr-comment:v1:aec5bacab2777bfd62ea5821 -->\n\n<!-- This is an auto-generated comment by CodeRabbit -->"
+}
+{
+  "id": 3629345452,
+  "user": "coderabbitai[bot]",
+  "path": "docs/superpowers/plans/2026-07-21-isomorphic-rag-core-p1.md",
+  "line": 671,
+  "original_line": 671,
+  "side": "RIGHT",
+  "in_reply_to_id": null,
+  "body": "_📐 Maintainability & Code Quality_ | _🟠 Major_ | _⚡ Quick win_\n\n**Do not mark the edgevec gate complete before executing it.**\n\nThis self-review marks R1 as complete, but `docs/superpowers/notes/2026-07-21-p2-native-rag-status.md` states that Task 5 was never executed and that the smoke example/findings note do not exist. Keep R1 pending until native and `wasm32` verification has actually run.\n\n<details>\n<summary>🤖 Prompt for AI Agents</summary>\n\n```\nVerify each finding against current code. Fix only still-valid issues, skip the\nrest with a brief reason, keep changes minimal, and validate.\n\nIn `@docs/superpowers/plans/2026-07-21-isomorphic-rag-core-p1.md` around lines 664\n- 671, The self-review must not mark the R1 edgevec-native gate as complete\nwhile Task 5 verification remains unexecuted. Update the “Spec coverage” entry\nand related placeholder-scan wording to show R1/Task 5 as pending, and retain\ncompletion only after native and wasm32 checks, the smoke example, and findings\nnote actually exist.\n```\n\n</details>\n\n<!-- fingerprinting:phantom:triton:luna -->\n\n<!-- cr-indicator-types:potential_issue -->\n\n<!-- cr-comment:v1:fd188891f28c2fa0abd7a81d -->\n\n<!-- This is an auto-generated comment by CodeRabbit -->\n\n✅ Addressed in commits cc2d97a to e008fe1"
+}
+{
+  "id": 3629345455,
+  "user": "coderabbitai[bot]",
+  "path": "docs/superpowers/plans/2026-07-21-isomorphic-rag-core-p2.md",
+  "line": 671,
+  "original_line": 671,
+  "side": "RIGHT",
+  "in_reply_to_id": null,
+  "body": "_🗄️ Data Integrity & Integration_ | _🟠 Major_ | _🏗️ Heavy lift_\n\n**Serialize the read-modify-write and use unique temporary files.**\n\nConcurrent `index_documents` calls can load the same old snapshot, overwrite the shared `rag.snapshot.tmp`, race on rename, and lose chunks. Atomic rename protects a single writer from torn writes, not concurrent writers. Add per-matter write serialization and a unique temp path or centralized writer.\n\n\n\n\n\n\n\nAlso applies to: 713-716\n\n<details>\n<summary>🤖 Prompt for AI Agents</summary>\n\n```\nVerify each finding against current code. Fix only still-valid issues, skip the\nrest with a brief reason, keep changes minimal, and validate.\n\nIn `@docs/superpowers/plans/2026-07-21-isomorphic-rag-core-p2.md` around lines 659\n- 671, Update the snapshot write flow around save so concurrent writes for the\nsame matter_id are serialized, preventing read-modify-write loss and races on\nthe shared temporary file. Replace the fixed rag.snapshot.tmp path with a unique\nper-write temporary path, or route writes through a centralized per-matter\nwriter, while preserving atomic rename into the final snapshot path; apply the\nsame change to the additional save path noted around lines 713-716.\n```\n\n</details>\n\n<!-- fingerprinting:phantom:triton:luna -->\n\n<!-- cr-indicator-types:potential_issue -->\n\n<!-- cr-comment:v1:5d498f91e01fd1cc961f01c3 -->\n\n<!-- This is an auto-generated comment by CodeRabbit -->"
+}
+{
+  "id": 3629345457,
+  "user": "coderabbitai[bot]",
+  "path": "docs/superpowers/plans/2026-07-21-isomorphic-rag-core-p2.md",
+  "line": 761,
+  "original_line": 761,
+  "side": "RIGHT",
+  "in_reply_to_id": null,
+  "body": "_🗄️ Data Integrity & Integration_ | _🟠 Major_ | _⚡ Quick win_\n\n**Reject embedder length mismatches before zipping.**\n\n`import_legacy` does not verify that the embedder returned one vector per legacy chunk. A short result silently truncates the imported index. Add the same count check used by `index_documents` before constructing `IndexedChunk` values.\n\n<details>\n<summary>🤖 Prompt for AI Agents</summary>\n\n```\nVerify each finding against current code. Fix only still-valid issues, skip the\nrest with a brief reason, keep changes minimal, and validate.\n\nIn `@docs/superpowers/plans/2026-07-21-isomorphic-rag-core-p2.md` around lines 748\n- 761, In import_legacy, validate that the number of vectors returned by\nself.embedder.embed_documents matches the number of legacy chunks before zipping\nthem. Reuse the same count-check behavior and error handling as index_documents,\nand only construct IndexedChunk values after validation succeeds.\n```\n\n</details>\n\n<!-- fingerprinting:phantom:triton:luna -->\n\n<!-- cr-indicator-types:potential_issue -->\n\n<!-- cr-comment:v1:90b56ab8e354a922b4f65b8c -->\n\n<!-- This is an auto-generated comment by CodeRabbit -->"
+}
+{
+  "id": 3629345461,
+  "user": "coderabbitai[bot]",
+  "path": "docs/superpowers/plans/2026-07-21-isomorphic-rag-core-p2.md",
+  "line": 1691,
+  "original_line": 1691,
+  "side": "RIGHT",
+  "in_reply_to_id": null,
+  "body": "_🩺 Stability & Availability_ | _🟠 Major_ | _🏗️ Heavy lift_\n\n**Keep the not-found MCP test independent of a real model.**\n\nThis test calls `query`, which builds `XbergEmbedder` before `RagEngine` can report `MatterNotFound`; construction probes/loads the real preset. That can fail or perform model/network work in CI, violating the no-egress constraint. Test the error mapper directly or inject a mock engine/embedder.\n\n<details>\n<summary>🤖 Prompt for AI Agents</summary>\n\n```\nVerify each finding against current code. Fix only still-valid issues, skip the\nrest with a brief reason, keep changes minimal, and validate.\n\nIn `@docs/superpowers/plans/2026-07-21-isomorphic-rag-core-p2.md` around lines\n1684 - 1691, Update not_found_maps_to_invalid_params_naming_the_matter so it\ndoes not call query or construct XbergEmbedder for the missing matter case.\nInvoke the error-mapping path directly with a MatterNotFound error, or inject a\nmock engine/embedder, and preserve the assertion that the resulting user-facing\nmessage is non-empty and identifies the cause.\n```\n\n</details>\n\n<!-- fingerprinting:phantom:triton:luna -->\n\n<!-- cr-indicator-types:potential_issue -->\n\n<!-- cr-comment:v1:8fddd068e040517c80b30b81 -->\n\n<!-- This is an auto-generated comment by CodeRabbit -->\n\n✅ Addressed in commits cc2d97a to e008fe1"
+}
+{
+  "id": 3629345462,
+  "user": "coderabbitai[bot]",
+  "path": "docs/superpowers/specs/2026-07-21-isomorphic-rag-core-design.md",
+  "line": 66,
+  "original_line": 65,
+  "side": "RIGHT",
+  "in_reply_to_id": null,
+  "body": "_🗄️ Data Integrity & Integration_ | _🟠 Major_ | _⚡ Quick win_\n\n**Update the embedding-dimension contract to match P2.**\n\nThe spec still promises one model/shared dimensionality and says `EMBED_DIM` remains unchanged, while P2 documents native `lightweight` embeddings at 256 dimensions and browser e5 embeddings at 768 dimensions, with equivalence deferred to P3. Leaving this text unchanged makes the cross-host compatibility contract false.\n\n\n\n\n\n\n\nAlso applies to: 83-86\n\n<details>\n<summary>🤖 Prompt for AI Agents</summary>\n\n```\nVerify each finding against current code. Fix only still-valid issues, skip the\nrest with a brief reason, keep changes minimal, and validate.\n\nIn `@docs/superpowers/specs/2026-07-21-isomorphic-rag-core-design.md` around lines\n62 - 65, Update the embedding-dimension and cross-host compatibility statements\nin the spec, including the referenced section around “EMBED_DIM,” to reflect\nP2’s native dimensions: 256 for lightweight embeddings and 768 for browser e5\nembeddings. Remove the claim that both hosts reuse one dimensionality or that\nEMBED_DIM remains unchanged, and state that embedding equivalence is deferred to\nP3.\n```\n\n</details>\n\n<!-- fingerprinting:phantom:triton:luna -->\n\n<!-- cr-indicator-types:potential_issue -->\n\n<!-- cr-comment:v1:ef592750a7b983c9b8ef32e2 -->\n\n<!-- This is an auto-generated comment by CodeRabbit -->"
+}
+{
+  "id": 3629345467,
+  "user": "coderabbitai[bot]",
+  "path": "docs/superpowers/specs/2026-07-21-isomorphic-rag-core-design.md",
+  "line": 100,
+  "original_line": 99,
+  "side": "RIGHT",
+  "in_reply_to_id": null,
+  "body": "_📐 Maintainability & Code Quality_ | _🟠 Major_ | _⚡ Quick win_\n\n**Reconcile the edgevec decision with the current implementation.**\n\nThis spec still presents edgevec as the shared native/WASM backend, but the P2 plan and status note say native/WASM viability is unverified and that P2 currently uses `FlatStore`. Mark edgevec as spike-gated/pending and document FlatStore as the current backend until the R1 evidence exists.\n\n\n\n\n\n\n\nAlso applies to: 182-185, 251-255\n\n<details>\n<summary>🤖 Prompt for AI Agents</summary>\n\n```\nVerify each finding against current code. Fix only still-valid issues, skip the\nrest with a brief reason, keep changes minimal, and validate.\n\nIn `@docs/superpowers/specs/2026-07-21-isomorphic-rag-core-design.md` around lines\n96 - 99, The specification’s edgevec backend decision conflicts with the current\nP2 implementation and status. Update the edgevec references in the shared\ndependency, P2 plan/status, and corresponding backend sections to mark edgevec\nas spike-gated and pending R1 validation, and explicitly identify FlatStore as\nthe current native/WASM backend until supporting evidence exists.\n```\n\n</details>\n\n<!-- fingerprinting:phantom:triton:luna -->\n\n<!-- cr-indicator-types:potential_issue -->\n\n<!-- cr-comment:v1:b49c1407da95bb75fc2a9f0b -->\n\n<!-- This is an auto-generated comment by CodeRabbit -->"
+}
+{
+  "id": 3629345470,
+  "user": "coderabbitai[bot]",
+  "path": "packages/wasm-pipeline/src/model-cache.ts",
+  "line": null,
+  "original_line": 49,
+  "side": "RIGHT",
+  "in_reply_to_id": null,
+  "body": "_🩺 Stability & Availability_ | _🟠 Major_ | _⚡ Quick win_\n\n**Make Cache Storage reads best-effort too.**\n\nA disabled, unavailable, or corrupted Cache Storage entry can make `caches.open`, `match`, `arrayBuffer`, or `json` throw before the network request runs. This turns a cache limitation into a warmup failure even when model downloads would succeed.\n\n- `packages/wasm-pipeline/src/model-cache.ts#L44-L49`: catch cache open/read/decode failures and continue with `fetch`.\n- `packages/wasm-pipeline/src/model-cache.ts#L67-L69`: apply the same fallback for JSON cache reads.\n\n<details>\n<summary>📍 Affects 1 file</summary>\n\n- `packages/wasm-pipeline/src/model-cache.ts#L44-L49` (this comment)\n- `packages/wasm-pipeline/src/model-cache.ts#L67-L69`\n\n</details>\n\n<details>\n<summary>🤖 Prompt for AI Agents</summary>\n\n```\nVerify each finding against current code. Fix only still-valid issues, skip the\nrest with a brief reason, keep changes minimal, and validate.\n\nIn `@packages/wasm-pipeline/src/model-cache.ts` around lines 44 - 49, Make Cache\nStorage access best-effort in the model-cache read flow: wrap cache opening,\nmatching, and decoding around the binary read near lines 44-49 and the JSON read\nnear lines 67-69 in error handling that falls through to the existing fetch path\nwhenever any cache operation fails. Preserve successful cache hits and progress\nreporting, while ensuring unavailable or corrupted cache entries never prevent\nnetwork retrieval.\n```\n\n</details>\n\n<!-- consolidated_sites_start -->\n<!--\n<consolidated_sites>\n<site>\n<role>anchor</role>\n<file>packages/wasm-pipeline/src/model-cache.ts</file>\n<line_range>44-49</line_range>\n</site>\n<site>\n<role>sibling</role>\n<file>packages/wasm-pipeline/src/model-cache.ts</file>\n<line_range>67-69</line_range>\n</site>\n</consolidated_sites>\n-->\n<!-- consolidated_sites_end -->\n\n<!-- fingerprinting:phantom:poseidon:terra -->\n\n<!-- cr-indicator-types:potential_issue -->\n\n<!-- cr-comment:v1:113794979e956cf934ca9e4b -->\n\n<!-- This is an auto-generated comment by CodeRabbit -->\n\n✅ Addressed in commits cc2d97a to e008fe1"
+}
+{
+  "id": 3629345475,
+  "user": "coderabbitai[bot]",
+  "path": "packages/wasm-pipeline/src/model-cache.ts",
+  "line": null,
+  "original_line": 102,
+  "side": "RIGHT",
+  "in_reply_to_id": null,
+  "body": "_🩺 Stability & Availability_ | _🟠 Major_ | _🏗️ Heavy lift_\n\n**Serialize scoped `fetch` overrides.**\n\nOverlapping calls can finish out of order and restore a stale `globalThis.fetch`, or remove an override while another initialization still needs it. Protect the full override lifetime with an async mutex/queue and add a non-LIFO concurrency regression test.\n\n<details>\n<summary>🤖 Prompt for AI Agents</summary>\n\n```\nVerify each finding against current code. Fix only still-valid issues, skip the\nrest with a brief reason, keep changes minimal, and validate.\n\nIn `@packages/wasm-pipeline/src/model-cache.ts` around lines 84 - 102, Update\nwithScopedFetchOverride to serialize the complete globalThis.fetch override\nlifetime through an async mutex or queue, ensuring each call installs its scoped\nfetch only after prior calls finish and restores the correct fetch before\nreleasing the lock. Add a regression test covering overlapping invocations that\ncomplete out of LIFO order and verify fetch remains overridden until all active\ninitializations finish.\n```\n\n</details>\n\n<!-- fingerprinting:phantom:poseidon:terra -->\n\n<!-- cr-indicator-types:potential_issue -->\n\n<!-- cr-comment:v1:e336b9dc15c612a8a6730a08 -->\n\n<!-- This is an auto-generated comment by CodeRabbit -->\n\n✅ Addressed in commits cc2d97a to 52e0e05"
+}

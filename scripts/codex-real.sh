@@ -21,15 +21,18 @@ export REAL_HOME
 export SNAP_REAL_HOME="${SNAP_REAL_HOME:-$REAL_HOME}"
 export GIT_EXEC_PATH="${GIT_EXEC_PATH:-/usr/lib/git-core}"
 
-append_path_if_dir "$REAL_HOME/.local/node/bin"
-append_path_if_dir "$REAL_HOME/.local/bin"
-append_path_if_dir "$REAL_HOME/.cargo/bin"
-append_path_if_dir "$REAL_HOME/.npm-global/bin"
-append_path_if_dir "$REAL_HOME/.local/share/pnpm"
-append_path_if_dir "$GIT_EXEC_PATH"
-append_path_if_dir "/usr/bin"
-append_path_if_dir "/bin"
+# System/sandbox paths first (prepended first = end up LAST in PATH = lowest precedence)
 append_path_if_dir "/snap/bin"
+append_path_if_dir "/bin"
+append_path_if_dir "/usr/bin"
+append_path_if_dir "$GIT_EXEC_PATH"
+
+# Real-home toolchain paths last (prepended last = end up FIRST in PATH = highest precedence)
+append_path_if_dir "$REAL_HOME/.local/share/pnpm"
+append_path_if_dir "$REAL_HOME/.npm-global/bin"
+append_path_if_dir "$REAL_HOME/.cargo/bin"
+append_path_if_dir "$REAL_HOME/.local/bin"
+append_path_if_dir "$REAL_HOME/.local/node/bin"
 
 export PATH
 

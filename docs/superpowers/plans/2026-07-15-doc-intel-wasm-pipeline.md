@@ -453,12 +453,12 @@ export async function queryRag(
 - **Users never run cargo.** `@xberg-io/xberg-wasm` is a prebuilt npm package; ORT-Web/`gliner`/`edgevec`
   are npm deps.
 
-## 2026-07-23 GLiNER2 migration update
+## 2026-07-23 GLiNER2 migration update (pinned to Xberg `b06fbc71cc5f2a5aed425b56dba105122f7cd4c2`)
 
-The statement that Xberg cannot run NER in WASM is now time-qualified. Latest
-upstream `xberg-gliner` has a Candle GLiNER2 `from_bytes` path that compiles for
-WASM, but the published `xberg-wasm` binding still exposes only injected
-JavaScript NER and has no in-binary fallback.
+The statement that Xberg cannot run NER in WASM is now time-qualified. Upstream
+Xberg revision `b06fbc71cc5f2a5aed425b56dba105122f7cd4c2` adds a Candle GLiNER2
+`from_bytes` path that compiles for WASM, but the published `xberg-wasm`
+binding still exposes only injected JavaScript NER and has no in-binary fallback.
 
 - [ ] Add the Candle feature through canonical Xberg/Alef inputs and expose a
   stateful GLiNER2 model handle; do not hand-edit generated WASM files.

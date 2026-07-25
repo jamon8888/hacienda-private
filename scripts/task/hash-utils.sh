@@ -4,11 +4,11 @@ set -euo pipefail
 
 hash_cmd() {
   if command -v sha256sum >/dev/null 2>&1; then
-    echo "sha256sum"
+    HASHER=(sha256sum)
     return 0
   fi
   if command -v shasum >/dev/null 2>&1; then
-    echo "shasum -a 256"
+    HASHER=(shasum -a 256)
     return 0
   fi
   return 1
@@ -19,8 +19,8 @@ hash_tree() {
     echo "usage: hash_tree <path> [path...]" >&2
     return 1
   fi
-  local hasher
-  hasher="$(hash_cmd)" || {
+
+  hash_cmd || {
     echo "sha256 tool not found" >&2
     return 1
   }
@@ -43,8 +43,8 @@ hash_tree() {
     fi
   done | sort -z | while IFS= read -r -d '' file; do
     printf '%s\0' "$file" >>"$tmp"
-    eval "$hasher \"\$file\"" | awk '{print $1}' >>"$tmp"
+    "${HASHER[@]}" "$file" | awk '{print $1}' >>"$tmp"
   done
 
-  eval "$hasher \"\$tmp\"" | awk '{print $1}'
+  "${HASHER[@]}" "$tmp" | awk '{print $1}'
 }

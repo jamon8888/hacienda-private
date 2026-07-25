@@ -80,7 +80,10 @@ build_wasm_fast() {
     "$REPO_ROOT/crates/xberg" \
     "$REPO_ROOT/crates/xberg-tesseract" \
     "$REPO_ROOT/crates/xberg-gliner" \
-    "$REPO_ROOT/crates/xberg-candle-embed"; then
+    "$REPO_ROOT/crates/xberg-candle-embed" \
+    "$REPO_ROOT/Cargo.toml" \
+    "$REPO_ROOT/Cargo.lock" \
+    "$REPO_ROOT/.cargo/config.toml"; then
     echo "== build xberg-wasm =="
     (
       unset CARGO_INCREMENTAL
@@ -90,7 +93,8 @@ build_wasm_fast() {
       export CARGO_PROFILE_RELEASE_INCREMENTAL=false
       export CARGO_ENCODED_RUSTFLAGS=
       bash "$CARGO_LOCAL_SH" metadata --format-version=1 >/dev/null
-      export CARGO="bash $CARGO_LOCAL_SH"
+      # Use a single-token wrapper path to avoid multi-token CARGO issues
+      export CARGO_WRAPPER="$CARGO_LOCAL_SH"
       run_pnpm "$node_bin" --dir "$REPO_ROOT/crates/xberg-wasm" run build:wasm:web
     )
     "$node_bin" "$REPO_ROOT/crates/xberg-wasm/scripts/fix-wasi-imports.mjs"

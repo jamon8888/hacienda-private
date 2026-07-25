@@ -52,8 +52,8 @@ Investigated local build and check speed across Rust, WASM, and web flows, with 
 
 ### Highest impact
 
-1. Use `sccache` locally for all Rust compile loops.
-2. Use `mold` locally on Linux for link-heavy debug and check runs.
+1. Use the implemented local fast path (`task build`, `task test`, `task check:rust:fast`) which isolates Cargo from the global `sccache` wrapper via `scripts/task/cargo-local.sh`. See `scripts/task/build-accel-env.sh` for the opt-in `sccache` + `mold` environment if you have those tools installed.
+2. Use `mold` locally on Linux for link-heavy debug and check runs (installed via `sudo apt-get install mold`).
 3. Split local-fast tasks from CI-grade tasks instead of making `task build` and `task test` do full-workspace `--all-features` by default.
 
 ### Medium impact
