@@ -137,7 +137,6 @@ PaddleOCR is bundled via the native Rust bindings and works out of the box since
 `pip install "xberg[tesseract]"` is available as a metadata-only marker to document a dependency on the Tesseract system package. It installs no Python packages — Tesseract itself must still be installed via your OS package manager (see above).
 :::
 
-
 ## Configuration
 
 ### Basic OCR
@@ -1333,6 +1332,7 @@ sudo apt-get install tesseract-ocr
 # Verify
 tesseract --version
 ```
+
 :::
 
 :::note[Language not found]
@@ -1348,9 +1348,11 @@ sudo apt-get install tesseract-ocr-deu
 # Verify
 tesseract --list-langs
 ```
+
 :::
 
 :::note[Poor accuracy]
+
 - Increase DPI to 600 for better quality
 - Try a different backend — PaddleOCR often outperforms Tesseract on complex layouts
 - Specify the correct language code for your document
@@ -1359,12 +1361,14 @@ tesseract --list-langs
 :::
 
 :::note[Slow processing]
+
 - Reduce DPI to 150 for faster throughput
 - Use a GPU-capable backend such as PaddleOCR or Candle OCR
 - Use batch extraction to process multiple files concurrently
 :::
 
 :::note[Out of memory on large PDFs]
+
 - Reduce DPI — lower resolution uses significantly less memory
 - Process pages in smaller batches
 - Use PaddleOCR's mobile tier (`model_tier="mobile"`) for a smaller memory footprint

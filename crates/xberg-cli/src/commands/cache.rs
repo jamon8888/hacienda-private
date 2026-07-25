@@ -10,6 +10,7 @@ use xberg::cache;
 
 use crate::{WireFormat, style};
 
+#[cfg(any(feature = "paddle-ocr", feature = "layout-detection", feature = "ner-onnx"))]
 #[derive(Debug, Clone, serde::Serialize)]
 struct CacheManifestEntry {
     relative_path: String,
@@ -18,6 +19,7 @@ struct CacheManifestEntry {
     source_url: String,
 }
 
+#[cfg(any(feature = "paddle-ocr", feature = "layout-detection", feature = "ner-onnx"))]
 impl CacheManifestEntry {
     fn new(relative_path: String, sha256: String, size_bytes: u64, source_url: String) -> Self {
         Self {
@@ -283,7 +285,7 @@ pub fn warm_command(
     format: WireFormat,
     all_embeddings: bool,
     embedding_model: Option<String>,
-    all_table_models: bool,
+    #[cfg_attr(not(feature = "layout-detection"), allow(unused_variables))] all_table_models: bool,
     all_grammars: bool,
     grammar_groups: Option<Vec<String>>,
     grammars: Option<Vec<String>>,
@@ -293,7 +295,15 @@ pub fn warm_command(
 ) -> Result<()> {
     let cache_base = resolve_cache_base(cache_dir);
 
+    #[cfg_attr(
+        not(any(feature = "paddle-ocr", feature = "layout-detection", feature = "ner-onnx")),
+        allow(unused_mut)
+    )]
     let mut downloaded: Vec<String> = Vec::new();
+    #[cfg_attr(
+        not(any(feature = "paddle-ocr", feature = "layout-detection", feature = "ner-onnx")),
+        allow(unused_mut)
+    )]
     let mut already_cached: Vec<String> = Vec::new();
 
     #[cfg(feature = "paddle-ocr")]

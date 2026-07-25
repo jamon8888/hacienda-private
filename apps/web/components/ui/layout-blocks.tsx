@@ -1,6 +1,6 @@
-﻿"use client"
+﻿"use client";
 
-import * as React from "react"
+import * as React from "react";
 import {
   AlignBoxBottomCenterIcon,
   Heading01Icon,
@@ -10,132 +10,116 @@ import {
   Table01Icon,
   TextCenterlineCenterTopIcon,
   TextNumberSignIcon,
-} from "@hugeicons/core-free-icons"
-import { HugeiconsIcon } from "@hugeicons/react"
-import { useVirtualizer } from "@tanstack/react-virtual"
-import ReactMarkdown from "react-markdown"
-import rehypeRaw from "rehype-raw"
-import rehypeSanitize, { defaultSchema } from "rehype-sanitize"
-import remarkGfm from "remark-gfm"
+} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import ReactMarkdown from "react-markdown";
+import rehypeRaw from "rehype-raw";
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
+import remarkGfm from "remark-gfm";
 
-import { cn } from "@/lib/utils"
-import { ScrollArea } from "@/components/ui/scroll-area"
+import { cn } from "@/lib/utils";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 export type Point = {
-  x: number
-  y: number
-}
+  x: number;
+  y: number;
+};
 
 export type BoundingBox = {
-  left: number
-  top: number
-  right: number
-  bottom: number
-}
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+};
 
-export type OcrBlockType =
-  | "heading"
-  | "paragraph"
-  | "list"
-  | "table"
-  | "figure"
-  | "header"
-  | "footer"
-  | "page_number"
+export type OcrBlockType = "heading" | "paragraph" | "list" | "table" | "figure" | "header" | "footer" | "page_number";
 
 export type ParsedOcrBlock = {
-  id: string
-  type: string
-  content: string
+  id: string;
+  type: string;
+  content: string;
   metadata: {
     page: {
-      number: number
-      width: number
-      height: number
-    }
-    layoutClass?: string
-    minOcrConfidence?: number
-    avgOcrConfidence?: number
-  }
-  polygon?: Point[]
-  boundingBox?: BoundingBox
-}
+      number: number;
+      width: number;
+      height: number;
+    };
+    layoutClass?: string;
+    minOcrConfidence?: number;
+    avgOcrConfidence?: number;
+  };
+  polygon?: Point[];
+  boundingBox?: BoundingBox;
+};
 
 export type ParsedOcrOutput = {
   chunks: {
-    blocks: ParsedOcrBlock[]
-  }[]
-}
+    blocks: ParsedOcrBlock[];
+  }[];
+};
 
 export type OcrBlock = {
-  id: string
-  type: OcrBlockType
-  text: string
-  page: number
-  pageWidth: number
-  pageHeight: number
-  confidence: number
-  polygon?: Point[]
-  boundingBox?: BoundingBox
-}
+  id: string;
+  type: OcrBlockType;
+  text: string;
+  page: number;
+  pageWidth: number;
+  pageHeight: number;
+  confidence: number;
+  polygon?: Point[];
+  boundingBox?: BoundingBox;
+};
 
 export type HighlightArea = {
-  left: number
-  top: number
-  width: number
-  height: number
-}
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
 
-export const PDF_URL = "/samples/attention.pdf"
-const OCR_BLOCK_ROW_MIN_ESTIMATE = 92
-const OCR_BLOCK_ROW_VERTICAL_CHROME = 62
-const OCR_BLOCK_LINE_HEIGHT = 20
-const OCR_BLOCK_ESTIMATED_CHARS_PER_LINE = 42
-const OCR_BLOCK_ROW_GAP = 8
-const OCR_BLOCK_LIST_PADDING = 12
+export const PDF_URL = "/samples/attention.pdf";
+const OCR_BLOCK_ROW_MIN_ESTIMATE = 92;
+const OCR_BLOCK_ROW_VERTICAL_CHROME = 62;
+const OCR_BLOCK_LINE_HEIGHT = 20;
+const OCR_BLOCK_ESTIMATED_CHARS_PER_LINE = 42;
+const OCR_BLOCK_ROW_GAP = 8;
+const OCR_BLOCK_LIST_PADDING = 12;
 const OCR_MARKDOWN_SCHEMA = {
   ...defaultSchema,
   attributes: {
     ...defaultSchema.attributes,
     figure: [...(defaultSchema.attributes?.figure ?? []), "type"],
   },
-  tagNames: [
-    ...(defaultSchema.tagNames ?? []),
-    "caption",
-    "figcaption",
-    "figure",
-  ],
-}
-const OCR_MARKDOWN_REHYPE_PLUGINS: NonNullable<
-  React.ComponentProps<typeof ReactMarkdown>["rehypePlugins"]
-> = [rehypeRaw, [rehypeSanitize, OCR_MARKDOWN_SCHEMA]]
-const OCR_MARKDOWN_REMARK_PLUGINS: NonNullable<
-  React.ComponentProps<typeof ReactMarkdown>["remarkPlugins"]
-> = [remarkGfm]
-const OCR_MARKDOWN_FIGURE_CAPTION_PATTERN = /<\/?caption>/gi
+  tagNames: [...(defaultSchema.tagNames ?? []), "caption", "figcaption", "figure"],
+};
+const OCR_MARKDOWN_REHYPE_PLUGINS: NonNullable<React.ComponentProps<typeof ReactMarkdown>["rehypePlugins"]> = [
+  rehypeRaw,
+  [rehypeSanitize, OCR_MARKDOWN_SCHEMA],
+];
+const OCR_MARKDOWN_REMARK_PLUGINS: NonNullable<React.ComponentProps<typeof ReactMarkdown>["remarkPlugins"]> = [
+  remarkGfm,
+];
+const OCR_MARKDOWN_FIGURE_CAPTION_PATTERN = /<\/?caption>/gi;
 
 function getEstimatedOcrBlockRowHeight(block: OcrBlock) {
   const plainText = block.text
     .replace(OCR_MARKDOWN_FIGURE_CAPTION_PATTERN, "")
     .replace(/<[^>]*>/g, "")
     .replace(/\s+/g, " ")
-    .trim()
-  const explicitLineCount = block.text.split(/\n+/).filter(Boolean).length
+    .trim();
+  const explicitLineCount = block.text.split(/\n+/).filter(Boolean).length;
   const wrappedLineCount = Math.max(
     explicitLineCount,
-    Math.ceil(plainText.length / OCR_BLOCK_ESTIMATED_CHARS_PER_LINE)
-  )
-  const contentHeight = Math.max(1, wrappedLineCount) * OCR_BLOCK_LINE_HEIGHT
-  const typeExtraHeight =
-    block.type === "figure" ? 44 : block.type === "table" ? 28 : 0
+    Math.ceil(plainText.length / OCR_BLOCK_ESTIMATED_CHARS_PER_LINE),
+  );
+  const contentHeight = Math.max(1, wrappedLineCount) * OCR_BLOCK_LINE_HEIGHT;
+  const typeExtraHeight = block.type === "figure" ? 44 : block.type === "table" ? 28 : 0;
 
   return Math.max(
     OCR_BLOCK_ROW_MIN_ESTIMATE,
-    OCR_BLOCK_ROW_VERTICAL_CHROME +
-      contentHeight +
-      typeExtraHeight +
-      OCR_BLOCK_ROW_GAP
-  )
+    OCR_BLOCK_ROW_VERTICAL_CHROME + contentHeight + typeExtraHeight + OCR_BLOCK_ROW_GAP,
+  );
 }
 
 export const ATTENTION_OCR_OUTPUT = {
@@ -380,8 +364,7 @@ export const ATTENTION_OCR_OUTPUT = {
         {
           id: "block_1_VxOJIL",
           type: "text",
-          content:
-            "Aidan N. Gomez* * University of Toronto aidan@cs.toronto.edu",
+          content: "Aidan N. Gomez* * University of Toronto aidan@cs.toronto.edu",
           metadata: {
             page: {
               number: 1,
@@ -734,8 +717,7 @@ export const ATTENTION_OCR_OUTPUT = {
         {
           id: "block_1_iKp4Ae",
           type: "footer",
-          content:
-            "31st Conference on Neural Information Processing Systems (NIPS 2017), Long Beach, CA, USA.",
+          content: "31st Conference on Neural Information Processing Systems (NIPS 2017), Long Beach, CA, USA.",
           metadata: {
             page: {
               number: 1,
@@ -2454,8 +2436,7 @@ export const ATTENTION_OCR_OUTPUT = {
         {
           id: "block_5_zTpvNY",
           type: "text",
-          content:
-            "MultiHead(Q,K,V)=Concat(head1, ... , headh)W\u00ba where head; = Attention(Qw?, KWK,VW)",
+          content: "MultiHead(Q,K,V)=Concat(head1, ... , headh)W\u00ba where head; = Attention(Qw?, KWK,VW)",
           metadata: {
             page: {
               number: 5,
@@ -2613,8 +2594,7 @@ export const ATTENTION_OCR_OUTPUT = {
         {
           id: "block_5_b34egv",
           type: "text",
-          content:
-            "The Transformer uses multi-head attention in three different ways:",
+          content: "The Transformer uses multi-head attention in three different ways:",
           metadata: {
             page: {
               number: 5,
@@ -3251,8 +3231,7 @@ export const ATTENTION_OCR_OUTPUT = {
         {
           id: "block_6_NG2aN8",
           type: "text",
-          content:
-            "In this work, we use sine and cosine functions of different frequencies:",
+          content: "In this work, we use sine and cosine functions of different frequencies:",
           metadata: {
             page: {
               number: 6,
@@ -3291,8 +3270,7 @@ export const ATTENTION_OCR_OUTPUT = {
         {
           id: "block_6_ktOzAP",
           type: "text",
-          content:
-            "PE(pos,2i) = sin(pos/100002i/dmodel ) PE(pos,2i+1) = cos(pos/100002i/dmodel) )",
+          content: "PE(pos,2i) = sin(pos/100002i/dmodel ) PE(pos,2i+1) = cos(pos/100002i/dmodel) )",
           metadata: {
             page: {
               number: 6,
@@ -4088,8 +4066,7 @@ export const ATTENTION_OCR_OUTPUT = {
         {
           id: "block_7_qvJczg",
           type: "text",
-          content:
-            "lrate = dmodel . min(step_num-0.5, step_num . warmup_steps-1.5)",
+          content: "lrate = dmodel . min(step_num-0.5, step_num . warmup_steps-1.5)",
           metadata: {
             page: {
               number: 7,
@@ -4805,8 +4782,7 @@ export const ATTENTION_OCR_OUTPUT = {
         {
           id: "block_8_6e9VRc",
           type: "text",
-          content:
-            "5We used values of 2.8, 3.7, 6.0 and 9.5 TFLOPS for K80, K40, M40 and P100, respectively.",
+          content: "5We used values of 2.8, 3.7, 6.0 and 9.5 TFLOPS for K80, K40, M40 and P100, respectively.",
           metadata: {
             page: {
               number: 8,
@@ -6571,8 +6547,7 @@ export const ATTENTION_OCR_OUTPUT = {
         {
           id: "block_11_nehypx",
           type: "text",
-          content:
-            "[20] Diederik Kingma and Jimmy Ba. Adam: A method for stochastic optimization. In ICLR, 2015.",
+          content: "[20] Diederik Kingma and Jimmy Ba. Adam: A method for stochastic optimization. In ICLR, 2015.",
           metadata: {
             page: {
               number: 11,
@@ -7941,17 +7916,17 @@ export const ATTENTION_OCR_OUTPUT = {
       ],
     },
   ],
-} satisfies ParsedOcrOutput
+} satisfies ParsedOcrOutput;
 
 const BLOCK_STYLES: Record<
   OcrBlockType,
   {
-    label: string
-    icon: React.ComponentProps<typeof HugeiconsIcon>["icon"]
-    overlay: string
-    mutedOverlay: string
-    ring: string
-    badge: string
+    label: string;
+    icon: React.ComponentProps<typeof HugeiconsIcon>["icon"];
+    overlay: string;
+    mutedOverlay: string;
+    ring: string;
+    badge: string;
   }
 > = {
   heading: {
@@ -7960,8 +7935,7 @@ const BLOCK_STYLES: Record<
     overlay: "border-violet-500/70 bg-violet-500/10",
     mutedOverlay: "border-violet-500/35 bg-violet-500/5",
     ring: "border-violet-500/60 bg-violet-500/5 text-violet-600",
-    badge:
-      "bg-violet-50 text-violet-600 dark:bg-violet-300/10 dark:text-violet-300",
+    badge: "bg-violet-50 text-violet-600 dark:bg-violet-300/10 dark:text-violet-300",
   },
   paragraph: {
     label: "Paragraph",
@@ -7977,8 +7951,7 @@ const BLOCK_STYLES: Record<
     overlay: "border-emerald-500/70 bg-emerald-500/10",
     mutedOverlay: "border-emerald-500/35 bg-emerald-500/5",
     ring: "border-emerald-500/60 bg-emerald-500/5 text-emerald-600",
-    badge:
-      "bg-emerald-50 text-emerald-600 dark:bg-emerald-300/10 dark:text-emerald-300",
+    badge: "bg-emerald-50 text-emerald-600 dark:bg-emerald-300/10 dark:text-emerald-300",
   },
   table: {
     label: "Table",
@@ -7986,8 +7959,7 @@ const BLOCK_STYLES: Record<
     overlay: "border-amber-500/70 bg-amber-500/10",
     mutedOverlay: "border-amber-500/35 bg-amber-500/5",
     ring: "border-amber-500/60 bg-amber-500/5 text-amber-700",
-    badge:
-      "bg-amber-50 text-amber-600 dark:bg-amber-300/10 dark:text-amber-300",
+    badge: "bg-amber-50 text-amber-600 dark:bg-amber-300/10 dark:text-amber-300",
   },
   figure: {
     label: "Figure",
@@ -8011,8 +7983,7 @@ const BLOCK_STYLES: Record<
     overlay: "border-slate-500/70 bg-slate-500/10",
     mutedOverlay: "border-slate-500/35 bg-slate-500/5",
     ring: "border-slate-500/60 bg-slate-500/5 text-slate-700",
-    badge:
-      "bg-slate-50 text-slate-600 dark:bg-slate-300/10 dark:text-slate-300",
+    badge: "bg-slate-50 text-slate-600 dark:bg-slate-300/10 dark:text-slate-300",
   },
   page_number: {
     label: "Page number",
@@ -8022,50 +7993,50 @@ const BLOCK_STYLES: Record<
     ring: "border-zinc-500/60 bg-zinc-500/5 text-zinc-700",
     badge: "bg-zinc-50 text-zinc-600 dark:bg-zinc-300/10 dark:text-zinc-300",
   },
-}
+};
 
 function getBlockType(block: ParsedOcrBlock): OcrBlockType | undefined {
   if (block.type === "heading" || block.type === "section_heading") {
-    return "heading"
+    return "heading";
   }
 
   if (block.type === "header") {
-    return "header"
+    return "header";
   }
 
   if (block.type === "footer") {
-    return "footer"
+    return "footer";
   }
 
   if (block.type === "page_number") {
-    return "page_number"
+    return "page_number";
   }
 
   if (block.type === "figure" || block.type === "image") {
-    return "figure"
+    return "figure";
   }
 
   if (block.type === "table") {
-    return "table"
+    return "table";
   }
 
   if (block.metadata.layoutClass === "List Item") {
-    return "list"
+    return "list";
   }
 
   if (block.type === "text") {
-    return "paragraph"
+    return "paragraph";
   }
 }
 
 export function getOcrBlocks(output: ParsedOcrOutput): OcrBlock[] {
   return output.chunks.flatMap((chunk) =>
     chunk.blocks.flatMap((block) => {
-      const type = getBlockType(block)
-      const { page } = block.metadata
+      const type = getBlockType(block);
+      const { page } = block.metadata;
 
       if (!type || page.width <= 0 || page.height <= 0) {
-        return []
+        return [];
       }
 
       return {
@@ -8075,60 +8046,51 @@ export function getOcrBlocks(output: ParsedOcrOutput): OcrBlock[] {
         page: page.number,
         pageWidth: page.width,
         pageHeight: page.height,
-        confidence:
-          block.metadata.avgOcrConfidence ??
-          block.metadata.minOcrConfidence ??
-          1,
+        confidence: block.metadata.avgOcrConfidence ?? block.metadata.minOcrConfidence ?? 1,
         polygon: block.polygon,
         boundingBox: block.boundingBox,
-      }
-    })
-  )
+      };
+    }),
+  );
 }
 
 function getBoundingBox(block: OcrBlock): BoundingBox {
   if (block.boundingBox) {
-    return block.boundingBox
+    return block.boundingBox;
   }
 
-  const polygon = block.polygon ?? []
-  const xValues = polygon.map((point) => point.x)
-  const yValues = polygon.map((point) => point.y)
-  const left = Math.min(...xValues)
-  const right = Math.max(...xValues)
-  const top = Math.min(...yValues)
-  const bottom = Math.max(...yValues)
+  const polygon = block.polygon ?? [];
+  const xValues = polygon.map((point) => point.x);
+  const yValues = polygon.map((point) => point.y);
+  const left = Math.min(...xValues);
+  const right = Math.max(...xValues);
+  const top = Math.min(...yValues);
+  const bottom = Math.max(...yValues);
 
-  return { left, top, right, bottom }
+  return { left, top, right, bottom };
 }
 
-function getBlockCoordinateRotation(
-  block: OcrBlock,
-  pageSize?: { width: number; height: number }
-) {
-  const blockIsLandscape = block.pageWidth > block.pageHeight
+function getBlockCoordinateRotation(block: OcrBlock, pageSize?: { width: number; height: number }) {
+  const blockIsLandscape = block.pageWidth > block.pageHeight;
 
-  if (!pageSize) return blockIsLandscape ? 1 : 0
+  if (!pageSize) return blockIsLandscape ? 1 : 0;
 
-  const pageIsLandscape = pageSize.width > pageSize.height
+  const pageIsLandscape = pageSize.width > pageSize.height;
 
-  if (blockIsLandscape && !pageIsLandscape) return 1
-  if (!blockIsLandscape && pageIsLandscape) return 3
+  if (blockIsLandscape && !pageIsLandscape) return 1;
+  if (!blockIsLandscape && pageIsLandscape) return 3;
 
-  return 0
+  return 0;
 }
 
-function normalizeHighlightAreaForRotation(
-  area: HighlightArea,
-  rotation: number
-): HighlightArea {
+function normalizeHighlightAreaForRotation(area: HighlightArea, rotation: number): HighlightArea {
   if (rotation === 1) {
     return {
       left: area.top,
       top: 100 - area.left - area.width,
       width: area.height,
       height: area.width,
-    }
+    };
   }
 
   if (rotation === 3) {
@@ -8137,53 +8099,40 @@ function normalizeHighlightAreaForRotation(
       top: area.left,
       width: area.height,
       height: area.width,
-    }
+    };
   }
 
-  return area
+  return area;
 }
 
-export function blockToHighlightArea(
-  block: OcrBlock,
-  pageSize?: { width: number; height: number }
-): HighlightArea {
-  const { left, top, right, bottom } = getBoundingBox(block)
+export function blockToHighlightArea(block: OcrBlock, pageSize?: { width: number; height: number }): HighlightArea {
+  const { left, top, right, bottom } = getBoundingBox(block);
 
   const area = {
     left: (left / block.pageWidth) * 100,
     top: (top / block.pageHeight) * 100,
     width: ((right - left) / block.pageWidth) * 100,
     height: ((bottom - top) / block.pageHeight) * 100,
-  }
+  };
 
-  return normalizeHighlightAreaForRotation(
-    area,
-    getBlockCoordinateRotation(block, pageSize)
-  )
+  return normalizeHighlightAreaForRotation(area, getBlockCoordinateRotation(block, pageSize));
 }
 
-export function blockToArea(
-  block: OcrBlock,
-  pageSize?: { width: number; height: number }
-): React.CSSProperties {
-  const area = blockToHighlightArea(block, pageSize)
+export function blockToArea(block: OcrBlock, pageSize?: { width: number; height: number }): React.CSSProperties {
+  const area = blockToHighlightArea(block, pageSize);
 
   return {
     left: `${area.left}%`,
     top: `${area.top}%`,
     width: `${area.width}%`,
     height: `${area.height}%`,
-  }
+  };
 }
 
-const OcrBlockMarkdown = React.memo(function OcrBlockMarkdown({
-  text,
-}: {
-  text: string
-}) {
+const OcrBlockMarkdown = React.memo(function OcrBlockMarkdown({ text }: { text: string }) {
   const markdown = text.replace(OCR_MARKDOWN_FIGURE_CAPTION_PATTERN, (tag) =>
-    tag.startsWith("</") ? "</figcaption>" : "<figcaption>"
-  )
+    tag.startsWith("</") ? "</figcaption>" : "<figcaption>",
+  );
 
   return (
     <div className="space-y-1 text-sm leading-5 text-foreground/90">
@@ -8192,64 +8141,44 @@ const OcrBlockMarkdown = React.memo(function OcrBlockMarkdown({
         remarkPlugins={OCR_MARKDOWN_REMARK_PLUGINS}
         components={{
           h1: ({ node: _node, ...props }) => (
-            <h1
-              className="my-0 text-base leading-5 font-semibold text-foreground"
-              {...props}
-            />
+            <h1 className="my-0 text-base leading-5 font-semibold text-foreground" {...props} />
           ),
-          p: ({ node: _node, ...props }) => (
-            <p className="my-0 text-[13px] leading-5" {...props} />
-          ),
-          ol: ({ node: _node, ...props }) => (
-            <ol className="my-0 list-decimal space-y-0.5 pl-4" {...props} />
-          ),
+          p: ({ node: _node, ...props }) => <p className="my-0 text-[13px] leading-5" {...props} />,
+          ol: ({ node: _node, ...props }) => <ol className="my-0 list-decimal space-y-0.5 pl-4" {...props} />,
           table: ({ node: _node, ...props }) => (
             <div className="overflow-hidden rounded-md border bg-background">
               <table className="w-full border-collapse text-xs" {...props} />
             </div>
           ),
           figure: ({ node: _node, ...props }) => (
-            <figure
-              className="my-0 space-y-2 rounded-md border bg-muted/20 p-2 text-[13px]"
-              {...props}
-            />
+            <figure className="my-0 space-y-2 rounded-md border bg-muted/20 p-2 text-[13px]" {...props} />
           ),
           figcaption: ({ node: _node, ...props }) => (
-            <figcaption
-              className="border-t pt-2 text-xs leading-5 text-muted-foreground"
-              {...props}
-            />
+            <figcaption className="border-t pt-2 text-xs leading-5 text-muted-foreground" {...props} />
           ),
           caption: ({ node: _node, ...props }) => (
-            <figcaption
-              className="block border-t pt-2 text-xs leading-5 text-muted-foreground"
-              {...props}
-            />
+            <figcaption className="block border-t pt-2 text-xs leading-5 text-muted-foreground" {...props} />
           ),
-          th: ({ node: _node, ...props }) => (
-            <th className="border-b bg-muted px-2 py-1 text-left" {...props} />
-          ),
-          td: ({ node: _node, ...props }) => (
-            <td className="border-t px-2 py-1" {...props} />
-          ),
+          th: ({ node: _node, ...props }) => <th className="border-b bg-muted px-2 py-1 text-left" {...props} />,
+          td: ({ node: _node, ...props }) => <td className="border-t px-2 py-1" {...props} />,
         }}
       >
         {markdown}
       </ReactMarkdown>
     </div>
-  )
-})
+  );
+});
 
 const OcrBlockButton = React.memo(function OcrBlockButton({
   block,
   isActive,
   onFocusBlock,
 }: {
-  block: OcrBlock
-  isActive: boolean
-  onFocusBlock: (block: OcrBlock) => void
+  block: OcrBlock;
+  isActive: boolean;
+  onFocusBlock: (block: OcrBlock) => void;
 }) {
-  const style = BLOCK_STYLES[block.type]
+  const style = BLOCK_STYLES[block.type];
 
   return (
     <button
@@ -8258,7 +8187,7 @@ const OcrBlockButton = React.memo(function OcrBlockButton({
       onFocus={() => onFocusBlock(block)}
       className={cn(
         "w-full rounded-lg border bg-background p-3 text-left hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-        isActive && style.ring
+        isActive && style.ring,
       )}
     >
       <div className="min-w-0">
@@ -8267,15 +8196,13 @@ const OcrBlockButton = React.memo(function OcrBlockButton({
             <div
               className={cn(
                 "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
-                style.badge
+                style.badge,
               )}
             >
               <HugeiconsIcon icon={style.icon} className="size-3.5" />
               {style.label}
             </div>
-            <div className="truncate text-xs text-muted-foreground">
-              {Math.round(block.confidence * 100)}%
-            </div>
+            <div className="truncate text-xs text-muted-foreground">{Math.round(block.confidence * 100)}%</div>
           </div>
           <div className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
             p. {block.page}
@@ -8286,8 +8213,8 @@ const OcrBlockButton = React.memo(function OcrBlockButton({
         </div>
       </div>
     </button>
-  )
-})
+  );
+});
 
 export const OcrBlockOverlay = React.memo(function OcrBlockOverlay({
   block,
@@ -8295,28 +8222,20 @@ export const OcrBlockOverlay = React.memo(function OcrBlockOverlay({
   pageHeight,
   pageWidth,
 }: {
-  block: OcrBlock
-  isActive?: boolean
-  pageHeight?: number
-  pageWidth?: number
+  block: OcrBlock;
+  isActive?: boolean;
+  pageHeight?: number;
+  pageWidth?: number;
 }) {
-  const style = BLOCK_STYLES[block.type]
+  const style = BLOCK_STYLES[block.type];
 
   return (
     <div
-      className={cn(
-        "pointer-events-none absolute z-10 border",
-        isActive ? style.overlay : style.mutedOverlay
-      )}
-      style={blockToArea(
-        block,
-        pageWidth && pageHeight
-          ? { width: pageWidth, height: pageHeight }
-          : undefined
-      )}
+      className={cn("pointer-events-none absolute z-10 border", isActive ? style.overlay : style.mutedOverlay)}
+      style={blockToArea(block, pageWidth && pageHeight ? { width: pageWidth, height: pageHeight } : undefined)}
     />
-  )
-})
+  );
+});
 
 export function OcrBlocksPanel({
   activeBlockId,
@@ -8324,74 +8243,60 @@ export function OcrBlocksPanel({
   className,
   onBlockFocus,
 }: {
-  activeBlockId?: string
-  blocks: OcrBlock[]
-  className?: string
-  onBlockFocus?: (block: OcrBlock) => void
+  activeBlockId?: string;
+  blocks: OcrBlock[];
+  className?: string;
+  onBlockFocus?: (block: OcrBlock) => void;
 }) {
-  const scrollViewportRef = React.useRef<HTMLDivElement | null>(null)
-  const [localActiveBlockId, setLocalActiveBlockId] = React.useState(
-    activeBlockId ?? blocks[0]?.id
-  )
-  const firstBlock = blocks[0]
-  const focusedBlockId = activeBlockId ?? localActiveBlockId
-  const activeBlock =
-    blocks.find((block) => block.id === focusedBlockId) ?? firstBlock
-  const focusedBlockIdRef = React.useRef(focusedBlockId)
+  const scrollViewportRef = React.useRef<HTMLDivElement | null>(null);
+  const [localActiveBlockId, setLocalActiveBlockId] = React.useState(activeBlockId ?? blocks[0]?.id);
+  const firstBlock = blocks[0];
+  const focusedBlockId = activeBlockId ?? localActiveBlockId;
+  const activeBlock = blocks.find((block) => block.id === focusedBlockId) ?? firstBlock;
+  const focusedBlockIdRef = React.useRef(focusedBlockId);
 
   React.useEffect(() => {
-    focusedBlockIdRef.current = focusedBlockId
-  }, [focusedBlockId])
+    focusedBlockIdRef.current = focusedBlockId;
+  }, [focusedBlockId]);
 
   const estimateBlockSize = React.useCallback(
     (index: number) => {
-      const block = blocks[index]
-      return block
-        ? getEstimatedOcrBlockRowHeight(block)
-        : OCR_BLOCK_ROW_MIN_ESTIMATE
+      const block = blocks[index];
+      return block ? getEstimatedOcrBlockRowHeight(block) : OCR_BLOCK_ROW_MIN_ESTIMATE;
     },
-    [blocks]
-  )
+    [blocks],
+  );
   const virtualizer = useVirtualizer({
     count: blocks.length,
     estimateSize: estimateBlockSize,
     getItemKey: (index) => blocks[index]?.id ?? index,
     getScrollElement: () => scrollViewportRef.current,
     overscan: 6,
-  })
+  });
 
   const focusBlock = React.useCallback(
     (block: OcrBlock) => {
-      if (block.id === focusedBlockIdRef.current) return
+      if (block.id === focusedBlockIdRef.current) return;
 
-      focusedBlockIdRef.current = block.id
-      setLocalActiveBlockId(block.id)
-      onBlockFocus?.(block)
+      focusedBlockIdRef.current = block.id;
+      setLocalActiveBlockId(block.id);
+      onBlockFocus?.(block);
     },
-    [onBlockFocus]
-  )
+    [onBlockFocus],
+  );
 
   React.useEffect(() => {
-    if (!firstBlock) return
-    if (
-      activeBlockId ||
-      blocks.some((block) => block.id === localActiveBlockId)
-    ) {
-      return
+    if (!firstBlock) return;
+    if (activeBlockId || blocks.some((block) => block.id === localActiveBlockId)) {
+      return;
     }
 
-    setLocalActiveBlockId(firstBlock.id)
-  }, [activeBlockId, blocks, firstBlock, localActiveBlockId])
+    setLocalActiveBlockId(firstBlock.id);
+  }, [activeBlockId, blocks, firstBlock, localActiveBlockId]);
 
   return (
-    <aside
-      className={cn("flex h-[420px] min-h-0 flex-col bg-background", className)}
-    >
-      <ScrollArea
-        className="min-h-0 flex-1"
-        scrollFade
-        viewportRef={scrollViewportRef}
-      >
+    <aside className={cn("flex h-[420px] min-h-0 flex-col bg-background", className)}>
+      <ScrollArea className="min-h-0 flex-1" scrollFade viewportRef={scrollViewportRef}>
         {blocks.length ? (
           <div
             className="relative"
@@ -8400,8 +8305,8 @@ export function OcrBlocksPanel({
             }}
           >
             {virtualizer.getVirtualItems().map((virtualRow) => {
-              const block = blocks[virtualRow.index]
-              if (!block) return null
+              const block = blocks[virtualRow.index];
+              if (!block) return null;
 
               return (
                 <div
@@ -8410,18 +8315,12 @@ export function OcrBlocksPanel({
                   data-index={virtualRow.index}
                   className="absolute top-0 right-3 left-3 pb-2 [contain:layout_paint]"
                   style={{
-                    transform: `translateY(${
-                      virtualRow.start + OCR_BLOCK_LIST_PADDING
-                    }px)`,
+                    transform: `translateY(${virtualRow.start + OCR_BLOCK_LIST_PADDING}px)`,
                   }}
                 >
-                  <OcrBlockButton
-                    block={block}
-                    isActive={block.id === activeBlock?.id}
-                    onFocusBlock={focusBlock}
-                  />
+                  <OcrBlockButton block={block} isActive={block.id === activeBlock?.id} onFocusBlock={focusBlock} />
                 </div>
-              )
+              );
             })}
           </div>
         ) : (
@@ -8433,12 +8332,9 @@ export function OcrBlocksPanel({
         )}
       </ScrollArea>
     </aside>
-  )
+  );
 }
 
 export function OcrBlocks() {
-  return (
-    <OcrBlocksPanel blocks={getOcrBlocks(ATTENTION_OCR_OUTPUT).slice(0, 12)} />
-  )
+  return <OcrBlocksPanel blocks={getOcrBlocks(ATTENTION_OCR_OUTPUT).slice(0, 12)} />;
 }
-

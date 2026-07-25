@@ -7,29 +7,26 @@
 
 ## Goal
 
-Today, the on-device models (E5 embedding model, GLiNER PII model, and their
-tokenizers) are loaded lazily, for the first time, buried inside the first
-call to `ingestFolder()`. There is no dedicated progress signal for this —
-the existing per-file ingest progress bar just appears to stall during the
-`embed`/`pii` stages while a multi-MB model download happens silently. There
-is also no caching for the GLiNER model or tokenizer today
-(`useBrowserCache: false` in `ner.ts`), so this stall repeats every session.
+This spec proposed a background warmup step that starts automatically when the
+app loads, a visible progress indicator, gating for model-dependent actions,
+and model-asset caching so the wait only happens on a user's genuinely first
+visit (or after a model version bump).
 
-This spec adds a background warmup step that starts automatically when the
-app loads, a visible progress indicator, gates only the actions that
-actually require the models, and fixes model caching so the wait only
-happens on a user's genuinely first visit (or after a model version bump).
+As of July 22, 2026, that work has landed on `main`. The sections below are
+kept as the design record, with the "Current State" section updated to reflect
+the implemented behavior.
 
 ## Current State (verified)
 
 - [apps/web/app/onboarding/page.tsx](../../../apps/web/app/onboarding/page.tsx) — static card, "Enter workspace" just sets local auth and navigates to `/matters`. No model interaction.
-- [packages/wasm-pipeline/src/runtime.ts](../../../packages/wasm-pipeline/src/runtime.ts) `initWasm()` — lazy-loads the Rust/WASM extraction engine on first call.
-- [packages/wasm-pipeline/src/embed.ts](../../../packages/wasm-pipeline/src/embed.ts) `getSession()` — dynamically imports `onnxruntime-web`, fetches the E5 `.onnx` file itself (`fetch(e5ModelUrl(...))`), and `fetchJson()` fetches the E5 tokenizer + config itself.
-- [packages/wasm-pipeline/src/ner.ts](../../../packages/wasm-pipeline/src/ner.ts) `getModel()` — constructs a `gliner` `Gliner` instance; **we do not fetch its model/tokenizer ourselves.**
-- [packages/wasm-pipeline/src/scenario.ts](../../../packages/wasm-pipeline/src/scenario.ts) `selectScenario()` + [capabilities.ts](../../../packages/wasm-pipeline/src/capabilities.ts) `detectCapabilities()` already compute which execution provider/quant/model variant to use per device — reused as-is by warmup.
-- Traced into `gliner@0.0.19`'s source (`dist/index.mjs`):
-  - `ONNXWebWrapper.init()` calls `ort.InferenceSession.create(modelPath, ...)` with a **URL string**, so `onnxruntime-web` does its own internal fetch for the PII model binary — not interceptable via our own fetch calls.
-  - `Gliner`'s tokenizer setup calls `AutoTokenizer.from_pretrained(tokenizerPath)` from `@xenova/transformers`, which **does** respect `transformersSettings.useBrowserCache` (currently set to `false` in `ner.ts:62`).
+- [apps/web/components/app-shell.tsx](../../../apps/web/components/app-shell.tsx) starts warmup on mount via `startModelWarmup()`, and [apps/web/components/model-warmup-status.tsx](../../../apps/web/components/model-warmup-status.tsx) renders the status pill in the top bar.
+- [apps/web/lib/engine/warmup-store.ts](../../../apps/web/lib/engine/warmup-store.ts) implements the singleton warmup store and co-locates the `useModelWarmup()` hook; there is no separate `apps/web/hooks/use-model-warmup.ts` file.
+- [packages/wasm-pipeline/src/warmup.ts](../../../packages/wasm-pipeline/src/warmup.ts) now orchestrates `detectCapabilities()` → `selectScenario()` → engine/model warmup, with weighted progress and retry/backoff.
+- [packages/wasm-pipeline/src/model-cache.ts](../../../packages/wasm-pipeline/src/model-cache.ts) provides Cache Storage-backed fetch helpers plus the scoped fetch override used for the GLiNER ONNX fetch path.
+- [packages/wasm-pipeline/src/embed.ts](../../../packages/wasm-pipeline/src/embed.ts) now fetches the E5 model and tokenizer through the cache helpers.
+- [packages/wasm-pipeline/src/ner.ts](../../../packages/wasm-pipeline/src/ner.ts) now enables `transformersSettings.useBrowserCache`, prefetches the GLiNER ONNX bytes, and initializes under a scoped fetch override.
+- [apps/web/app/folders/[id]/FolderView.tsx](../../../apps/web/app/folders/[id]/FolderView.tsx) gates ingest until warmup reaches `"ready"`.
+- [apps/web/app/search/SearchPageInner.tsx](../../../apps/web/app/search/SearchPageInner.tsx) also gates search on warmup readiness. This is a small UX divergence from the original design decision below, which proposed allowing the click and then showing a toast/error instead of proactively disabling the button.
 
 ## Decisions (from brainstorming)
 
@@ -81,3 +78,16 @@ fetch-you-already-own or flipping an existing library flag.
 - Web Worker or Service Worker based warmup (considered and rejected during brainstorming — no confirmed main-thread jank problem today, and both add infrastructure disproportionate to "warm 2 models and show progress").
 - Backend `Cache-Control` header changes on the Node model-cache service (would strengthen GLiNER model caching further but isn't required given the scoped-fetch-override approach; worth a follow-up ticket, not part of this spec).
 - Changing which models are used, quantization strategy, or `selectScenario()` logic itself.
+
+## 2026-07-23 GLiNER2 loading amendment
+
+The scoped global `fetch` override and injected JavaScript GLiNER constructor
+remain the legacy path. The target Xberg Candle path fetches checksum-verified
+safetensors, tokenizer, and encoder-config bytes, then passes them to a
+stateful WASM model handle in a Worker.
+
+The official 1.23 GB source checkpoint must not join eager startup warmup.
+GLiNER2 is explicit opt-in/lazy loading with truthful byte progress,
+cancellation, storage-quota preflight, corrupt-cache eviction, OOM recovery,
+immutable revision keys, and supported-language disclosure. A browser-optimized
+F16 or quantized artifact is required before default enablement.

@@ -31,8 +31,8 @@ interface MirrorChunk {
 }
 
 interface MirrorBundle {
-	version: number;
-	embedding_identity: string;
+  version: number;
+  embedding_identity: string;
   index: number[];
   vault: number[];
   vaultSalt: number[];
@@ -162,11 +162,19 @@ export class MirrorStore {
     const bundleFile = this.bundlePath(matterId);
     const existing: MirrorBundle = existsSync(bundleFile)
       ? this.parseBundle(matterId, readFileSync(bundleFile))
-      : { version: 2, embedding_identity: SHARED_EMBEDDING_IDENTITY, index: [], vault: [], vaultSalt: [], pii: [], chunks: [] };
+      : {
+          version: 2,
+          embedding_identity: SHARED_EMBEDDING_IDENTITY,
+          index: [],
+          vault: [],
+          vaultSalt: [],
+          pii: [],
+          chunks: [],
+        };
 
     const merged: MirrorBundle = {
-	  version: 2,
-	  embedding_identity: existing.embedding_identity,
+      version: 2,
+      embedding_identity: existing.embedding_identity,
       index: existing.index,
       vault: existing.vault,
       vaultSalt: existing.vaultSalt,

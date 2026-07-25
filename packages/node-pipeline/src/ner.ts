@@ -4,55 +4,55 @@ import { dirname } from "node:path";
 import type { Gliner, IEntityResult, InitConfig, IONNXWebSettings, ITransformersSettings } from "gliner";
 
 export const RUST_ALIGNED_PII_TYPES = [
-	"person",
-	"full_name",
-	"first_name",
-	"middle_name",
-	"last_name",
-	"date_of_birth",
-	"email",
-	"phone_number",
-	"address",
-	"street_address",
-	"city",
-	"state_or_region",
-	"postal_code",
-	"country",
-	"government_id",
-	"national_id_number",
-	"passport_number",
-	"drivers_license_number",
-	"license_number",
-	"tax_id",
-	"tax_number",
-	"bank_account",
-	"account_number",
-	"routing_number",
-	"iban",
-	"payment_card",
-	"card_number",
-	"card_expiry",
-	"card_cvv",
-	"username",
-	"ip_address",
-	"account_id",
-	"sensitive_account_id",
-	"password",
-	"secret",
-	"api_key",
-	"access_token",
-	"recovery_code",
-	"sensitive_date",
-	"document_date",
-	"expiration_date",
-	"transaction_date",
+  "person",
+  "full_name",
+  "first_name",
+  "middle_name",
+  "last_name",
+  "date_of_birth",
+  "email",
+  "phone_number",
+  "address",
+  "street_address",
+  "city",
+  "state_or_region",
+  "postal_code",
+  "country",
+  "government_id",
+  "national_id_number",
+  "passport_number",
+  "drivers_license_number",
+  "license_number",
+  "tax_id",
+  "tax_number",
+  "bank_account",
+  "account_number",
+  "routing_number",
+  "iban",
+  "payment_card",
+  "card_number",
+  "card_expiry",
+  "card_cvv",
+  "username",
+  "ip_address",
+  "account_id",
+  "sensitive_account_id",
+  "password",
+  "secret",
+  "api_key",
+  "access_token",
+  "recovery_code",
+  "sensitive_date",
+  "document_date",
+  "expiration_date",
+  "transaction_date",
 ] as const;
 
 export interface DetectedEntity {
-	kind: string;
-	start: number;
-	end: number;
-	text: string;
+  kind: string;
+  start: number;
+  end: number;
+  text: string;
 }
 
 /**
@@ -64,43 +64,43 @@ export interface DetectedEntity {
  * the multi-gigabyte model or importing an unavailable native module.
  */
 export interface Gliner2NativeFacade {
-	detectGliner2(
-		text: string,
-		modelDir: string,
-		labels: readonly string[],
-		threshold: number,
-	): Promise<DetectedEntity[]> | DetectedEntity[];
+  detectGliner2(
+    text: string,
+    modelDir: string,
+    labels: readonly string[],
+    threshold: number,
+  ): Promise<DetectedEntity[]> | DetectedEntity[];
 }
 
 let gliner2NativeFacade: Gliner2NativeFacade | undefined;
 
 /** Install the generated native façade at application startup. */
 export function configureGliner2NativeFacade(facade: Gliner2NativeFacade | undefined): void {
-	gliner2NativeFacade = facade;
+  gliner2NativeFacade = facade;
 }
 
 /** Run native GLiNER2 inference through the configured generated façade. */
 export async function detectGliner2(
-	text: string,
-	modelDir: string,
-	labels: readonly string[] = RUST_ALIGNED_PII_TYPES,
-	threshold = 0.5,
+  text: string,
+  modelDir: string,
+  labels: readonly string[] = RUST_ALIGNED_PII_TYPES,
+  threshold = 0.5,
 ): Promise<DetectedEntity[]> {
-	if (!gliner2NativeFacade) {
-		throw new Error(
-			"native GLiNER2 façade is unavailable; regenerate xberg-node and configureGliner2NativeFacade() before inference",
-		);
-	}
-	return gliner2NativeFacade.detectGliner2(text, modelDir, labels, threshold);
+  if (!gliner2NativeFacade) {
+    throw new Error(
+      "native GLiNER2 façade is unavailable; regenerate xberg-node and configureGliner2NativeFacade() before inference",
+    );
+  }
+  return gliner2NativeFacade.detectGliner2(text, modelDir, labels, threshold);
 }
 
 async function disableRemoteModels(): Promise<void> {
-	try {
-		const { env } = await import("@xenova/transformers");
-		env.allowRemoteModels = false;
-	} catch {
-		// transformers runtime unavailable — no-op.
-	}
+  try {
+    const { env } = await import("@xenova/transformers");
+    env.allowRemoteModels = false;
+  } catch {
+    // transformers runtime unavailable — no-op.
+  }
 }
 
 /**
@@ -137,52 +137,52 @@ async function disableRemoteModels(): Promise<void> {
  * via plain string concatenation: `wasmPaths + "ort-wasm-simd-threaded.wasm"`.
  */
 export function resolveLocalOnnxWasmPaths(): string {
-	const require = createRequire(import.meta.url);
-	const glinerEntryPath = require.resolve("gliner");
-	const glinerRequire = createRequire(glinerEntryPath);
-	const onnxEntryPath = glinerRequire.resolve("onnxruntime-web");
-	const wasmDir = dirname(onnxEntryPath).replaceAll("\\", "/");
-	return `${wasmDir}/`;
+  const require = createRequire(import.meta.url);
+  const glinerEntryPath = require.resolve("gliner");
+  const glinerRequire = createRequire(glinerEntryPath);
+  const onnxEntryPath = glinerRequire.resolve("onnxruntime-web");
+  const wasmDir = dirname(onnxEntryPath).replaceAll("\\", "/");
+  return `${wasmDir}/`;
 }
 
 const modelCache = new Map<string, Promise<Gliner>>();
 
 async function getModel(modelPath: string, tokenizerPath: string): Promise<Gliner> {
-	const key = `${modelPath}::${tokenizerPath}`;
-	let cached = modelCache.get(key);
-	if (!cached) {
-		cached = (async () => {
-			const { Gliner: GlinerClass } = await import("gliner");
-			await disableRemoteModels();
-			const transformersSettings: ITransformersSettings = { allowLocalModels: true, useBrowserCache: false };
-			const onnxSettings: IONNXWebSettings = {
-				modelPath,
-				executionProvider: "wasm",
-				wasmPaths: resolveLocalOnnxWasmPaths(),
-			};
-			const config: InitConfig = { tokenizerPath, onnxSettings, transformersSettings };
-			const model = new GlinerClass(config);
-			await model.initialize();
-			return model;
-		})().catch((err) => {
-			// Don't let a transient init failure permanently poison the cache — the next call
-			// should retry instead of replaying the same rejection forever.
-			modelCache.delete(key);
-			throw err;
-		});
-		modelCache.set(key, cached);
-	}
-	return cached;
+  const key = `${modelPath}::${tokenizerPath}`;
+  let cached = modelCache.get(key);
+  if (!cached) {
+    cached = (async () => {
+      const { Gliner: GlinerClass } = await import("gliner");
+      await disableRemoteModels();
+      const transformersSettings: ITransformersSettings = { allowLocalModels: true, useBrowserCache: false };
+      const onnxSettings: IONNXWebSettings = {
+        modelPath,
+        executionProvider: "wasm",
+        wasmPaths: resolveLocalOnnxWasmPaths(),
+      };
+      const config: InitConfig = { tokenizerPath, onnxSettings, transformersSettings };
+      const model = new GlinerClass(config);
+      await model.initialize();
+      return model;
+    })().catch((err) => {
+      // Don't let a transient init failure permanently poison the cache — the next call
+      // should retry instead of replaying the same rejection forever.
+      modelCache.delete(key);
+      throw err;
+    });
+    modelCache.set(key, cached);
+  }
+  return cached;
 }
 
 export async function detectPii(
-	text: string,
-	modelPath: string,
-	tokenizerPath: string,
-	types: readonly string[] = RUST_ALIGNED_PII_TYPES,
+  text: string,
+  modelPath: string,
+  tokenizerPath: string,
+  types: readonly string[] = RUST_ALIGNED_PII_TYPES,
 ): Promise<DetectedEntity[]> {
-	const model = await getModel(modelPath, tokenizerPath);
-	const result = await model.inference({ texts: [text], entities: [...types], flatNer: true, threshold: 0.5 });
-	const ents = result[0] ?? [];
-	return ents.map((e: IEntityResult) => ({ kind: e.label, start: e.start, end: e.end, text: e.spanText }));
+  const model = await getModel(modelPath, tokenizerPath);
+  const result = await model.inference({ texts: [text], entities: [...types], flatNer: true, threshold: 0.5 });
+  const ents = result[0] ?? [];
+  return ents.map((e: IEntityResult) => ({ kind: e.label, start: e.start, end: e.end, text: e.spanText }));
 }

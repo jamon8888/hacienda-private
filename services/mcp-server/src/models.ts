@@ -3,7 +3,11 @@ import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeF
 import { chmodSync } from "node:fs";
 import { dirname } from "node:path";
 import type { ModelManifest, ModelManifestEntry } from "@xberg-io/core";
-import { loadGliner2ManifestEntries, loadGlinerManifestEntries, type Gliner2ArtifactPaths } from "@xberg-io/node-pipeline";
+import {
+  loadGliner2ManifestEntries,
+  loadGlinerManifestEntries,
+  type Gliner2ArtifactPaths,
+} from "@xberg-io/node-pipeline";
 import { PLACEHOLDER_SHA } from "./config.js";
 import { AppError } from "./error.js";
 
@@ -35,9 +39,7 @@ function isRetryableFetchError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   const message = error.message.toLowerCase();
   const causeCode =
-    typeof error.cause === "object" && error.cause !== null && "code" in error.cause
-      ? String(error.cause.code)
-      : "";
+    typeof error.cause === "object" && error.cause !== null && "code" in error.cause ? String(error.cause.code) : "";
   return (
     message.includes("timed out") ||
     message.includes("timeout") ||

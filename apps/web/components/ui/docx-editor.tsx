@@ -1,7 +1,7 @@
-﻿"use client"
+﻿"use client";
 
-import * as React from "react"
-import { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card"
+import * as React from "react";
+import { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card";
 import {
   DocxEditorViewer,
   paragraphLetterheadFloatSideAtNodeIndex,
@@ -19,7 +19,7 @@ import {
   type DocxDocumentTheme,
   type DocxEditorController,
   type ParagraphStyleDefinition,
-} from "@extend-ai/react-docx"
+} from "@extend-ai/react-docx";
 import {
   ArrowExpandDiagonal01Icon,
   ArrowExpandDiagonal02Icon,
@@ -63,72 +63,51 @@ import {
   TextUnderlineIcon,
   Undo02Icon,
   Upload01Icon,
-} from "@hugeicons/core-free-icons"
-import { HugeiconsIcon } from "@hugeicons/react"
+} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { ColorPicker } from "@/components/ui/color-picker"
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { ColorPicker } from "@/components/ui/color-picker";
 import {
   DocumentViewerThumbnailSidebar,
   useElementWidth,
   useInlineThumbnailSidebar,
-} from "@/components/ui/document-viewer-sidebar"
+} from "@/components/ui/document-viewer-sidebar";
 import {
   createDocxCommentCardRenderer,
   createDocxTrackedChangeCardRenderer,
-} from "@/components/ui/docx-annotation-card"
+} from "@/components/ui/docx-annotation-card";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { FileThumbnail } from "@/components/ui/file-thumbnail"
-import { Input } from "@/components/ui/input"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Separator } from "@/components/ui/separator"
-import { Spinner } from "@/components/ui/spinner"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
+} from "@/components/ui/dropdown-menu";
+import { FileThumbnail } from "@/components/ui/file-thumbnail";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Spinner } from "@/components/ui/spinner";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-const DOCX_MIME_TYPE =
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-const DOCX_LOADING_INDICATOR_DELAY_MS = 300
-const DOCX_THUMBNAIL_WIDTH = 92
-const DOCX_EDITOR_DEFAULT_ZOOM_SCALE = 100
-const ZOOM_OPTIONS = [50, 75, 90, 100, 110, 125, 150, 175, 200] as const
-const FONT_FAMILIES = [
-  "Calibri",
-  "Arial",
-  "Times New Roman",
-  "Georgia",
-  "Helvetica",
-  "Courier New",
-] as const
-const FONT_SIZE_OPTIONS = [
-  8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48,
-] as const
-const LINE_SPACING_OPTIONS = [1, 1.15, 1.2, 1.5, 2, 2.5, 3] as const
+const DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const DOCX_LOADING_INDICATOR_DELAY_MS = 300;
+const DOCX_THUMBNAIL_WIDTH = 92;
+const DOCX_EDITOR_DEFAULT_ZOOM_SCALE = 100;
+const ZOOM_OPTIONS = [50, 75, 90, 100, 110, 125, 150, 175, 200] as const;
+const FONT_FAMILIES = ["Calibri", "Arial", "Times New Roman", "Georgia", "Helvetica", "Courier New"] as const;
+const FONT_SIZE_OPTIONS = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48] as const;
+const LINE_SPACING_OPTIONS = [1, 1.15, 1.2, 1.5, 2, 2.5, 3] as const;
 const FALLBACK_PARAGRAPH_STYLE_OPTIONS = [
   { id: "Normal", name: "Body" },
   { id: "Heading1", name: "Heading 1" },
   { id: "Heading2", name: "Heading 2" },
   { id: "Heading3", name: "Heading 3" },
-] as const
+] as const;
 const HIGHLIGHT_COLORS = [
   { label: "Yellow", value: "yellow", color: "#fff59d" },
   { label: "Green", value: "green", color: "#bbf7d0" },
@@ -136,15 +115,13 @@ const HIGHLIGHT_COLORS = [
   { label: "Magenta", value: "magenta", color: "#f5d0fe" },
   { label: "Red", value: "red", color: "#fecaca" },
   { label: "Blue", value: "blue", color: "#bfdbfe" },
-] as const
+] as const;
 const HIGHLIGHT_PREVIEW_COLORS: Record<string, string> = {
   black: "#111827",
   white: "#ffffff",
-  ...Object.fromEntries(
-    HIGHLIGHT_COLORS.map((option) => [option.value, option.color])
-  ),
-}
-const DOCX_PADDING_WARNING_TEXT = "a style property during rerender"
+  ...Object.fromEntries(HIGHLIGHT_COLORS.map((option) => [option.value, option.color])),
+};
+const DOCX_PADDING_WARNING_TEXT = "a style property during rerender";
 const DEFAULT_HEADING_PREVIEW_RUN_STYLES: Record<
   1 | 2 | 3 | 4 | 5 | 6,
   NonNullable<ParagraphStyleDefinition["runStyle"]>
@@ -185,27 +162,21 @@ const DEFAULT_HEADING_PREVIEW_RUN_STYLES: Record<
     bold: true,
     color: "#1f3763",
   },
-}
+};
 
 type UploadedDocxFile = {
-  file: File
-  identity: string
-}
+  file: File;
+  identity: string;
+};
 
 type BorderControlOption = {
-  id: DocxBorderPreset
-  label: string
-  contexts?: DocxBorderContext[]
-  separatorBefore?: boolean
-}
+  id: DocxBorderPreset;
+  label: string;
+  contexts?: DocxBorderContext[];
+  separatorBefore?: boolean;
+};
 
-type DocxFontToggleValue =
-  | "bold"
-  | "italic"
-  | "underline"
-  | "strike"
-  | "superscript"
-  | "subscript"
+type DocxFontToggleValue = "bold" | "italic" | "underline" | "strike" | "superscript" | "subscript";
 
 const BORDER_CONTROL_OPTIONS: BorderControlOption[] = [
   { id: "bottom", label: "Bottom Border" },
@@ -234,117 +205,108 @@ const BORDER_CONTROL_OPTIONS: BorderControlOption[] = [
   },
   { id: "diagonal-up", label: "Diagonal Up Border", contexts: ["table"] },
   { id: "horizontal-line", label: "Horizontal Line", separatorBefore: true },
-]
+];
 
 function borderControlOptionIcon(optionId: DocxBorderPreset) {
   switch (optionId) {
     case "bottom":
-      return BorderBottom01Icon
+      return BorderBottom01Icon;
     case "top":
-      return BorderTop01Icon
+      return BorderTop01Icon;
     case "left":
-      return BorderLeft01Icon
+      return BorderLeft01Icon;
     case "right":
-      return BorderRight01Icon
+      return BorderRight01Icon;
     case "none":
-      return BorderNone01Icon
+      return BorderNone01Icon;
     case "inside":
-      return BorderInnerIcon
+      return BorderInnerIcon;
     case "inside-horizontal":
-      return BorderHorizontalIcon
+      return BorderHorizontalIcon;
     case "inside-vertical":
-      return BorderVerticalIcon
+      return BorderVerticalIcon;
     case "diagonal-down":
-      return ArrowExpandDiagonal01Icon
+      return ArrowExpandDiagonal01Icon;
     case "diagonal-up":
-      return ArrowExpandDiagonal02Icon
+      return ArrowExpandDiagonal02Icon;
     case "horizontal-line":
-      return LineIcon
+      return LineIcon;
     default:
-      return BorderAll01Icon
+      return BorderAll01Icon;
   }
 }
 
-async function loadDocxFile(
-  url: string,
-  displayFileName: string
-): Promise<File> {
-  const response = await fetch(url)
+async function loadDocxFile(url: string, displayFileName: string): Promise<File> {
+  const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`Failed to fetch DOCX (${response.status})`)
+    throw new Error(`Failed to fetch DOCX (${response.status})`);
   }
 
-  const blob = await response.blob()
+  const blob = await response.blob();
   return new File([blob], displayFileName, {
     type: blob.type || DOCX_MIME_TYPE,
-  })
+  });
 }
 
 function formatDocumentName(fileName: string | undefined, url: string) {
-  if (fileName?.trim()) return fileName
+  if (fileName?.trim()) return fileName;
 
-  const pathname = url.split("?")[0] ?? ""
-  const rawName = pathname.split("/").pop() ?? "document.docx"
+  const pathname = url.split("?")[0] ?? "";
+  const rawName = pathname.split("/").pop() ?? "document.docx";
 
   try {
-    return decodeURIComponent(rawName)
+    return decodeURIComponent(rawName);
   } catch {
-    return rawName
+    return rawName;
   }
 }
 
 function getNextZoomScale(currentZoomScale: number, direction: 1 | -1) {
-  const currentIndex = ZOOM_OPTIONS.indexOf(
-    currentZoomScale as (typeof ZOOM_OPTIONS)[number]
-  )
-  let fallbackIndex = -1
+  const currentIndex = ZOOM_OPTIONS.indexOf(currentZoomScale as (typeof ZOOM_OPTIONS)[number]);
+  let fallbackIndex = -1;
 
   if (direction > 0) {
-    fallbackIndex = ZOOM_OPTIONS.findIndex((value) => value > currentZoomScale)
+    fallbackIndex = ZOOM_OPTIONS.findIndex((value) => value > currentZoomScale);
   } else {
     for (let index = ZOOM_OPTIONS.length - 1; index >= 0; index -= 1) {
       if (ZOOM_OPTIONS[index]! < currentZoomScale) {
-        fallbackIndex = index
-        break
+        fallbackIndex = index;
+        break;
       }
     }
   }
 
-  const resolvedIndex = currentIndex >= 0 ? currentIndex : fallbackIndex
-  if (resolvedIndex < 0) return currentZoomScale
+  const resolvedIndex = currentIndex >= 0 ? currentIndex : fallbackIndex;
+  if (resolvedIndex < 0) return currentZoomScale;
 
-  const nextIndex = Math.min(
-    Math.max(resolvedIndex + direction, 0),
-    ZOOM_OPTIONS.length - 1
-  )
+  const nextIndex = Math.min(Math.max(resolvedIndex + direction, 0), ZOOM_OPTIONS.length - 1);
 
-  return ZOOM_OPTIONS[nextIndex] ?? currentZoomScale
+  return ZOOM_OPTIONS[nextIndex] ?? currentZoomScale;
 }
 
 function normalizeDocxZoomScale(value: number | undefined): number {
-  return typeof value === "number" &&
-    ZOOM_OPTIONS.includes(value as (typeof ZOOM_OPTIONS)[number])
+  return typeof value === "number" && ZOOM_OPTIONS.includes(value as (typeof ZOOM_OPTIONS)[number])
     ? value
-    : DOCX_EDITOR_DEFAULT_ZOOM_SCALE
+    : DOCX_EDITOR_DEFAULT_ZOOM_SCALE;
 }
 
 function useDelayedLoadingIndicator(isLoading: boolean, delayMs: number) {
-  const [showSpinner, setShowSpinner] = React.useState(false)
+  const [showSpinner, setShowSpinner] = React.useState(false);
 
   React.useEffect(() => {
     if (!isLoading) {
-      setShowSpinner(false)
-      return
+      setShowSpinner(false);
+      return;
     }
 
     const timeoutId = window.setTimeout(() => {
-      setShowSpinner(true)
-    }, delayMs)
+      setShowSpinner(true);
+    }, delayMs);
 
-    return () => window.clearTimeout(timeoutId)
-  }, [delayMs, isLoading])
+    return () => window.clearTimeout(timeoutId);
+  }, [delayMs, isLoading]);
 
-  return showSpinner
+  return showSpinner;
 }
 
 function isDocxPaddingWarning(args: unknown[]) {
@@ -352,51 +314,51 @@ function isDocxPaddingWarning(args: unknown[]) {
     typeof args[0] === "string" &&
     args[0].includes(DOCX_PADDING_WARNING_TEXT) &&
     args.some((arg) => String(arg).includes("padding"))
-  )
+  );
 }
 
 function useSuppressDocxPaddingWarning(enabled: boolean) {
   React.useEffect(() => {
-    if (!enabled) return
+    if (!enabled) return;
 
-    const originalConsoleError = console.error
+    const originalConsoleError = console.error;
 
     console.error = (...args: unknown[]) => {
-      if (isDocxPaddingWarning(args)) return
-      originalConsoleError(...args)
-    }
+      if (isDocxPaddingWarning(args)) return;
+      originalConsoleError(...args);
+    };
 
     return () => {
-      console.error = originalConsoleError
-    }
-  }, [enabled])
+      console.error = originalConsoleError;
+    };
+  }, [enabled]);
 }
 
 function normalizeHexColor(value?: string, fallback = "#111827") {
-  if (!value) return fallback
+  if (!value) return fallback;
 
-  const trimmed = value.trim()
-  const threeDigit = /^#([0-9a-f]{3})$/i.exec(trimmed)
+  const trimmed = value.trim();
+  const threeDigit = /^#([0-9a-f]{3})$/i.exec(trimmed);
   if (threeDigit?.[1]) {
-    const [red, green, blue] = threeDigit[1].split("")
-    return `#${red}${red}${green}${green}${blue}${blue}`.toLowerCase()
+    const [red, green, blue] = threeDigit[1].split("");
+    return `#${red}${red}${green}${green}${blue}${blue}`.toLowerCase();
   }
 
-  const sixDigit = /^#([0-9a-f]{6})$/i.exec(trimmed)
+  const sixDigit = /^#([0-9a-f]{6})$/i.exec(trimmed);
   if (sixDigit?.[1]) {
-    return `#${sixDigit[1].toLowerCase()}`
+    return `#${sixDigit[1].toLowerCase()}`;
   }
 
-  return fallback
+  return fallback;
 }
 
 function inferParagraphStyleHeadingLevel(value?: string) {
-  if (!value) return undefined
+  if (!value) return undefined;
 
-  const match = value.match(/(?:^|[\s_-])(?:heading|h)\s*([1-6])(?:$|[\s_-])/i)
-  const level = match?.[1] ? Number(match[1]) : NaN
+  const match = value.match(/(?:^|[\s_-])(?:heading|h)\s*([1-6])(?:$|[\s_-])/i);
+  const level = match?.[1] ? Number(match[1]) : NaN;
 
-  return level >= 1 && level <= 6 ? (level as 1 | 2 | 3 | 4 | 5 | 6) : undefined
+  return level >= 1 && level <= 6 ? (level as 1 | 2 | 3 | 4 | 5 | 6) : undefined;
 }
 
 function resolveParagraphStyleHeadingLevel(option?: ParagraphStyleDefinition) {
@@ -406,51 +368,43 @@ function resolveParagraphStyleHeadingLevel(option?: ParagraphStyleDefinition) {
     option.headingLevel >= 1 &&
     option.headingLevel <= 6
   ) {
-    return option.headingLevel as 1 | 2 | 3 | 4 | 5 | 6
+    return option.headingLevel as 1 | 2 | 3 | 4 | 5 | 6;
   }
 
-  return (
-    inferParagraphStyleHeadingLevel(option?.id) ??
-    inferParagraphStyleHeadingLevel(option?.name)
-  )
+  return inferParagraphStyleHeadingLevel(option?.id) ?? inferParagraphStyleHeadingLevel(option?.name);
 }
 
 function resolveParagraphStyleRunPreview(option?: ParagraphStyleDefinition) {
-  if (!option) return undefined
+  if (!option) return undefined;
 
-  const headingLevel = resolveParagraphStyleHeadingLevel(option)
-  const headingRunStyle = headingLevel
-    ? DEFAULT_HEADING_PREVIEW_RUN_STYLES[headingLevel]
-    : undefined
+  const headingLevel = resolveParagraphStyleHeadingLevel(option);
+  const headingRunStyle = headingLevel ? DEFAULT_HEADING_PREVIEW_RUN_STYLES[headingLevel] : undefined;
 
   return headingRunStyle
     ? {
         ...headingRunStyle,
         ...(option.runStyle ?? {}),
       }
-    : option.runStyle
+    : option.runStyle;
 }
 
 function resolveHighlightPreview(value?: string) {
-  if (!value) return undefined
+  if (!value) return undefined;
 
-  const normalized = value.trim().toLowerCase()
-  if (!normalized) return undefined
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return undefined;
 
-  const hex = normalizeHexColor(normalized, "")
-  if (hex) return hex
+  const hex = normalizeHexColor(normalized, "");
+  if (hex) return hex;
 
-  return HIGHLIGHT_PREVIEW_COLORS[normalized]
+  return HIGHLIGHT_PREVIEW_COLORS[normalized];
 }
 
-function themedPreviewColor(
-  color: string | undefined,
-  documentTheme: DocxDocumentTheme
-) {
-  if (documentTheme !== "dark") return color
-  if (!color) return "#f3f4f6"
+function themedPreviewColor(color: string | undefined, documentTheme: DocxDocumentTheme) {
+  if (documentTheme !== "dark") return color;
+  if (!color) return "#f3f4f6";
 
-  const normalized = color.trim().toLowerCase()
+  const normalized = color.trim().toLowerCase();
   if (
     normalized === "#000" ||
     normalized === "#000000" ||
@@ -460,78 +414,61 @@ function themedPreviewColor(
     normalized === "rgb(0,0,0)" ||
     normalized === "rgb(0, 0, 0)"
   ) {
-    return "#f3f4f6"
+    return "#f3f4f6";
   }
 
-  return color
+  return color;
 }
 
 function paragraphStylePreviewStyle(
   option: ParagraphStyleDefinition,
-  documentTheme: DocxDocumentTheme
+  documentTheme: DocxDocumentTheme,
 ): React.CSSProperties {
-  const runStyle = resolveParagraphStyleRunPreview(option)
-  const textDecoration = [
-    runStyle?.underline ? "underline" : "",
-    runStyle?.strike ? "line-through" : "",
-  ]
+  const runStyle = resolveParagraphStyleRunPreview(option);
+  const textDecoration = [runStyle?.underline ? "underline" : "", runStyle?.strike ? "line-through" : ""]
     .filter(Boolean)
-    .join(" ")
+    .join(" ");
 
   return {
     textAlign: option.align ?? "left",
     fontFamily: runStyle?.fontFamily,
     fontSize: runStyle?.fontSizePt ? `${runStyle.fontSizePt}pt` : "11pt",
-    fontWeight:
-      runStyle?.bold !== undefined ? (runStyle.bold ? 700 : 400) : undefined,
+    fontWeight: runStyle?.bold !== undefined ? (runStyle.bold ? 700 : 400) : undefined,
     fontStyle: runStyle?.italic ? "italic" : undefined,
     textDecoration: textDecoration || undefined,
     color:
-      runStyle?.color !== undefined
-        ? themedPreviewColor(normalizeHexColor(runStyle.color), documentTheme)
-        : undefined,
+      runStyle?.color !== undefined ? themedPreviewColor(normalizeHexColor(runStyle.color), documentTheme) : undefined,
     backgroundColor: resolveHighlightPreview(runStyle?.highlight),
     lineHeight: 1,
     whiteSpace: "pre-wrap",
-  }
+  };
 }
 
 function paragraphStylePreviewTriggerId(prefix: string, styleId: string) {
-  return `${prefix}-paragraph-style-preview-${styleId.replace(
-    /[^a-zA-Z0-9_-]/g,
-    "_"
-  )}`
+  return `${prefix}-paragraph-style-preview-${styleId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
 }
 
-function parseToolbarSectionColumns(
-  sectionPropertiesXml?: string
-): { count: number; gapPx: number } | undefined {
-  if (!sectionPropertiesXml) return undefined
+function parseToolbarSectionColumns(sectionPropertiesXml?: string): { count: number; gapPx: number } | undefined {
+  if (!sectionPropertiesXml) return undefined;
 
-  const columnsTag = sectionPropertiesXml.match(/<w:cols\b[^>]*\/?>/i)?.[0]
-  if (!columnsTag) return undefined
+  const columnsTag = sectionPropertiesXml.match(/<w:cols\b[^>]*\/?>/i)?.[0];
+  if (!columnsTag) return undefined;
 
-  const countRaw = columnsTag.match(/\bw:num="(\d+)"/i)?.[1]
-  const count = countRaw ? Number(countRaw) : 1
-  if (!Number.isFinite(count) || count <= 1) return undefined
+  const countRaw = columnsTag.match(/\bw:num="(\d+)"/i)?.[1];
+  const count = countRaw ? Number(countRaw) : 1;
+  if (!Number.isFinite(count) || count <= 1) return undefined;
 
-  const gapRaw = columnsTag.match(/\bw:space="(\d+)"/i)?.[1]
-  const gapTwips = gapRaw ? Number(gapRaw) : 720
-  const gapPx = Math.max(0, Math.round((gapTwips * 96) / 1440))
+  const gapRaw = columnsTag.match(/\bw:space="(\d+)"/i)?.[1];
+  const gapTwips = gapRaw ? Number(gapRaw) : 720;
+  const gapPx = Math.max(0, Math.round((gapTwips * 96) / 1440));
 
   return {
     count: Math.max(2, Math.round(count)),
     gapPx,
-  }
+  };
 }
 
-function ToolbarTooltip({
-  label,
-  children,
-}: {
-  label: string
-  children: React.ReactNode
-}) {
+function ToolbarTooltip({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -539,19 +476,15 @@ function ToolbarTooltip({
       </TooltipTrigger>
       <TooltipContent side="bottom">{label}</TooltipContent>
     </Tooltip>
-  )
+  );
 }
 
-function EditorLoadingSurface({
-  showSpinner = true,
-}: {
-  showSpinner?: boolean
-}) {
+function EditorLoadingSurface({ showSpinner = true }: { showSpinner?: boolean }) {
   return (
     <div className="grid h-full min-h-52 place-items-center bg-transparent">
       {showSpinner ? <Spinner className="size-4" /> : null}
     </div>
-  )
+  );
 }
 
 function ToolbarIconButton({
@@ -560,8 +493,8 @@ function ToolbarIconButton({
   label,
   ...props
 }: React.ComponentProps<typeof Button> & {
-  active?: boolean
-  label: string
+  active?: boolean;
+  label: string;
 }) {
   return (
     <ToolbarTooltip label={label}>
@@ -576,11 +509,11 @@ function ToolbarIconButton({
         {children}
       </Button>
     </ToolbarTooltip>
-  )
+  );
 }
 
 function ToolbarSeparator() {
-  return <Separator orientation="vertical" className="mx-1 h-4 self-center" />
+  return <Separator orientation="vertical" className="mx-1 h-4 self-center" />;
 }
 
 function DocxSidebarThumbnail({
@@ -594,15 +527,15 @@ function DocxSidebarThumbnail({
   pixelWidthPx,
   previewAspectRatio,
 }: {
-  canvasRef: React.RefCallback<HTMLCanvasElement>
-  displayFileName: string
-  hasError: boolean
-  isActive: boolean
-  isLoading: boolean
-  pageNumber: number
-  pixelHeightPx: number
-  pixelWidthPx: number
-  previewAspectRatio: number
+  canvasRef: React.RefCallback<HTMLCanvasElement>;
+  displayFileName: string;
+  hasError: boolean;
+  isActive: boolean;
+  isLoading: boolean;
+  pageNumber: number;
+  pixelHeightPx: number;
+  pixelWidthPx: number;
+  previewAspectRatio: number;
 }) {
   return (
     <FileThumbnail
@@ -624,18 +557,18 @@ function DocxSidebarThumbnail({
       hasError={hasError}
       className={cn(
         "w-[92px] rounded-md border-0 shadow-xs ring-0 transition-shadow duration-150",
-        isActive && "shadow-sm"
+        isActive && "shadow-sm",
       )}
     />
-  )
+  );
 }
 
 function ParagraphStylePreviewCard({
   documentTheme,
   option,
 }: {
-  documentTheme: DocxDocumentTheme
-  option: ParagraphStyleDefinition
+  documentTheme: DocxDocumentTheme;
+  option: ParagraphStyleDefinition;
 }) {
   const surfaceStyle: React.CSSProperties =
     documentTheme === "dark"
@@ -648,18 +581,14 @@ function ParagraphStylePreviewCard({
           backgroundColor: "#ffffff",
           borderColor: "#d4d4d8",
           color: "#111827",
-        }
-  const secondaryTextColor = documentTheme === "dark" ? "#9ca3af" : "#6b7280"
+        };
+  const secondaryTextColor = documentTheme === "dark" ? "#9ca3af" : "#6b7280";
 
   return (
     <div className="w-[260px] p-3">
-      <p className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
-        Style Preview
-      </p>
+      <p className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">Style Preview</p>
       <div className="mt-2 rounded-sm border p-2.5" style={surfaceStyle}>
-        <p style={paragraphStylePreviewStyle(option, documentTheme)}>
-          {option.name}
-        </p>
+        <p style={paragraphStylePreviewStyle(option, documentTheme)}>{option.name}</p>
         <p
           className="mt-1 text-[11px]"
           style={{
@@ -671,7 +600,7 @@ function ParagraphStylePreviewCard({
         </p>
       </div>
     </div>
-  )
+  );
 }
 
 function DocxEditorToolbar({
@@ -690,169 +619,134 @@ function DocxEditorToolbar({
   showNightRenderToggle,
   zoomScale,
 }: {
-  activePage: number
-  controlsDisabled: boolean
-  editor: DocxEditorController
-  isReadOnly: boolean
-  onImageUploadClick: () => void
-  onIsDarkChange: (checked: boolean) => void
-  onIsReadOnlyChange: (checked: boolean) => void
-  onOpenLinkEditor: () => void
-  onToggleSidebar: () => void
-  onUploadClick: () => void
-  pageCount: number
-  setZoomScale: React.Dispatch<React.SetStateAction<number>>
-  showNightRenderToggle: boolean
-  zoomScale: number
+  activePage: number;
+  controlsDisabled: boolean;
+  editor: DocxEditorController;
+  isReadOnly: boolean;
+  onImageUploadClick: () => void;
+  onIsDarkChange: (checked: boolean) => void;
+  onIsReadOnlyChange: (checked: boolean) => void;
+  onOpenLinkEditor: () => void;
+  onToggleSidebar: () => void;
+  onUploadClick: () => void;
+  pageCount: number;
+  setZoomScale: React.Dispatch<React.SetStateAction<number>>;
+  showNightRenderToggle: boolean;
+  zoomScale: number;
 }) {
-  const { documentTheme, setDocumentTheme } = useDocxDocumentTheme(editor)
-  const { layout: pageLayout } = useDocxPageLayout(editor)
-  const { paragraphStyles, selectedParagraphStyleId, setParagraphStyle } =
-    useDocxParagraphStyles(editor)
-  const { lineSpacing, setLineSpacing } = useDocxLineSpacing(editor)
-  const { borderContext, activeBorderPresets, applyBorderPreset } =
-    useDocxBorders(editor)
-  const { showTrackedChanges, setShowTrackedChanges } =
-    useDocxTrackChanges(editor)
-  const { showComments, setShowComments } = useDocxComments(editor)
-  const selectedRunStyle = editor.selectedRunStyle
-  const selectedParagraph = editor.selectedParagraph
+  const { documentTheme, setDocumentTheme } = useDocxDocumentTheme(editor);
+  const { layout: pageLayout } = useDocxPageLayout(editor);
+  const { paragraphStyles, selectedParagraphStyleId, setParagraphStyle } = useDocxParagraphStyles(editor);
+  const { lineSpacing, setLineSpacing } = useDocxLineSpacing(editor);
+  const { borderContext, activeBorderPresets, applyBorderPreset } = useDocxBorders(editor);
+  const { showTrackedChanges, setShowTrackedChanges } = useDocxTrackChanges(editor);
+  const { showComments, setShowComments } = useDocxComments(editor);
+  const selectedRunStyle = editor.selectedRunStyle;
+  const selectedParagraph = editor.selectedParagraph;
   const paragraphStyleOptions: ParagraphStyleDefinition[] =
-    paragraphStyles.length > 0
-      ? paragraphStyles
-      : [...FALLBACK_PARAGRAPH_STYLE_OPTIONS]
+    paragraphStyles.length > 0 ? paragraphStyles : [...FALLBACK_PARAGRAPH_STYLE_OPTIONS];
   const selectedParagraphStyleValue =
     selectedParagraphStyleId ??
     paragraphStyleOptions.find((option) => "isDefault" in option)?.id ??
     paragraphStyleOptions[0]?.id ??
-    "Normal"
+    "Normal";
   const selectedParagraphStyleOption =
-    paragraphStyleOptions.find(
-      (option) => option.id === selectedParagraphStyleValue
-    ) ??
+    paragraphStyleOptions.find((option) => option.id === selectedParagraphStyleValue) ??
     paragraphStyleOptions[0] ??
-    FALLBACK_PARAGRAPH_STYLE_OPTIONS[0]
+    FALLBACK_PARAGRAPH_STYLE_OPTIONS[0];
   const paragraphStylePreviewHandle = React.useMemo(
     () => PreviewCardPrimitive.createHandle<ParagraphStyleDefinition>(),
-    []
-  )
-  const paragraphStylePreviewIdPrefix = React.useId()
-  const [isParagraphStyleMenuOpen, setIsParagraphStyleMenuOpen] =
-    React.useState(false)
+    [],
+  );
+  const paragraphStylePreviewIdPrefix = React.useId();
+  const [isParagraphStyleMenuOpen, setIsParagraphStyleMenuOpen] = React.useState(false);
   const openParagraphStylePreview = React.useCallback(
     (styleId: string) => {
-      paragraphStylePreviewHandle.open(
-        paragraphStylePreviewTriggerId(paragraphStylePreviewIdPrefix, styleId)
-      )
+      paragraphStylePreviewHandle.open(paragraphStylePreviewTriggerId(paragraphStylePreviewIdPrefix, styleId));
     },
-    [paragraphStylePreviewHandle, paragraphStylePreviewIdPrefix]
-  )
+    [paragraphStylePreviewHandle, paragraphStylePreviewIdPrefix],
+  );
   const selectedLineSpacingValue = React.useMemo(() => {
-    const current = Number.isFinite(lineSpacing.multiple)
-      ? lineSpacing.multiple
-      : 1
+    const current = Number.isFinite(lineSpacing.multiple) ? lineSpacing.multiple : 1;
     const nearest = LINE_SPACING_OPTIONS.reduce((closest, candidate) => {
-      return Math.abs(candidate - current) < Math.abs(closest - current)
-        ? candidate
-        : closest
-    }, LINE_SPACING_OPTIONS[0])
-    return String(nearest)
-  }, [lineSpacing.multiple])
-  const textColorValue = normalizeHexColor(selectedRunStyle?.color)
+      return Math.abs(candidate - current) < Math.abs(closest - current) ? candidate : closest;
+    }, LINE_SPACING_OPTIONS[0]);
+    return String(nearest);
+  }, [lineSpacing.multiple]);
+  const textColorValue = normalizeHexColor(selectedRunStyle?.color);
   const highlightColor =
-    HIGHLIGHT_COLORS.find(
-      (option) => option.value === selectedRunStyle?.highlight
-    )?.color ?? "#fff59d"
+    HIGHLIGHT_COLORS.find((option) => option.value === selectedRunStyle?.highlight)?.color ?? "#fff59d";
   const activeNodeIndex =
-    editor.selection.kind === "paragraph"
-      ? editor.selection.nodeIndex
-      : editor.selection.tableIndex
+    editor.selection.kind === "paragraph" ? editor.selection.nodeIndex : editor.selection.tableIndex;
   const letterheadColumns =
     editor.selection.kind === "paragraph" &&
-    paragraphLetterheadFloatSideAtNodeIndex(
-      editor.model.nodes,
-      editor.selection.nodeIndex
-    )
+    paragraphLetterheadFloatSideAtNodeIndex(editor.model.nodes, editor.selection.nodeIndex)
       ? { count: 2, gapPx: 28 }
-      : undefined
-  const sections = editor.model.metadata.sections ?? []
-  const activeSection = sections
-    .filter((section) => section.startNodeIndex <= activeNodeIndex)
-    .at(-1)
+      : undefined;
+  const sections = editor.model.metadata.sections ?? [];
+  const activeSection = sections.filter((section) => section.startNodeIndex <= activeNodeIndex).at(-1);
   const activeColumns =
     letterheadColumns ??
     parseToolbarSectionColumns(activeSection?.sectionPropertiesXml) ??
     parseToolbarSectionColumns(editor.model.metadata.sectionPropertiesXml) ??
-    pageLayout.columns
-  const activeBorderControlOptions = BORDER_CONTROL_OPTIONS.filter(
-    (option) => activeBorderPresets[option.id]
-  )
-  const borderTriggerLabel =
-    activeBorderControlOptions.length === 1
-      ? activeBorderControlOptions[0]!.label
-      : "Borders"
+    pageLayout.columns;
+  const activeBorderControlOptions = BORDER_CONTROL_OPTIONS.filter((option) => activeBorderPresets[option.id]);
+  const borderTriggerLabel = activeBorderControlOptions.length === 1 ? activeBorderControlOptions[0]!.label : "Borders";
   const borderTriggerIcon = borderControlOptionIcon(
-    activeBorderControlOptions.length === 1
-      ? activeBorderControlOptions[0]!.id
-      : "all"
-  )
-  const canEdit = !controlsDisabled && !isReadOnly
-  const canZoomIn = zoomScale < (ZOOM_OPTIONS[ZOOM_OPTIONS.length - 1] ?? 1)
-  const canZoomOut = zoomScale > ZOOM_OPTIONS[0]
+    activeBorderControlOptions.length === 1 ? activeBorderControlOptions[0]!.id : "all",
+  );
+  const canEdit = !controlsDisabled && !isReadOnly;
+  const canZoomIn = zoomScale < (ZOOM_OPTIONS[ZOOM_OPTIONS.length - 1] ?? 1);
+  const canZoomOut = zoomScale > ZOOM_OPTIONS[0];
   const fontToggleValues = React.useMemo<DocxFontToggleValue[]>(() => {
-    const values: DocxFontToggleValue[] = []
+    const values: DocxFontToggleValue[] = [];
 
-    if (selectedRunStyle?.bold) values.push("bold")
-    if (selectedRunStyle?.italic) values.push("italic")
-    if (selectedRunStyle?.underline) values.push("underline")
-    if (selectedRunStyle?.strike) values.push("strike")
+    if (selectedRunStyle?.bold) values.push("bold");
+    if (selectedRunStyle?.italic) values.push("italic");
+    if (selectedRunStyle?.underline) values.push("underline");
+    if (selectedRunStyle?.strike) values.push("strike");
     if (selectedRunStyle?.verticalAlign === "superscript") {
-      values.push("superscript")
+      values.push("superscript");
     }
     if (selectedRunStyle?.verticalAlign === "subscript") {
-      values.push("subscript")
+      values.push("subscript");
     }
 
-    return values
-  }, [selectedRunStyle])
+    return values;
+  }, [selectedRunStyle]);
 
   const preserveTextSelection = React.useCallback(
-    (event: React.MouseEvent<HTMLElement> | React.PointerEvent<HTMLElement>) =>
-      event.preventDefault(),
-    []
-  )
+    (event: React.MouseEvent<HTMLElement> | React.PointerEvent<HTMLElement>) => event.preventDefault(),
+    [],
+  );
   const applyFontToggleValues = React.useCallback(
     (nextValues: DocxFontToggleValue[]) => {
       const changedValue =
         nextValues.find((value) => !fontToggleValues.includes(value)) ??
-        fontToggleValues.find((value) => !nextValues.includes(value))
+        fontToggleValues.find((value) => !nextValues.includes(value));
 
       if (changedValue === "bold") {
-        editor.toggleBold()
+        editor.toggleBold();
       } else if (changedValue === "italic") {
-        editor.toggleItalic()
+        editor.toggleItalic();
       } else if (changedValue === "underline") {
-        editor.toggleUnderline()
+        editor.toggleUnderline();
       } else if (changedValue === "strike") {
-        editor.toggleStrike()
+        editor.toggleStrike();
       } else if (changedValue === "superscript") {
-        editor.toggleSuperscript()
+        editor.toggleSuperscript();
       } else if (changedValue === "subscript") {
-        editor.toggleSubscript()
+        editor.toggleSubscript();
       }
     },
-    [editor, fontToggleValues]
-  )
+    [editor, fontToggleValues],
+  );
 
   return (
     <div className="bg-background">
       <TooltipProvider>
         <div className="flex min-h-11 items-center gap-2 overflow-x-auto overflow-y-hidden border-b px-3">
-          <ToolbarIconButton
-            label="Toggle pages"
-            disabled={controlsDisabled}
-            onClick={onToggleSidebar}
-          >
+          <ToolbarIconButton label="Toggle pages" disabled={controlsDisabled} onClick={onToggleSidebar}>
             <HugeiconsIcon icon={SidebarLeftIcon} className="size-4" />
           </ToolbarIconButton>
           <div className="min-w-28 text-sm whitespace-nowrap text-primary">
@@ -862,27 +756,17 @@ function DocxEditorToolbar({
           {showNightRenderToggle ? (
             <>
               <ToolbarIconButton
-                label={
-                  documentTheme === "dark"
-                    ? "Use light document"
-                    : "Use dark document"
-                }
+                label={documentTheme === "dark" ? "Use light document" : "Use dark document"}
                 disabled={controlsDisabled}
                 onClick={() => {
-                  const nextIsDark = documentTheme !== "dark"
-                  setDocumentTheme(nextIsDark ? "dark" : "light")
-                  onIsDarkChange(nextIsDark)
+                  const nextIsDark = documentTheme !== "dark";
+                  setDocumentTheme(nextIsDark ? "dark" : "light");
+                  onIsDarkChange(nextIsDark);
                 }}
               >
-                <HugeiconsIcon
-                  icon={documentTheme === "dark" ? Sun03Icon : Moon02Icon}
-                  className="size-4"
-                />
+                <HugeiconsIcon icon={documentTheme === "dark" ? Sun03Icon : Moon02Icon} className="size-4" />
               </ToolbarIconButton>
-              <Separator
-                orientation="vertical"
-                className="mx-1 h-4 self-center"
-              />
+              <Separator orientation="vertical" className="mx-1 h-4 self-center" />
             </>
           ) : null}
           <ToolbarIconButton
@@ -910,11 +794,7 @@ function DocxEditorToolbar({
             <HugeiconsIcon icon={EditOffIcon} className="size-4" />
           </ToolbarIconButton>
           <Separator orientation="vertical" className="mx-1 h-4 self-center" />
-          <ToolbarIconButton
-            label="Import DOCX"
-            disabled={editor.isImporting}
-            onClick={onUploadClick}
-          >
+          <ToolbarIconButton label="Import DOCX" disabled={editor.isImporting} onClick={onUploadClick}>
             {editor.isImporting ? (
               <Spinner className="size-4" />
             ) : (
@@ -932,18 +812,10 @@ function DocxEditorToolbar({
 
         <div className="flex min-h-12 flex-wrap items-center gap-2 border-b px-3 py-2">
           <div className="flex shrink-0 items-center gap-1">
-            <ToolbarIconButton
-              label="Undo"
-              disabled={!editor.canUndo || isReadOnly}
-              onClick={editor.undo}
-            >
+            <ToolbarIconButton label="Undo" disabled={!editor.canUndo || isReadOnly} onClick={editor.undo}>
               <HugeiconsIcon icon={Undo02Icon} className="size-4" />
             </ToolbarIconButton>
-            <ToolbarIconButton
-              label="Redo"
-              disabled={!editor.canRedo || isReadOnly}
-              onClick={editor.redo}
-            >
+            <ToolbarIconButton label="Redo" disabled={!editor.canRedo || isReadOnly} onClick={editor.redo}>
               <HugeiconsIcon icon={Redo02Icon} className="size-4" />
             </ToolbarIconButton>
           </div>
@@ -952,49 +824,41 @@ function DocxEditorToolbar({
 
           <PreviewCardPrimitive.Root handle={paragraphStylePreviewHandle}>
             {({ payload }) => {
-              const previewOption = payload ?? selectedParagraphStyleOption
+              const previewOption = payload ?? selectedParagraphStyleOption;
 
               return (
                 <>
                   <Select
                     value={selectedParagraphStyleValue}
                     onOpenChange={(open) => {
-                      setIsParagraphStyleMenuOpen(open)
+                      setIsParagraphStyleMenuOpen(open);
 
                       if (!open) {
-                        paragraphStylePreviewHandle.close()
-                        return
+                        paragraphStylePreviewHandle.close();
+                        return;
                       }
 
                       window.requestAnimationFrame(() => {
-                        openParagraphStylePreview(selectedParagraphStyleValue)
-                      })
+                        openParagraphStylePreview(selectedParagraphStyleValue);
+                      });
                     }}
                     onValueChange={(value) => {
                       if (value) {
-                        setParagraphStyle(value)
+                        setParagraphStyle(value);
                       }
                     }}
                     disabled={!canEdit}
                     modal={false}
                   >
-                    <SelectTrigger
-                      size="sm"
-                      className="w-[136px] min-w-[136px]"
-                      aria-label="Paragraph style"
-                    >
+                    <SelectTrigger size="sm" className="w-[136px] min-w-[136px]" aria-label="Paragraph style">
                       <SelectValue placeholder="Style" />
                     </SelectTrigger>
-                    <SelectContent
-                      align="start"
-                      alignItemWithTrigger={false}
-                      className="z-40 min-w-[210px]"
-                    >
+                    <SelectContent align="start" alignItemWithTrigger={false} className="z-40 min-w-[210px]">
                       {paragraphStyleOptions.map((option) => {
                         const previewTriggerId = paragraphStylePreviewTriggerId(
                           paragraphStylePreviewIdPrefix,
-                          option.id
-                        )
+                          option.id,
+                        );
 
                         return (
                           <SelectItem
@@ -1003,13 +867,9 @@ function DocxEditorToolbar({
                             label={option.name}
                             className="relative min-w-[190px]"
                             onFocus={() => openParagraphStylePreview(option.id)}
-                            onPointerEnter={() =>
-                              openParagraphStylePreview(option.id)
-                            }
+                            onPointerEnter={() => openParagraphStylePreview(option.id)}
                           >
-                            <span className="block truncate">
-                              {option.name}
-                            </span>
+                            <span className="block truncate">{option.name}</span>
                             <PreviewCardPrimitive.Trigger
                               id={previewTriggerId}
                               handle={paragraphStylePreviewHandle}
@@ -1017,14 +877,11 @@ function DocxEditorToolbar({
                               delay={0}
                               closeDelay={120}
                               render={
-                                <span
-                                  aria-hidden="true"
-                                  className="pointer-events-none absolute inset-0 block"
-                                />
+                                <span aria-hidden="true" className="pointer-events-none absolute inset-0 block" />
                               }
                             />
                           </SelectItem>
-                        )
+                        );
                       })}
                     </SelectContent>
                   </Select>
@@ -1041,16 +898,13 @@ function DocxEditorToolbar({
                           data-slot="paragraph-style-preview-card"
                           className="origin-(--transform-origin) rounded-lg border bg-popover text-popover-foreground shadow-lg/5 transition-opacity duration-100 outline-none not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] data-ending-style:opacity-0 data-starting-style:opacity-0 dark:before:shadow-[0_-1px_--theme(--color-white/6%)]"
                         >
-                          <ParagraphStylePreviewCard
-                            documentTheme={documentTheme}
-                            option={previewOption}
-                          />
+                          <ParagraphStylePreviewCard documentTheme={documentTheme} option={previewOption} />
                         </PreviewCardPrimitive.Popup>
                       </PreviewCardPrimitive.Positioner>
                     </PreviewCardPrimitive.Portal>
                   ) : null}
                 </>
-              )
+              );
             }}
           </PreviewCardPrimitive.Root>
 
@@ -1058,24 +912,16 @@ function DocxEditorToolbar({
             value={selectedRunStyle?.fontFamily ?? "Calibri"}
             onValueChange={(value) => {
               if (value) {
-                editor.setFontFamily(value)
+                editor.setFontFamily(value);
               }
             }}
             disabled={!canEdit}
             modal={false}
           >
-            <SelectTrigger
-              size="sm"
-              className="w-[156px] min-w-[156px]"
-              aria-label="Font family"
-            >
+            <SelectTrigger size="sm" className="w-[156px] min-w-[156px]" aria-label="Font family">
               <SelectValue placeholder="Font" />
             </SelectTrigger>
-            <SelectContent
-              align="start"
-              alignItemWithTrigger={false}
-              className="z-40"
-            >
+            <SelectContent align="start" alignItemWithTrigger={false} className="z-40">
               {FONT_FAMILIES.map((fontFamily) => (
                 <SelectItem key={fontFamily} value={fontFamily}>
                   <span style={{ fontFamily }}>{fontFamily}</span>
@@ -1087,26 +933,18 @@ function DocxEditorToolbar({
           <Select
             value={String(Math.round(selectedRunStyle?.fontSizePt ?? 12))}
             onValueChange={(value) => {
-              const nextSize = Number(value)
+              const nextSize = Number(value);
               if (Number.isFinite(nextSize)) {
-                editor.setFontSize(nextSize)
+                editor.setFontSize(nextSize);
               }
             }}
             disabled={!canEdit}
             modal={false}
           >
-            <SelectTrigger
-              size="sm"
-              className="w-[86px] min-w-[86px]"
-              aria-label="Font size"
-            >
+            <SelectTrigger size="sm" className="w-[86px] min-w-[86px]" aria-label="Font size">
               <SelectValue placeholder="Size" />
             </SelectTrigger>
-            <SelectContent
-              align="start"
-              alignItemWithTrigger={false}
-              className="z-40"
-            >
+            <SelectContent align="start" alignItemWithTrigger={false} className="z-40">
               {FONT_SIZE_OPTIONS.map((size) => (
                 <SelectItem key={size} value={String(size)}>
                   {size} pt
@@ -1118,26 +956,18 @@ function DocxEditorToolbar({
           <Select
             value={selectedLineSpacingValue}
             onValueChange={(value) => {
-              const nextSpacing = Number(value)
+              const nextSpacing = Number(value);
               if (Number.isFinite(nextSpacing)) {
-                setLineSpacing(nextSpacing)
+                setLineSpacing(nextSpacing);
               }
             }}
             disabled={!canEdit}
             modal={false}
           >
-            <SelectTrigger
-              size="sm"
-              className="w-[94px] min-w-[94px]"
-              aria-label="Line spacing"
-            >
+            <SelectTrigger size="sm" className="w-[94px] min-w-[94px]" aria-label="Line spacing">
               <SelectValue placeholder="Spacing" />
             </SelectTrigger>
-            <SelectContent
-              align="start"
-              alignItemWithTrigger={false}
-              className="z-40"
-            >
+            <SelectContent align="start" alignItemWithTrigger={false} className="z-40">
               {LINE_SPACING_OPTIONS.map((spacing) => (
                 <SelectItem key={spacing} value={String(spacing)}>
                   {spacing}x
@@ -1156,9 +986,7 @@ function DocxEditorToolbar({
             value={fontToggleValues}
             onMouseDown={preserveTextSelection}
             onPointerDown={preserveTextSelection}
-            onValueChange={(value) =>
-              applyFontToggleValues(value as DocxFontToggleValue[])
-            }
+            onValueChange={(value) => applyFontToggleValues(value as DocxFontToggleValue[])}
           >
             <ToolbarTooltip label="Bold">
               <ToggleGroupItem aria-label="Bold" size="sm" value="bold">
@@ -1171,41 +999,22 @@ function DocxEditorToolbar({
               </ToggleGroupItem>
             </ToolbarTooltip>
             <ToolbarTooltip label="Underline">
-              <ToggleGroupItem
-                aria-label="Underline"
-                size="sm"
-                value="underline"
-              >
+              <ToggleGroupItem aria-label="Underline" size="sm" value="underline">
                 <HugeiconsIcon icon={TextUnderlineIcon} className="size-4" />
               </ToggleGroupItem>
             </ToolbarTooltip>
             <ToolbarTooltip label="Strikethrough">
-              <ToggleGroupItem
-                aria-label="Strikethrough"
-                size="sm"
-                value="strike"
-              >
-                <HugeiconsIcon
-                  icon={TextStrikethroughIcon}
-                  className="size-4"
-                />
+              <ToggleGroupItem aria-label="Strikethrough" size="sm" value="strike">
+                <HugeiconsIcon icon={TextStrikethroughIcon} className="size-4" />
               </ToggleGroupItem>
             </ToolbarTooltip>
             <ToolbarTooltip label="Superscript">
-              <ToggleGroupItem
-                aria-label="Superscript"
-                size="sm"
-                value="superscript"
-              >
+              <ToggleGroupItem aria-label="Superscript" size="sm" value="superscript">
                 <HugeiconsIcon icon={TextSuperscriptIcon} className="size-4" />
               </ToggleGroupItem>
             </ToolbarTooltip>
             <ToolbarTooltip label="Subscript">
-              <ToggleGroupItem
-                aria-label="Subscript"
-                size="sm"
-                value="subscript"
-              >
+              <ToggleGroupItem aria-label="Subscript" size="sm" value="subscript">
                 <HugeiconsIcon icon={TextSubscriptIcon} className="size-4" />
               </ToggleGroupItem>
             </ToolbarTooltip>
@@ -1221,9 +1030,7 @@ function DocxEditorToolbar({
               disabled={!canEdit}
               onTriggerMouseDown={preserveTextSelection}
               onTriggerPointerDown={preserveTextSelection}
-              onChange={(color) =>
-                editor.setTextColor(normalizeHexColor(color))
-              }
+              onChange={(color) => editor.setTextColor(normalizeHexColor(color))}
             />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -1249,10 +1056,7 @@ function DocxEditorToolbar({
                     checked={selectedRunStyle?.highlight === option.value}
                     onCheckedChange={() => editor.setHighlight(option.value)}
                   >
-                    <span
-                      className="size-3 rounded-full border"
-                      style={{ backgroundColor: option.color }}
-                    />
+                    <span className="size-3 rounded-full border" style={{ backgroundColor: option.color }} />
                     {option.label}
                   </DropdownMenuCheckboxItem>
                 ))}
@@ -1281,10 +1085,7 @@ function DocxEditorToolbar({
           <div className="flex shrink-0 items-center gap-1">
             <ToolbarIconButton
               label="Align left"
-              active={
-                selectedParagraph?.style?.align === "left" ||
-                !selectedParagraph?.style?.align
-              }
+              active={selectedParagraph?.style?.align === "left" || !selectedParagraph?.style?.align}
               disabled={!canEdit}
               onMouseDown={preserveTextSelection}
               onPointerDown={preserveTextSelection}
@@ -1320,10 +1121,7 @@ function DocxEditorToolbar({
               onPointerDown={preserveTextSelection}
               onClick={() => editor.setAlignment("justify")}
             >
-              <HugeiconsIcon
-                icon={TextAlignJustifyLeftIcon}
-                className="size-4"
-              />
+              <HugeiconsIcon icon={TextAlignJustifyLeftIcon} className="size-4" />
             </ToolbarIconButton>
           </div>
 
@@ -1338,10 +1136,7 @@ function DocxEditorToolbar({
               onPointerDown={preserveTextSelection}
               onClick={() => editor.toggleList("unordered")}
             >
-              <HugeiconsIcon
-                icon={LeftToRightListBulletIcon}
-                className="size-4"
-              />
+              <HugeiconsIcon icon={LeftToRightListBulletIcon} className="size-4" />
             </ToolbarIconButton>
             <ToolbarIconButton
               label="Numbered list"
@@ -1351,10 +1146,7 @@ function DocxEditorToolbar({
               onPointerDown={preserveTextSelection}
               onClick={() => editor.toggleList("ordered")}
             >
-              <HugeiconsIcon
-                icon={LeftToRightListNumberIcon}
-                className="size-4"
-              />
+              <HugeiconsIcon icon={LeftToRightListNumberIcon} className="size-4" />
             </ToolbarIconButton>
           </div>
 
@@ -1375,9 +1167,8 @@ function DocxEditorToolbar({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="z-40 w-56">
               {BORDER_CONTROL_OPTIONS.map((option) => {
-                const enabledForContext =
-                  !option.contexts || option.contexts.includes(borderContext)
-                const BorderOptionIcon = borderControlOptionIcon(option.id)
+                const enabledForContext = !option.contexts || option.contexts.includes(borderContext);
+                const BorderOptionIcon = borderControlOptionIcon(option.id);
 
                 return (
                   <React.Fragment key={option.id}>
@@ -1387,18 +1178,15 @@ function DocxEditorToolbar({
                       disabled={!enabledForContext}
                       onCheckedChange={() => {
                         if (enabledForContext) {
-                          applyBorderPreset(option.id)
+                          applyBorderPreset(option.id);
                         }
                       }}
                     >
-                      <HugeiconsIcon
-                        icon={BorderOptionIcon}
-                        className="size-4 text-muted-foreground"
-                      />
+                      <HugeiconsIcon icon={BorderOptionIcon} className="size-4 text-muted-foreground" />
                       {option.label}
                     </DropdownMenuCheckboxItem>
                   </React.Fragment>
-                )
+                );
               })}
             </DropdownMenuContent>
           </DropdownMenu>
@@ -1406,18 +1194,10 @@ function DocxEditorToolbar({
           <ToolbarSeparator />
 
           <div className="flex shrink-0 items-center gap-1">
-            <ToolbarIconButton
-              label="Insert image"
-              disabled={!canEdit}
-              onClick={onImageUploadClick}
-            >
+            <ToolbarIconButton label="Insert image" disabled={!canEdit} onClick={onImageUploadClick}>
               <HugeiconsIcon icon={ImageAdd01Icon} className="size-4" />
             </ToolbarIconButton>
-            <ToolbarIconButton
-              label="Insert table"
-              disabled={!canEdit}
-              onClick={editor.insertTable}
-            >
+            <ToolbarIconButton label="Insert table" disabled={!canEdit} onClick={editor.insertTable}>
               <HugeiconsIcon icon={TableIcon} className="size-4" />
             </ToolbarIconButton>
             <ToolbarTooltip label="Section columns">
@@ -1434,11 +1214,7 @@ function DocxEditorToolbar({
             <ToolbarIconButton
               label="Zoom out"
               disabled={controlsDisabled || !canZoomOut}
-              onClick={() =>
-                setZoomScale((currentZoomScale) =>
-                  getNextZoomScale(currentZoomScale, -1)
-                )
-              }
+              onClick={() => setZoomScale((currentZoomScale) => getNextZoomScale(currentZoomScale, -1))}
             >
               <HugeiconsIcon icon={MinusSignCircleIcon} className="size-4" />
             </ToolbarIconButton>
@@ -1448,18 +1224,10 @@ function DocxEditorToolbar({
               disabled={controlsDisabled}
               modal={false}
             >
-              <SelectTrigger
-                size="sm"
-                className="w-[84px] min-w-[84px]"
-                aria-label="Zoom level"
-              >
+              <SelectTrigger size="sm" className="w-[84px] min-w-[84px]" aria-label="Zoom level">
                 <SelectValue>{Math.round(zoomScale)}%</SelectValue>
               </SelectTrigger>
-              <SelectContent
-                align="end"
-                alignItemWithTrigger={false}
-                className="z-40"
-              >
+              <SelectContent align="end" alignItemWithTrigger={false} className="z-40">
                 {ZOOM_OPTIONS.map((value) => (
                   <SelectItem key={value} value={value.toString()}>
                     {value}%
@@ -1470,11 +1238,7 @@ function DocxEditorToolbar({
             <ToolbarIconButton
               label="Zoom in"
               disabled={controlsDisabled || !canZoomIn}
-              onClick={() =>
-                setZoomScale((currentZoomScale) =>
-                  getNextZoomScale(currentZoomScale, 1)
-                )
-              }
+              onClick={() => setZoomScale((currentZoomScale) => getNextZoomScale(currentZoomScale, 1))}
             >
               <HugeiconsIcon icon={PlusSignCircleIcon} className="size-4" />
             </ToolbarIconButton>
@@ -1482,7 +1246,7 @@ function DocxEditorToolbar({
         </div>
       </TooltipProvider>
     </div>
-  )
+  );
 }
 
 export function DocxEditorPreview({
@@ -1493,12 +1257,12 @@ export function DocxEditorPreview({
   onIsDarkChange,
   src,
 }: {
-  className?: string
-  defaultZoomScale?: number
-  fileName?: string
-  isDark: boolean
-  onIsDarkChange: (isDark: boolean) => void
-  src?: string
+  className?: string;
+  defaultZoomScale?: number;
+  fileName?: string;
+  isDark: boolean;
+  onIsDarkChange: (isDark: boolean) => void;
+  src?: string;
 }) {
   return (
     <DocxEditorContent
@@ -1510,7 +1274,7 @@ export function DocxEditorPreview({
       shouldRenderNightMode
       url={src}
     />
-  )
+  );
 }
 
 function DocxEditorContent({
@@ -1522,62 +1286,53 @@ function DocxEditorContent({
   shouldRenderNightMode,
   url,
 }: {
-  className?: string
-  defaultZoomScale?: number
-  effectiveIsDark: boolean
-  fileName?: string
-  setIsDark: (checked: boolean) => void
-  shouldRenderNightMode: boolean
-  url?: string
+  className?: string;
+  defaultZoomScale?: number;
+  effectiveIsDark: boolean;
+  fileName?: string;
+  setIsDark: (checked: boolean) => void;
+  shouldRenderNightMode: boolean;
+  url?: string;
 }) {
-  const fileInputRef = React.useRef<HTMLInputElement>(null)
-  const imageInputRef = React.useRef<HTMLInputElement>(null)
-  const viewportRef = React.useRef<HTMLDivElement | null>(null)
-  const [viewportElement, setViewportElement] =
-    React.useState<HTMLDivElement | null>(null)
-  const [viewerShellRef, viewerShellWidth] = useElementWidth<HTMLDivElement>()
-  const [uploadedDocxFile, setUploadedDocxFile] =
-    React.useState<UploadedDocxFile | null>(null)
-  const [activePage, setActivePage] = React.useState(1)
-  const [sidebarOpen, setSidebarOpen] = React.useState(false)
-  const resolvedDefaultZoomScale = normalizeDocxZoomScale(defaultZoomScale)
-  const [zoomScale, setZoomScale] = React.useState<number>(
-    resolvedDefaultZoomScale
-  )
-  const [loadError, setLoadError] = React.useState<string>()
-  const [isLoadingDocument, setIsLoadingDocument] = React.useState(true)
-  const [isReadOnly, setIsReadOnly] = React.useState(false)
-  const [linkEditorOpen, setLinkEditorOpen] = React.useState(false)
-  const [linkDraft, setLinkDraft] = React.useState("")
-  const viewerBackgroundColor =
-    "color-mix(in oklab, var(--muted) 40%, transparent)"
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const imageInputRef = React.useRef<HTMLInputElement>(null);
+  const viewportRef = React.useRef<HTMLDivElement | null>(null);
+  const [viewportElement, setViewportElement] = React.useState<HTMLDivElement | null>(null);
+  const [viewerShellRef, viewerShellWidth] = useElementWidth<HTMLDivElement>();
+  const [uploadedDocxFile, setUploadedDocxFile] = React.useState<UploadedDocxFile | null>(null);
+  const [activePage, setActivePage] = React.useState(1);
+  const [sidebarOpen, setSidebarOpen] = React.useState(false);
+  const resolvedDefaultZoomScale = normalizeDocxZoomScale(defaultZoomScale);
+  const [zoomScale, setZoomScale] = React.useState<number>(resolvedDefaultZoomScale);
+  const [loadError, setLoadError] = React.useState<string>();
+  const [isLoadingDocument, setIsLoadingDocument] = React.useState(true);
+  const [isReadOnly, setIsReadOnly] = React.useState(false);
+  const [linkEditorOpen, setLinkEditorOpen] = React.useState(false);
+  const [linkDraft, setLinkDraft] = React.useState("");
+  const viewerBackgroundColor = "color-mix(in oklab, var(--muted) 40%, transparent)";
   const displayFileName = React.useMemo(
-    () =>
-      uploadedDocxFile?.file.name ??
-      (url ? formatDocumentName(fileName, url) : (fileName ?? "document.docx")),
-    [fileName, uploadedDocxFile?.file.name, url]
-  )
-  const [initialDocumentTheme] = React.useState<DocxDocumentTheme>(() =>
-    effectiveIsDark ? "dark" : "light"
-  )
+    () => uploadedDocxFile?.file.name ?? (url ? formatDocumentName(fileName, url) : (fileName ?? "document.docx")),
+    [fileName, uploadedDocxFile?.file.name, url],
+  );
+  const [initialDocumentTheme] = React.useState<DocxDocumentTheme>(() => (effectiveIsDark ? "dark" : "light"));
   const editorOptions = React.useMemo(
     () => ({
       initialDocumentTheme,
       initialFileName: displayFileName,
     }),
-    [displayFileName, initialDocumentTheme]
-  )
-  const editor = useDocxEditor(editorOptions)
-  const { layout: pageLayout } = useDocxPageLayout(editor)
-  const { importDocxFile, setDocumentTheme, status } = editor
-  const [reportedPageCount, setReportedPageCount] = React.useState(0)
+    [displayFileName, initialDocumentTheme],
+  );
+  const editor = useDocxEditor(editorOptions);
+  const { layout: pageLayout } = useDocxPageLayout(editor);
+  const { importDocxFile, setDocumentTheme, status } = editor;
+  const [reportedPageCount, setReportedPageCount] = React.useState(0);
   const thumbnailEditor = React.useMemo<DocxEditorController>(
     () => ({
       ...editor,
       totalPages: Math.max(editor.totalPages, reportedPageCount),
     }),
-    [editor, reportedPageCount]
-  )
+    [editor, reportedPageCount],
+  );
   const thumbnailOptions = React.useMemo(
     () => ({
       pixelRatio: 2,
@@ -1586,45 +1341,32 @@ function DocxEditorContent({
         maxWidth: DOCX_THUMBNAIL_WIDTH,
       },
     }),
-    []
-  )
-  const { thumbnails } = useDocxViewerThumbnails(
-    thumbnailEditor,
-    thumbnailOptions
-  )
-  const shouldShowDocumentSpinner = useDelayedLoadingIndicator(
-    isLoadingDocument,
-    DOCX_LOADING_INDICATOR_DELAY_MS
-  )
-  const loadingState = (
-    <EditorLoadingSurface showSpinner={shouldShowDocumentSpinner} />
-  )
+    [],
+  );
+  const { thumbnails } = useDocxViewerThumbnails(thumbnailEditor, thumbnailOptions);
+  const shouldShowDocumentSpinner = useDelayedLoadingIndicator(isLoadingDocument, DOCX_LOADING_INDICATOR_DELAY_MS);
+  const loadingState = <EditorLoadingSurface showSpinner={shouldShowDocumentSpinner} />;
   const renderTrackedChangeCard = React.useMemo(
     () => createDocxTrackedChangeCardRenderer(editor.documentTheme),
-    [editor.documentTheme]
-  )
+    [editor.documentTheme],
+  );
   const renderCommentCard = React.useMemo(
     () => createDocxCommentCardRenderer(editor.documentTheme),
-    [editor.documentTheme]
-  )
-  const hasDocument = Boolean(url || uploadedDocxFile)
-  const sidebarInline = useInlineThumbnailSidebar(viewerShellWidth)
+    [editor.documentTheme],
+  );
+  const hasDocument = Boolean(url || uploadedDocxFile);
+  const sidebarInline = useInlineThumbnailSidebar(viewerShellWidth);
   const pageCount =
-    hasDocument && !isLoadingDocument && !loadError
-      ? Math.max(1, reportedPageCount || editor.totalPages)
-      : 0
-  const controlsDisabled =
-    !hasDocument || isLoadingDocument || Boolean(loadError)
-  const thumbnailSidebarOpen = Boolean(
-    sidebarOpen && (pageCount || isLoadingDocument)
-  )
+    hasDocument && !isLoadingDocument && !loadError ? Math.max(1, reportedPageCount || editor.totalPages) : 0;
+  const controlsDisabled = !hasDocument || isLoadingDocument || Boolean(loadError);
+  const thumbnailSidebarOpen = Boolean(sidebarOpen && (pageCount || isLoadingDocument));
   const handlePageCountChange = React.useCallback((nextPageCount: number) => {
-    setReportedPageCount(Math.max(1, Math.round(nextPageCount || 1)))
-  }, [])
+    setReportedPageCount(Math.max(1, Math.round(nextPageCount || 1)));
+  }, []);
   const setViewportRef = React.useCallback((element: HTMLDivElement | null) => {
-    viewportRef.current = element
-    setViewportElement(element)
-  }, [])
+    viewportRef.current = element;
+    setViewportElement(element);
+  }, []);
   const pageVirtualization = React.useMemo(
     () => ({
       enabled: true,
@@ -1632,209 +1374,185 @@ function DocxEditorContent({
       scrollElement: viewportElement,
       zoomScale: zoomScale / 100,
     }),
-    [viewportElement, zoomScale]
-  )
+    [viewportElement, zoomScale],
+  );
 
-  useSuppressDocxPaddingWarning(!isLoadingDocument && !loadError)
-
-  React.useEffect(() => {
-    setZoomScale(resolvedDefaultZoomScale)
-    setActivePage(1)
-    viewportRef.current?.scrollTo({ top: 0, left: 0 })
-  }, [resolvedDefaultZoomScale, url])
+  useSuppressDocxPaddingWarning(!isLoadingDocument && !loadError);
 
   React.useEffect(() => {
-    setDocumentTheme(effectiveIsDark ? "dark" : "light")
-  }, [effectiveIsDark, setDocumentTheme])
+    setZoomScale(resolvedDefaultZoomScale);
+    setActivePage(1);
+    viewportRef.current?.scrollTo({ top: 0, left: 0 });
+  }, [resolvedDefaultZoomScale, url]);
 
   React.useEffect(() => {
-    if (
-      status.startsWith("Failed to load file") ||
-      status === "Only .docx files are supported"
-    ) {
-      setLoadError(status)
-      setIsLoadingDocument(false)
+    setDocumentTheme(effectiveIsDark ? "dark" : "light");
+  }, [effectiveIsDark, setDocumentTheme]);
+
+  React.useEffect(() => {
+    if (status.startsWith("Failed to load file") || status === "Only .docx files are supported") {
+      setLoadError(status);
+      setIsLoadingDocument(false);
     }
-  }, [status])
+  }, [status]);
 
   React.useEffect(() => {
-    let isCurrent = true
+    let isCurrent = true;
 
     async function load() {
       if (!uploadedDocxFile && !url) {
-        setIsLoadingDocument(false)
-        setLoadError(undefined)
-        setReportedPageCount(0)
-        return
+        setIsLoadingDocument(false);
+        setLoadError(undefined);
+        setReportedPageCount(0);
+        return;
       }
 
-      setIsLoadingDocument(true)
-      setLoadError(undefined)
-      setReportedPageCount(0)
+      setIsLoadingDocument(true);
+      setLoadError(undefined);
+      setReportedPageCount(0);
 
       try {
-        const docxFile =
-          uploadedDocxFile?.file ??
-          (url ? await loadDocxFile(url, displayFileName) : null)
-        if (!docxFile) return
-        await importDocxFile(docxFile)
+        const docxFile = uploadedDocxFile?.file ?? (url ? await loadDocxFile(url, displayFileName) : null);
+        if (!docxFile) return;
+        await importDocxFile(docxFile);
 
         if (isCurrent) {
-          setIsLoadingDocument(false)
-          setActivePage(1)
-          viewportRef.current?.scrollTo({ top: 0, left: 0 })
+          setIsLoadingDocument(false);
+          setActivePage(1);
+          viewportRef.current?.scrollTo({ top: 0, left: 0 });
         }
       } catch (error) {
         if (isCurrent) {
-          setLoadError(
-            error instanceof Error ? error.message : "Unknown DOCX load error"
-          )
-          setIsLoadingDocument(false)
+          setLoadError(error instanceof Error ? error.message : "Unknown DOCX load error");
+          setIsLoadingDocument(false);
         }
       }
     }
 
-    void load()
+    void load();
 
     return () => {
-      isCurrent = false
-    }
-  }, [displayFileName, importDocxFile, uploadedDocxFile, url])
+      isCurrent = false;
+    };
+  }, [displayFileName, importDocxFile, uploadedDocxFile, url]);
 
   React.useEffect(() => {
     if (url) {
-      setUploadedDocxFile(null)
+      setUploadedDocxFile(null);
     }
-  }, [url])
+  }, [url]);
 
   const updateActivePageFromViewport = React.useCallback(() => {
-    const viewport = viewportRef.current
-    if (!viewport || !pageCount) return
+    const viewport = viewportRef.current;
+    if (!viewport || !pageCount) return;
 
-    const viewportRect = viewport.getBoundingClientRect()
-    const viewportCenter = viewportRect.top + viewportRect.height / 2
-    let closestPage = 1
-    let closestDistance = Number.POSITIVE_INFINITY
+    const viewportRect = viewport.getBoundingClientRect();
+    const viewportCenter = viewportRect.top + viewportRect.height / 2;
+    let closestPage = 1;
+    let closestDistance = Number.POSITIVE_INFINITY;
 
-    viewport
-      .querySelectorAll<HTMLElement>(
-        '[data-docx-page-wrapper="true"][data-index]'
-      )
-      .forEach((page) => {
-        const pageIndex = Number(page.dataset.index)
-        if (!Number.isFinite(pageIndex)) return
+    viewport.querySelectorAll<HTMLElement>('[data-docx-page-wrapper="true"][data-index]').forEach((page) => {
+      const pageIndex = Number(page.dataset.index);
+      if (!Number.isFinite(pageIndex)) return;
 
-        const pageRect = page.getBoundingClientRect()
-        const pageCenter = pageRect.top + pageRect.height / 2
-        const distance = Math.abs(pageCenter - viewportCenter)
+      const pageRect = page.getBoundingClientRect();
+      const pageCenter = pageRect.top + pageRect.height / 2;
+      const distance = Math.abs(pageCenter - viewportCenter);
 
-        if (distance < closestDistance) {
-          closestDistance = distance
-          closestPage = pageIndex + 1
-        }
-      })
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestPage = pageIndex + 1;
+      }
+    });
 
-    setActivePage((currentPage) =>
-      currentPage === closestPage ? currentPage : closestPage
-    )
-  }, [pageCount])
+    setActivePage((currentPage) => (currentPage === closestPage ? currentPage : closestPage));
+  }, [pageCount]);
 
   React.useEffect(() => {
-    const viewport = viewportRef.current
-    if (!viewport || !pageCount) return
+    const viewport = viewportRef.current;
+    if (!viewport || !pageCount) return;
 
-    let frameId = 0
+    let frameId = 0;
     const handleScroll = () => {
-      window.cancelAnimationFrame(frameId)
-      frameId = window.requestAnimationFrame(updateActivePageFromViewport)
-    }
+      window.cancelAnimationFrame(frameId);
+      frameId = window.requestAnimationFrame(updateActivePageFromViewport);
+    };
 
-    frameId = window.requestAnimationFrame(updateActivePageFromViewport)
-    viewport.addEventListener("scroll", handleScroll, { passive: true })
+    frameId = window.requestAnimationFrame(updateActivePageFromViewport);
+    viewport.addEventListener("scroll", handleScroll, { passive: true });
 
     return () => {
-      window.cancelAnimationFrame(frameId)
-      viewport.removeEventListener("scroll", handleScroll)
-    }
-  }, [pageCount, updateActivePageFromViewport])
+      window.cancelAnimationFrame(frameId);
+      viewport.removeEventListener("scroll", handleScroll);
+    };
+  }, [pageCount, updateActivePageFromViewport]);
 
   const scrollToPage = React.useCallback(
     (pageNumber: number) => {
-      const viewport = viewportRef.current
-      const targetPageIndex = pageNumber - 1
+      const viewport = viewportRef.current;
+      const targetPageIndex = pageNumber - 1;
       const page = viewport?.querySelector<HTMLElement>(
-        `[data-docx-page-wrapper="true"][data-index="${targetPageIndex}"]`
-      )
+        `[data-docx-page-wrapper="true"][data-index="${targetPageIndex}"]`,
+      );
 
-      setActivePage(pageNumber)
+      setActivePage(pageNumber);
 
-      if (!viewport) return
+      if (!viewport) return;
 
       if (!page) {
-        const pageStridePx =
-          (pageLayout.pageHeightPx + pageLayout.viewportDefaults.pageGapPx) *
-          (zoomScale / 100)
+        const pageStridePx = (pageLayout.pageHeightPx + pageLayout.viewportDefaults.pageGapPx) * (zoomScale / 100);
 
         viewport.scrollTo({
           top: Math.max(0, targetPageIndex * pageStridePx - 24),
           behavior: "auto",
-        })
-        return
+        });
+        return;
       }
 
       viewport.scrollTo({
-        top:
-          page.getBoundingClientRect().top -
-          viewport.getBoundingClientRect().top +
-          viewport.scrollTop -
-          24,
+        top: page.getBoundingClientRect().top - viewport.getBoundingClientRect().top + viewport.scrollTop - 24,
         behavior: "auto",
-      })
+      });
     },
-    [pageLayout.pageHeightPx, pageLayout.viewportDefaults.pageGapPx, zoomScale]
-  )
+    [pageLayout.pageHeightPx, pageLayout.viewportDefaults.pageGapPx, zoomScale],
+  );
 
   async function handleUpload(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]
-    event.target.value = ""
+    const file = event.target.files?.[0];
+    event.target.value = "";
 
-    if (!file) return
+    if (!file) return;
 
-    setZoomScale(resolvedDefaultZoomScale)
-    setActivePage(1)
-    setReportedPageCount(0)
+    setZoomScale(resolvedDefaultZoomScale);
+    setActivePage(1);
+    setReportedPageCount(0);
     setUploadedDocxFile({
       file,
       identity: `${file.name}-${file.size}-${file.lastModified}`,
-    })
+    });
   }
 
   async function handleImageUpload(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]
-    event.target.value = ""
+    const file = event.target.files?.[0];
+    event.target.value = "";
 
-    if (!file) return
+    if (!file) return;
 
-    await editor.insertImageFile(file)
+    await editor.insertImageFile(file);
   }
 
   function openLinkEditor() {
-    setLinkDraft(editor.selectedLink ?? "")
-    setLinkEditorOpen(true)
+    setLinkDraft(editor.selectedLink ?? "");
+    setLinkEditorOpen(true);
   }
 
   function applyLink() {
-    editor.setLink(linkDraft.trim() || undefined)
-    setLinkEditorOpen(false)
+    editor.setLink(linkDraft.trim() || undefined);
+    setLinkEditorOpen(false);
   }
 
   return (
-    <div
-      className={cn(
-        "flex h-[720px] min-h-0 flex-col overflow-hidden bg-background",
-        className
-      )}
-    >
+    <div className={cn("flex h-[720px] min-h-0 flex-col overflow-hidden bg-background", className)}>
       <input
         ref={fileInputRef}
         type="file"
@@ -1842,13 +1560,7 @@ function DocxEditorContent({
         className="hidden"
         onChange={handleUpload}
       />
-      <input
-        ref={imageInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={handleImageUpload}
-      />
+      <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
       <DocxEditorToolbar
         activePage={activePage}
         controlsDisabled={controlsDisabled}
@@ -1865,10 +1577,7 @@ function DocxEditorContent({
         showNightRenderToggle={shouldRenderNightMode}
         zoomScale={zoomScale}
       />
-      <div
-        ref={viewerShellRef}
-        className="relative flex min-h-0 flex-1 overflow-hidden bg-muted/30"
-      >
+      <div ref={viewerShellRef} className="relative flex min-h-0 flex-1 overflow-hidden bg-muted/30">
         {linkEditorOpen ? (
           <div className="absolute top-3 left-1/2 z-50 flex w-[min(420px,calc(100%-2rem))] -translate-x-1/2 items-center gap-2 rounded-lg border bg-background p-2 shadow-lg">
             <Input
@@ -1876,11 +1585,11 @@ function DocxEditorContent({
               onChange={(event) => setLinkDraft(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
-                  event.preventDefault()
-                  applyLink()
+                  event.preventDefault();
+                  applyLink();
                 }
                 if (event.key === "Escape") {
-                  setLinkEditorOpen(false)
+                  setLinkEditorOpen(false);
                 }
               }}
               placeholder="https://example.com"
@@ -1894,23 +1603,16 @@ function DocxEditorContent({
               size="sm"
               variant="ghost"
               onClick={() => {
-                editor.setLink(undefined)
-                setLinkEditorOpen(false)
+                editor.setLink(undefined);
+                setLinkEditorOpen(false);
               }}
             >
               Clear
             </Button>
           </div>
         ) : null}
-        <DocumentViewerThumbnailSidebar
-          inline={sidebarInline}
-          open={thumbnailSidebarOpen}
-        >
-          <ScrollArea
-            className="h-full"
-            scrollFade
-            viewportClassName="overscroll-contain"
-          >
+        <DocumentViewerThumbnailSidebar inline={sidebarInline} open={thumbnailSidebarOpen}>
+          <ScrollArea className="h-full" scrollFade viewportClassName="overscroll-contain">
             <div className="p-4">
               {isLoadingDocument ? (
                 <>
@@ -1929,10 +1631,8 @@ function DocxEditorContent({
                       size="sm"
                       className={cn(
                         "!h-auto w-full flex-col items-center gap-2 p-2 text-xs shadow-none hover:bg-sidebar-accent",
-                        thumbnail.pageNumber === activePage &&
-                          "bg-sidebar-accent text-foreground",
-                        thumbnail.pageNumber !== activePage &&
-                          "text-muted-foreground"
+                        thumbnail.pageNumber === activePage && "bg-sidebar-accent text-foreground",
+                        thumbnail.pageNumber !== activePage && "text-muted-foreground",
                       )}
                       onFocus={(event) => event.currentTarget.blur()}
                       onClick={() => scrollToPage(thumbnail.pageNumber)}
@@ -1942,11 +1642,7 @@ function DocxEditorContent({
                         displayFileName={displayFileName}
                         hasError={thumbnail.status === "error"}
                         isActive={thumbnail.pageNumber === activePage}
-                        isLoading={
-                          !thumbnail.isMounted &&
-                          thumbnail.status !== "ready" &&
-                          thumbnail.status !== "error"
-                        }
+                        isLoading={!thumbnail.isMounted && thumbnail.status !== "ready" && thumbnail.status !== "error"}
                         pageNumber={thumbnail.pageNumber}
                         pixelHeightPx={thumbnail.pixelHeightPx}
                         pixelWidthPx={thumbnail.pixelWidthPx}
@@ -1971,8 +1667,7 @@ function DocxEditorContent({
               <div className="max-w-md rounded-lg border bg-background p-4 text-sm shadow-xs">
                 <div className="font-medium">Upload a DOCX to edit</div>
                 <div className="mt-1 text-muted-foreground">
-                  Pass a DOCX URL with the <code>src</code> prop or upload a
-                  file.
+                  Pass a DOCX URL with the <code>src</code> prop or upload a file.
                 </div>
                 <Button
                   type="button"
@@ -1998,10 +1693,7 @@ function DocxEditorContent({
           ) : (
             <div className="mx-auto flex min-h-full justify-center">
               <div
-                className={cn(
-                  "origin-top",
-                  editor.documentTheme === "dark" && "docx-night-reader-shell"
-                )}
+                className={cn("origin-top", editor.documentTheme === "dark" && "docx-night-reader-shell")}
                 style={{ zoom: zoomScale / 100 }}
               >
                 <DocxEditorViewer
@@ -2012,9 +1704,7 @@ function DocxEditorContent({
                   showComments={editor.showComments}
                   renderCommentCard={renderCommentCard}
                   loadingState={loadingState}
-                  pageBackgroundColor={
-                    editor.documentTheme === "dark" ? "#0a0a0a" : undefined
-                  }
+                  pageBackgroundColor={editor.documentTheme === "dark" ? "#0a0a0a" : undefined}
                   pageGapBackgroundColor={viewerBackgroundColor}
                   pageVirtualization={pageVirtualization}
                   deferInitialPaginationPaint={false}
@@ -2026,6 +1716,5 @@ function DocxEditorContent({
         </ScrollArea>
       </div>
     </div>
-  )
+  );
 }
-

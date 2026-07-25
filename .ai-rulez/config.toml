@@ -5,22 +5,22 @@ description = 'Rust document intelligence library with active Python, TypeScript
 gitignore = true
 presets = ["claude", "codex"]
 builtins = [
-    'rust',
-    'python',
-    'go',
-    'java',
-    'ruby',
-    'php',
-    'csharp',
-    'elixir',
-    'wasm',
-    'pyo3',
-    'napi-rs',
-    'magnus',
-    'ext-php-rs',
-    'rustler',
-    'cgo',
-    'default-commands',
+  'rust',
+  'python',
+  'go',
+  'java',
+  'ruby',
+  'php',
+  'csharp',
+  'elixir',
+  'wasm',
+  'pyo3',
+  'napi-rs',
+  'magnus',
+  'ext-php-rs',
+  'rustler',
+  'cgo',
+  'default-commands',
 ]
 
 [[includes]]

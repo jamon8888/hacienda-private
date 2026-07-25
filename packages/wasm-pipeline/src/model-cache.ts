@@ -10,7 +10,10 @@ async function readWithProgress(response: Response, onProgress?: (p: FetchProgre
   const reader = response.body?.getReader();
   if (!reader) {
     const buf = new Uint8Array(await response.arrayBuffer());
-    onProgress?.({ bytesLoaded: buf.byteLength, bytesTotal: total || buf.byteLength });
+    onProgress?.({
+      bytesLoaded: buf.byteLength,
+      bytesTotal: total || buf.byteLength,
+    });
     return buf;
   }
 
@@ -77,17 +80,17 @@ export async function cachedFetchBuffer(url: string, onProgress?: (p: FetchProgr
 
 /** Fetch an immutable model artifact and verify its content hash before use. */
 export async function cachedFetchVerifiedBuffer(
-	url: string,
-	expectedSha256: string,
-	onProgress?: (p: FetchProgress) => void,
+  url: string,
+  expectedSha256: string,
+  onProgress?: (p: FetchProgress) => void,
 ): Promise<ArrayBuffer> {
-	const bytes = new Uint8Array(await cachedFetchBuffer(url, onProgress));
-	const digest = await crypto.subtle.digest("SHA-256", bytes);
-	const actual = Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join("");
-	if (actual !== expectedSha256.toLowerCase()) {
-		throw new Error(`model artifact checksum mismatch for ${url}`);
-	}
-	return bytes.buffer;
+  const bytes = new Uint8Array(await cachedFetchBuffer(url, onProgress));
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const actual = Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join("");
+  if (actual !== expectedSha256.toLowerCase()) {
+    throw new Error(`model artifact checksum mismatch for ${url}`);
+  }
+  return bytes.buffer;
 }
 
 export async function cachedFetchJson(url: string): Promise<unknown> {

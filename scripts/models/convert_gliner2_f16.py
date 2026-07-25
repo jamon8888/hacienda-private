@@ -23,8 +23,13 @@ import struct
 from pathlib import Path
 
 import numpy as np
+
+
 def convert(source: Path, destination: Path) -> tuple[str, int]:
-    with source.open("rb") as source_file, mmap.mmap(source_file.fileno(), 0, access=mmap.ACCESS_READ) as source_map:
+    with (
+        source.open("rb") as source_file,
+        mmap.mmap(source_file.fileno(), 0, access=mmap.ACCESS_READ) as source_map,
+    ):
         header_size = struct.unpack_from("<Q", source_map, 0)[0]
         header = json.loads(source_map[8 : 8 + header_size])
         output_header: dict[str, object] = {"__metadata__": {"source": source.name, "precision": "f16"}}

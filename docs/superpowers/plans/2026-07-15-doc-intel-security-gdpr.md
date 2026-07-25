@@ -12,7 +12,7 @@ summary: >
   is gated by consent + scopes + matter scope. xberg is consumed only as @xberg-io/xberg-wasm.
 ---
 
-# Plan 5 — Security & GDPR
+## Plan 5 — Security & GDPR
 
 **Depends on:** Plan 1 (`services/mcp-server` auth/scopes/consent/key vault/mirror),
 Plan 4 (consent-gated MCP tools `rag_query`, `list_pii`, `rehydrate_chunk`, `ingest_folder`, `redact`),
@@ -25,7 +25,7 @@ or redacted originals is gated by an explicit, revocable consent record and a sc
 
 ---
 
-## Context
+### Context
 
 The product is a **fully-local** document-intelligence application for lawyers. The **browser** runs
 the entire engine on the user's device: `@xberg-io/xberg-wasm` (extract + Tesseract OCR + chunk),
@@ -53,12 +53,12 @@ vault, consent store, scoped auth, audit) and serves pinned models.
 
 ---
 
-## Approach / Tasks
+### Approach / Tasks
 
 All tasks are implemented inside the browser (`apps/web` + `packages/wasm-pipeline`) and the thin
 Node service (`services/mcp-server`). No xberg crate, no ORT, no Rust in this layer.
 
-### T1 — Local-first guarantee (no egress)
+#### T1 — Local-first guarantee (no egress)
 
 - [ ] **Step 1:** Document the guarantee as an enforced invariant: document bytes are read from local
   disk and processed in-browser. The only network calls permitted are (a) the **pinned model
@@ -68,7 +68,7 @@ Node service (`services/mcp-server`). No xberg crate, no ORT, no Rust in this la
   content paths; assert the only allowed egress is the SHA256-pinned model fetcher (Node `models.ts`).
 - [ ] **Step 3:** Commit. `git commit -m "feat: enforce local-first no-egress invariant"`
 
-### T2 — PII detection in-browser (local GLiNER)
+#### T2 — PII detection in-browser (local GLiNER)
 
 - [ ] **Step 1:** Run `gliner` (GLiNER.js) over extracted document text **in the browser**
   to produce `PiiEntity` spans. Persist only `kind`, `start`, `end` + a curtain token in IndexedDB.
@@ -79,7 +79,7 @@ Node service (`services/mcp-server`). No xberg crate, no ORT, no Rust in this la
   rehydration via `rehydrate_chunk`, T5, returns plaintext).
 - [ ] **Step 4:** Commit. `git commit -m "feat: in-browser PII detection (GLiNER.js), token-only persistence"`
 
-### T3 — In-browser reversible redaction (in-house, pattern from curtain-privacy)
+#### T3 — In-browser reversible redaction (in-house, pattern from curtain-privacy)
 
 - [ ] **Step 1:** Apply in-house reversible tokenization (span → `{{CATEGORY_n}}`) for `PERSON` / `ORG` / `LOC` spans
   produced by browser GLiNER. Redacted documents store **tokens** (e.g. `<PERSON_1>`), not values.
@@ -90,7 +90,7 @@ Node service (`services/mcp-server`). No xberg crate, no ORT, no Rust in this la
   curtain tokens on-device.
 - [ ] **Step 4:** Commit. `git commit -m "feat: in-house reversible redaction coupled to GLiNER spans"`
 
-### T4 — Key vault (AES-GCM, owner-only)
+#### T4 — Key vault (AES-GCM, owner-only)
 
 - [ ] **Step 1:** Browser: use WebCrypto AES-GCM. The symmetric key lives in the **OS credential
   store** where available (e.g. platform keychain via `window.crypto` + a passphrase-derived
@@ -101,7 +101,7 @@ Node service (`services/mcp-server`). No xberg crate, no ORT, no Rust in this la
   throws.
 - [ ] **Step 4:** Commit. `git commit -m "feat: AES-GCM key vault (browser owner + Node offline rehydration)"`
 
-### T5 — Consent gate
+#### T5 — Consent gate
 
 - [ ] **Step 1:** Store an explicit, revocable **consent record** in the Node metadata store (Plan 1).
   Before any MCP call returns PII or a redacted original, check the consent record for the capability.
@@ -112,7 +112,7 @@ Node service (`services/mcp-server`). No xberg crate, no ORT, no Rust in this la
 - [ ] **Step 4:** Manual check: revoke consent → `list_pii` / `rehydrate_chunk` refuse.
 - [ ] **Step 5:** Commit. `git commit -m "feat: consent gate before any PII/redacted egress"`
 
-### T6 — Auth / scoped tokens + matter/folder scoping
+#### T6 — Auth / scoped tokens + matter/folder scoping
 
 - [ ] **Step 1:** Issue scoped tokens (Plan 1) over `AuthScopes = read | ingest | redact | admin`.
   Enforce scope in every HTTP handler and MCP tool.
@@ -123,7 +123,7 @@ Node service (`services/mcp-server`). No xberg crate, no ORT, no Rust in this la
   matter A reading matter B → refused.
 - [ ] **Step 4:** Commit. `git commit -m "feat: scoped tokens + matter/folder scoping enforcement"`
 
-### T7 — Model supply chain (SHA256-pinned)
+#### T7 — Model supply chain (SHA256-pinned)
 
 - [ ] **Step 1:** Every pinned model (`Xenova/multilingual-e5-base` e5 ONNX, `onnx-community/gliner_small-v2.1` gliner-pii ONNX, tokenizer) is fetched with a
   **SHA256 pin**; the Node `models.ts` verifies the digest before serving. No arbitrary model fetch.
@@ -132,7 +132,7 @@ Node service (`services/mcp-server`). No xberg crate, no ORT, no Rust in this la
 - [ ] **Step 3:** Document the only allowed egress (T1) is exactly this pinned fetcher + localhost.
 - [ ] **Step 4:** Commit. `git commit -m "feat: SHA256-pinned model supply chain"`
 
-### T8 — Data lifecycle / right to erasure
+#### T8 — Data lifecycle / right to erasure
 
 - [ ] **Step 1:** Erasure is **browser-first**: dropping a matter wipes its IndexedDB/OPFS chunks,
   vectors, PII spans, and redacted artifacts.
@@ -142,7 +142,7 @@ Node service (`services/mcp-server`). No xberg crate, no ORT, no Rust in this la
 - [ ] **Step 4:** Test: forget(matter) → browser IndexedDB + Node mirror + ciphertext all gone.
 - [ ] **Step 5:** Commit. `git commit -m "feat: per-matter data lifecycle + forget wipes browser + mirror"`
 
-### T9 — Local audit log (no PII in logs)
+#### T9 — Local audit log (no PII in logs)
 
 - [ ] **Step 1:** Append-only local log (Node `meta.sqlite` audit table) of accesses to PII / redacted
   content: actor, scope, action, matter id, timestamp. **Never** write PII values or plaintext.
@@ -152,7 +152,7 @@ Node service (`services/mcp-server`). No xberg crate, no ORT, no Rust in this la
 
 ---
 
-## Depends on
+### Depends on
 
 - **Plan 1** — `services/mcp-server` auth/scopes/consent store/key vault/mirror.
 - **Plan 4** — consent-gated MCP tools (`rag_query`, `list_pii`, `rehydrate_chunk`, `ingest_folder`,
@@ -160,7 +160,7 @@ Node service (`services/mcp-server`). No xberg crate, no ORT, no Rust in this la
 - **Plan 3** — consent UI in apps/web onboarding + per-matter toggle.
 - **Plan 2** — browser engine (extract/OCR/chunk/e5/GLiNER/RAG/curtain) that produces the mirror.
 
-## Verification
+### Verification
 
 - **Threat walkthrough** (documented, manual trace):
   1. No egress — confirm the only network path is the pinned `the pinned model repos` model fetch (served by
@@ -174,7 +174,7 @@ Node service (`services/mcp-server`). No xberg crate, no ORT, no Rust in this la
   - forget(matter) wipes browser IndexedDB + Node mirror + ciphertext (T8).
 - **Manual:** revoke consent → `list_pii` / `rehydrate_chunk` refuse; re-grant → succeed.
 
-## Risks / Non-goals
+### Risks / Non-goals
 
 - **Non-goal:** multi-tenant / cloud hosting. The app is single-owner, single-device by design.
 - **Device compromise is out of scope:** local-first means a stolen/unlocked device with the keychain
@@ -187,7 +187,7 @@ Node service (`services/mcp-server`). No xberg crate, no ORT, no Rust in this la
 - **Node mirror holds an encrypted curtain vault** — it must be AES-GCM and owner-only; the Node
   service never serves raw PII without consent + the owner key.
 
-## Exit criteria
+### Exit criteria
 
 - Local-first no-egress invariant enforced; only pinned `the pinned model repos` model fetch + localhost allowed.
 - PII detected in-browser via gliner; spans + reversible tokens persisted, plaintext minimized.
@@ -196,3 +196,19 @@ Node service (`services/mcp-server`). No xberg crate, no ORT, no Rust in this la
 - Key vault (AES-GCM, browser owner + Node offline rehydration); `rehydrate_chunk` gated by consent.
 - Scoped tokens + matter/folder scoping enforced in handlers and all MCP tools.
 - Per-matter forget wipes browser IndexedDB + Node mirror + ciphertext; audit log contains no PII.
+
+### 2026-07-23 GLiNER2 privacy gates
+
+The existing GLiNER.js/v1 detector is transitional and is not itself a GDPR
+quality boundary. Before enabling the imported Xberg GLiNER2 engine by default:
+
+- [ ] Pin and verify model/tokenizer/config bytes and record `NerIdentity`.
+- [ ] Disclose the seven supported languages and require human review or a
+  validated fallback outside them.
+- [ ] Keep deterministic validated structured-PII detectors in front of
+  contextual NER.
+- [ ] Prove native/WASM span and offset parity, with F16 confidence tolerance.
+- [ ] Test corrupt artifacts, resource exhaustion, cache quota, cancellation,
+  long-document window boundaries, and unsupported-language behavior.
+- [ ] Do not persist raw detected entity text or claim automatic GDPR
+  compliance from model output.

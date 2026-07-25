@@ -28,12 +28,7 @@ import {
   selectScenario,
   type IndexedChunk,
 } from "@xberg-io/wasm-pipeline-real";
-import {
-  mergeIntoAccumulator,
-  accumulatorKey,
-  type MatterMirrorAccumulator,
-  type MirrorChunk,
-} from "./mirror-merge";
+import { mergeIntoAccumulator, accumulatorKey, type MatterMirrorAccumulator, type MirrorChunk } from "./mirror-merge";
 
 export interface ExtractedDocument {
   doc_id: string;
@@ -111,9 +106,7 @@ export async function ingestFolder(file: File, ctx: IngestContext): Promise<Inge
   const chunks = chunkExtraction(doc);
   emit(ctx, name, name, "chunk", 0.4);
 
-  const vectors = await embedChunks(
-    chunks.map((c) => ({ text: c.content })),
-  );
+  const vectors = await embedChunks(chunks.map((c) => ({ text: c.content })));
   emit(ctx, name, name, "embed", 0.6);
 
   const docId = ctx.docId ?? ctx.folder.id;
@@ -233,7 +226,13 @@ export async function extractDocumentForUi(file: File): Promise<ExtractedDocumen
   const doc = firstDocument(result);
   if (!doc) throw new Error(`no document extracted from ${file.name}`);
   const pii = await detectPii(doc.content ?? "", listPiiTypes(), selectScenario(await detectCapabilities()));
-  return { doc_id: file.name, name: file.name, text: doc.content ?? "", pages: doc.pages?.length ?? 1, pii };
+  return {
+    doc_id: file.name,
+    name: file.name,
+    text: doc.content ?? "",
+    pages: doc.pages?.length ?? 1,
+    pii,
+  };
 }
 
 export async function queryRagForUi(matter: Matter, query: string, topK = 8): Promise<RetrievedChunk[]> {
@@ -269,7 +268,10 @@ export async function rehydrateSpanForUi(
     throw new Error("this document's cached mirror is missing vault data — please re-ingest it");
   }
   const entries = await openVault(
-    { cipher: Uint8Array.from(parsed.vault), salt: Uint8Array.from(parsed.vaultSalt) },
+    {
+      cipher: Uint8Array.from(parsed.vault),
+      salt: Uint8Array.from(parsed.vaultSalt),
+    },
     passphrase,
   );
   const match = entries.find((e) => e.kind === span.kind && e.start === span.start && e.end === span.end);

@@ -3,7 +3,7 @@
 # Re-generate with: alef scaffold
 
 [build]
-incremental = true
+incremental = false
 jobs = 4
 
 [net]
@@ -31,7 +31,14 @@ linker = "aarch64-linux-gnu-gcc"
 linker = "musl-gcc"
 
 [target.wasm32-unknown-unknown]
-rustflags = ["-C", "target-feature=+bulk-memory", "--cfg", "getrandom_backend=\"wasm_js\"", "-C", "link-arg=--allow-multiple-definition"]
+rustflags = [
+  "-C",
+  "target-feature=+bulk-memory",
+  "--cfg",
+  "getrandom_backend=\"wasm_js\"",
+  "-C",
+  "link-arg=--allow-multiple-definition",
+]
 
 [env]
 CFLAGS_i686_pc_windows_msvc = "/MD"
