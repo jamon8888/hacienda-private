@@ -54,7 +54,7 @@ explicit revocable consent for raw-PII access). xberg is consumed **only as `@xb
 
 ## 2. Trust Boundary & Architecture Overview
 
-```
+```text
 ┌───────────────────────── Lawyer's machine (localhost only) ────────────────────────┐
 │                                                                                    │
 │   Browser (apps/web, Next.js)  — runs the ENTIRE engine on-device                  │
@@ -140,7 +140,7 @@ extractor, OCR, NER, embedder, retriever, or redactor.
 
 ## 5. Storage & RAG
 
-  - **Primary RAG store (browser):** `edgevec` (WASM HNSW + sparse/BM25 + hybrid RRF) persisted to
+- **Primary RAG store (browser):** `edgevec` (WASM HNSW + sparse/BM25 + hybrid RRF) persisted to
   IndexedDB/OPFS; full-text is provided natively by EdgeVec's sparse/BM25. Hybrid retrieval (vector ANN fused
   with FTS) gives lawyer-grade precision over exact strings (clause numbers, party names). The index
   is mirrored to the Node service (`POST /rag/mirror`) as a serialized file for offline `rag_query`.
@@ -161,18 +161,20 @@ extractor, OCR, NER, embedder, retriever, or redactor.
 ## 6. Data Flow
 
 **(a) Ingest a folder (browser-full pipeline)**
+
 1. Lawyer drops a folder in the browser UI (`webkitdirectory`).
- 2. `@xberg-io/xberg-wasm` extracts + Tesseract-OCRs + chunks **on-device**.
- 3. The browser embeds with **e5** via `onnxruntime-web` and runs **GLiNER PII** via `GLiNER.js`
+2. `@xberg-io/xberg-wasm` extracts + Tesseract-OCRs + chunks **on-device**.
+3. The browser embeds with **e5** via `onnxruntime-web` and runs **GLiNER PII** via `GLiNER.js`
    — both on-device, using the pinned models served by the Node service at `/models/*`.
-  4. The browser builds the **edgevec** RAG index (e5 vectors + native sparse/BM25 FTS) in IndexedDB/OPFS
+  1. The browser builds the **edgevec** RAG index (e5 vectors + native sparse/BM25 FTS) in IndexedDB/OPFS
    and applies in-house reversible redaction (originals → AES-GCM vault ciphertext).
- 5. The browser **mirrors** the serialized EdgeVec index + light metadata to the Node service
+ 1. The browser **mirrors** the serialized EdgeVec index + light metadata to the Node service
    (`POST /rag/mirror`) so `rag_query` works when the browser is closed.
- 6. Raw documents never leave the browser; only a mirrored (redacted/tokenized) index + light
+ 2. Raw documents never leave the browser; only a mirrored (redacted/tokenized) index + light
    metadata reach the Node service.
 
 **(b) Lawyer query via MCP (agent path)**
+
 1. Claude Desktop launches `node dist/index.js mcp` (stdio) or connects to `localhost`.
 2. `rag_query` (gated by `read` scope + consent + matter scope) → the Node service loads the
    mirrored EdgeVec index for the matter and runs hybrid retrieval → returns redacted chunks +
@@ -313,3 +315,20 @@ model serving, light metadata, the key vault, the EdgeVec mirror, and the MCP ho
   `POST /rag/mirror` (EdgeVec index file), `GET/POST /matters`, `/folders`, `/consent`
 - Node service has **no engine features** — it does not compile/run xberg, ORT, or RAG.
 - WASM CI features: `["wasm-target","static-embeddings","url-ingestion"]`
+
+## 2026-07-23 NER architecture amendment
+
+Current state and target state must be represented separately:
+
+- Current browser: injected JavaScript GLiNER/ORT.
+- Current MCP ingest: Node `gliner@0.0.19`/ORT-Web, independent of Xberg NER.
+- Target browser: Xberg Candle GLiNER2 compiled to WASM and run in a Worker.
+- Target MCP: the same Xberg GLiNER2 implementation through the native Node
+  binding, not through the browser WASM binary.
+
+The official GLiNER2 privacy model is optional and lazy because its source
+checkpoint is approximately 1.23 GB. Its English, French, Spanish, German,
+Italian, Portuguese, and Dutch coverage must be disclosed; it cannot be
+described as all-EU-language PII protection. Model identity, checksums,
+thresholds, windowing, byte-offset semantics, and redaction taxonomy are shared
+across hosts even when native F32 and browser F16 artifacts differ.

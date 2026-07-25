@@ -38,6 +38,7 @@ updated to match (see Task 0).
 ### Task 0: Reconcile the spec with the onnxruntime-web decision
 
 **Files:**
+
 - Modify: `docs/superpowers/specs/2026-07-18-mcp-folder-ingest-design.md`
 
 - [ ] **Step 1: Update section B's runtime line**
@@ -75,11 +76,13 @@ git commit -m "docs(spec): switch Node GLiNER/embedding runtime to onnxruntime-w
 ### Task 1: `documents` table + folder status columns
 
 **Files:**
+
 - Modify: `packages/core/src/types.ts`
 - Modify: `services/mcp-server/src/store.ts`
 - Test: `services/mcp-server/tests/store.documents.test.ts`
 
 **Interfaces:**
+
 - Produces: `Document` type, `MetadataStore.createDocument()`, `MetadataStore.findDocumentByHash()`, `MetadataStore.updateDocumentStatus()`, `MetadataStore.getDocumentsByFolder()`, `MetadataStore.getFolders()` (now returns aggregate counts).
 
 - [ ] **Step 1: Extend shared types**
@@ -392,11 +395,13 @@ git commit -m "feat(mcp-server): add documents table and folder status aggregate
 ### Task 2: `document_pii` table (human-reviewable output)
 
 **Files:**
+
 - Modify: `packages/core/src/types.ts`
 - Modify: `services/mcp-server/src/store.ts`
 - Test: `services/mcp-server/tests/store.documentPii.test.ts`
 
 **Interfaces:**
+
 - Consumes: `Document` from Task 1.
 - Produces: `DocumentPiiEntity` type, `MetadataStore.insertPiiEntities()`, `MetadataStore.getPiiByDocument()`.
 
@@ -556,10 +561,12 @@ git commit -m "feat(mcp-server): add document_pii table for human-reviewable PII
 ### Task 3: `MirrorStore.appendMirror()`
 
 **Files:**
+
 - Modify: `services/mcp-server/src/mirror.ts`
 - Test: `services/mcp-server/tests/mirror.append.test.ts`
 
 **Interfaces:**
+
 - Produces: `MirrorStore.appendMirror(matterId, additions: { pii: MirrorPiiSpanInput[]; chunks: MirrorChunkInput[] })`.
 
 `saveMirror` fully replaces a matter's bundle; there is no existing way to add
@@ -693,6 +700,7 @@ git commit -m "feat(mcp-server): add MirrorStore.appendMirror for incremental do
 ### Task 4: Scaffold `packages/node-pipeline` + folder walk
 
 **Files:**
+
 - Create: `packages/node-pipeline/package.json`
 - Create: `packages/node-pipeline/tsconfig.json`
 - Create: `packages/node-pipeline/src/walk.ts`
@@ -700,6 +708,7 @@ git commit -m "feat(mcp-server): add MirrorStore.appendMirror for incremental do
 - Test: `packages/node-pipeline/src/walk.test.ts`
 
 **Interfaces:**
+
 - Produces: `walkFolder(rootDir: string): Promise<WalkedFile[]>`, `hashBytes(bytes: Buffer): string`, `WalkedFile { path: string; contentHash: string }`.
 
 - [ ] **Step 1: Scaffold the package**
@@ -884,10 +893,12 @@ git commit -m "feat(node-pipeline): scaffold package with recursive folder walk 
 ### Task 5: Shared GLiNER model catalog
 
 **Files:**
+
 - Create: `packages/node-pipeline/src/gliner-catalog.ts`
 - Create: `packages/node-pipeline/src/gliner-catalog.test.ts`
 
 **Interfaces:**
+
 - Produces: `GLINER_MODEL_DEFINITIONS`, `parseGlinerChecksums(text: string): Record<string,string>`, `buildGlinerManifestEntries(checksums: Record<string,string>): ModelManifestEntry[]`.
 
 This mirrors `crates/xberg/src/text/ner/gline.rs`'s `GLINER_MODELS` table and
@@ -1045,6 +1056,7 @@ Expected: PASS
 - [ ] **Step 6: Add `loadGlinerManifestEntries()` — self-relative, no cross-package path**
 
 **Files:**
+
 - Modify: `packages/node-pipeline/src/gliner-catalog.ts` (append)
 
 The checksum file must be located relative to `gliner-catalog.ts`'s own
@@ -1086,6 +1098,7 @@ files):
 - [ ] **Step 7: Wire the catalog into the Node service's `ModelCache`**
 
 **Files:**
+
 - Modify: `services/mcp-server/src/models.ts:19-42` (constructor)
 
 Merge the GLiNER catalog entries into whatever base manifest loads, so GLiNER
@@ -1134,10 +1147,12 @@ git commit -m "feat(node-pipeline): pin GLiNER model catalog to the same manifes
 ### Task 6: Node GLiNER inference (`ner.ts`)
 
 **Files:**
+
 - Create: `packages/node-pipeline/src/ner.ts`
 - Test: `packages/node-pipeline/src/ner.test.ts`
 
 **Interfaces:**
+
 - Consumes: `DEFAULT_GLINER_MODEL`, `GLINER_MODEL_DEFINITIONS` (Task 5).
 - Produces: `detectPii(text: string, modelPath: string, tokenizerPath: string, types?: readonly string[]): Promise<DetectedEntity[]>`, `DetectedEntity { kind: string; start: number; end: number; text: string }`, `RUST_ALIGNED_PII_TYPES`.
 
@@ -1284,10 +1299,12 @@ git commit -m "feat(node-pipeline): GLiNER PII detection via onnxruntime-web und
 ### Task 7: Node embedding (`embed.ts`)
 
 **Files:**
+
 - Create: `packages/node-pipeline/src/embed.ts`
 - Test: `packages/node-pipeline/src/embed.test.ts`
 
 **Interfaces:**
+
 - Produces: `embedText(text: string, modelPath: string, tokenizerPath: string): Promise<number[]>`.
 
 Same runtime/pattern as Task 6, for the existing e5 embedding model (already
@@ -1397,11 +1414,13 @@ git commit -m "feat(node-pipeline): e5 embedding via onnxruntime-web under Node"
 ### Task 8: Ingest orchestration (`ingestFile`)
 
 **Files:**
+
 - Create: `packages/node-pipeline/src/ingest.ts`
 - Test: `packages/node-pipeline/src/ingest.test.ts`
 - Modify: `packages/node-pipeline/src/index.ts` (re-export)
 
 **Interfaces:**
+
 - Consumes: `walkFolder`, `hashBytes` (Task 4); `detectPii` (Task 6); `embedText` (Task 7).
 - Produces: `ingestFile(deps: IngestDeps, file: WalkedFile, ctx: IngestFileContext): Promise<Document>`, `IngestDeps`, `IngestFileContext`, `DocumentStore`, `MirrorSink` (structural interfaces — see note below).
 
@@ -1701,10 +1720,12 @@ git commit -m "feat(node-pipeline): orchestrate extract/chunk/embed/PII into doc
 ### Task 9: `list_matters` + `create_matter` tools
 
 **Files:**
+
 - Modify: `services/mcp-server/src/mcp/tools.ts`
 - Modify: `services/mcp-server/tests/tools.test.ts`
 
 **Interfaces:**
+
 - Produces: `listMatters(ctx: AppContext): ToolResult`, `createMatter(ctx: AppContext, args: { name: string }): ToolResult`, registered as MCP tools `list_matters`/`create_matter`.
 
 - [ ] **Step 1: Write the failing test**
@@ -1801,11 +1822,13 @@ git commit -m "feat(mcp-server): add list_matters and create_matter MCP tools"
 ### Task 10: Rewrite `ingest_folder` to actually process files
 
 **Files:**
+
 - Modify: `services/mcp-server/src/mcp/tools.ts`
 - Modify: `services/mcp-server/src/index.ts` (wire real `extract`/`chunk` deps into `AppContext`)
 - Modify: `services/mcp-server/tests/tools.test.ts`
 
 **Interfaces:**
+
 - Consumes: `walkFolder`, `ingestFile`, `IngestDeps` (Group B).
 - Produces: rewritten `ingestFolder(ctx: AppContext, args: IngestFolderArgs): Promise<ToolResult>` returning `{ folder, documents_processed, documents_skipped, pii_entities_found, errors }`.
 
@@ -2028,11 +2051,13 @@ git commit -m "feat(mcp-server): ingest_folder now walks and fully processes a r
 ### Task 11: Per-launch REST bearer token
 
 **Files:**
+
 - Modify: `services/mcp-server/src/config.ts`
 - Modify: `services/mcp-server/src/index.ts`
 - Test: `services/mcp-server/tests/auth.test.ts`
 
 **Interfaces:**
+
 - Produces: `generateSessionToken(dataDir: string): string`, a `handle()` guard rejecting unauthenticated `/api/*` requests with `401`.
 
 - [ ] **Step 1: Write the failing test**
@@ -2189,11 +2214,13 @@ git commit -m "feat(mcp-server): require a per-launch bearer token on /api/* rou
 ### Task 12: Non-admin-by-default MCP scopes
 
 **Files:**
+
 - Modify: `services/mcp-server/src/config.ts`
 - Modify: `services/mcp-server/src/index.ts`
 - Test: `services/mcp-server/tests/scopes.mcp.test.ts`
 
 **Interfaces:**
+
 - Produces: `--elevated` CLI flag parsed into `CliArgs.elevated: boolean`, `createAppContext` deriving `tokenScopes` from it instead of a hardcoded constant.
 
 - [ ] **Step 1: Write the failing test**
@@ -2302,11 +2329,13 @@ git commit -m "feat(mcp-server): default MCP sessions to read+ingest scope, requ
 ### Task 13: New REST routes (`/api/folders/:id/documents`, `/api/documents/:id/pii`)
 
 **Files:**
+
 - Modify: `services/mcp-server/src/index.ts`
 - Modify: `apps/web/lib/api.ts`
 - Test: `services/mcp-server/tests/routes.documents.test.ts`
 
 **Interfaces:**
+
 - Produces: `GET /api/folders/:id/documents` → `{ documents: Document[] }`; `GET /api/documents/:id/pii` → `{ pii: DocumentPiiEntity[] }`; `getFolderDocuments(token, folderId)`, `getDocumentPii(token, documentId)` in `apps/web/lib/api.ts`.
 
 - [ ] **Step 1: Write the failing test**
@@ -2445,6 +2474,7 @@ git commit -m "feat(mcp-server,web): add folder-documents and document-PII REST 
 ### Task 14: `FolderView.tsx` shows MCP-ingested documents with polling
 
 **Files:**
+
 - Modify: `apps/web/app/folders/[id]/FolderView.tsx`
 
 - [ ] **Step 1: Add document-list state and a polling effect**
@@ -2528,6 +2558,7 @@ git commit -m "feat(web): show MCP-ingested documents in FolderView with status 
 ### Task 15: `MatterView.tsx` folder status badges
 
 **Files:**
+
 - Modify: `apps/web/app/matters/[id]/MatterView.tsx`
 
 - [ ] **Step 1: Render status/count badges per folder**
@@ -2570,6 +2601,7 @@ git commit -m "feat(web): show folder ingest status and counts in MatterView"
 ## Self-Review
 
 **1. Spec coverage:**
+
 - Section A (data model) → Tasks 1-3. ✓
 - Section B (Node pipeline + GLiNER consolidation) → Tasks 4-8. ✓
 - Section C (MCP tool surface) → Tasks 9-10. ✓
@@ -2604,3 +2636,23 @@ directory and would have broken again under a `dist/` build. Fixed by giving
 and a self-relative `loadGlinerManifestEntries()` (Task 5 Step 6) — the plan
 text above already reflects the fix; this note records that it was a
 pre-flight change, not part of the original design doc.
+
+## 2026-07-23 GLiNER2 successor work
+
+Tasks 5, 6, and 8 describe the currently shipped legacy path:
+`gliner@0.0.19` plus `onnxruntime-web` and GLiNER v1 span ONNX. The model catalog
+uses v2.5 model names, but it is not the new GLiNER2 architecture.
+
+- [ ] Wire the imported Xberg Candle backend through `NerBackendKind`,
+  extraction/redaction dispatch, and the canonical Node binding inputs.
+- [ ] Regenerate the Node binding with Alef; do not edit generated package or
+  binding files manually.
+- [ ] Resolve model/tokenizer/encoder-config files through the existing
+  checksum-verifying `ModelCache`, with immutable revision and language
+  metadata.
+- [ ] Replace Node GLiNER.js inference with native Xberg GLiNER2 behind a
+  bounded worker queue; keep the old path only as a temporary fallback.
+- [ ] Add overlapping long-input windows, canonical UTF-8 byte offsets,
+  per-label thresholds, and native/browser golden parity fixtures.
+- [ ] Treat the official model's seven languages and 1.23 GB checkpoint as
+  explicit deployment constraints, not EU-wide coverage.

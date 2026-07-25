@@ -61,9 +61,16 @@ tasks:
       - poly hooks install
 
   build:
-    desc: "Build Rust core library only (debug)"
+    desc: "Fast local build for the xberg core crate"
     cmds:
-      - task: build:core
+      - task: build:fast
+    platforms: [linux, darwin]
+
+  build:windows:
+    desc: "Fast local build for the xberg core crate (Windows)"
+    cmds:
+      - task: rust:build:fast:windows
+    platforms: [windows]
 
   build:release:
     desc: "Build Rust core library only (release)"
@@ -76,7 +83,32 @@ tasks:
       - task: rust:build:ci
 
   build:core:
-    desc: "Build Rust core library only (debug)"
+    desc: "Fast local build for the xberg core crate"
+    cmds:
+      - task: build:fast
+    platforms: [linux, darwin]
+
+  build:core:windows:
+    desc: "Fast local build for the xberg core crate (Windows)"
+    cmds:
+      - task: rust:build:fast:windows
+    platforms: [windows]
+
+  build:fast:
+    desc: "Fast local Rust build for the xberg core crate"
+    cmds:
+      - task: rust:build:fast
+    platforms: [linux, darwin]
+
+  build:fast:windows:
+    desc: "Fast local Rust build for the xberg core crate (Windows)"
+    platforms: [windows]
+    cmds:
+      - task: rust:build:fast:windows
+      - task: rust:build:fast:cranelift
+
+  build:full:
+    desc: "Full workspace Rust build with all features"
     cmds:
       - task: rust:build:dev
 
@@ -84,6 +116,11 @@ tasks:
     desc: "Build all language bindings"
     cmds:
       - task: alef:build
+
+  build:web:
+    desc: "Incremental local build for xberg-wasm and apps/web"
+    cmds:
+      - task: node:web:build:fast
 
   build:all:
     desc: "Build Rust core library and all language bindings (debug)"
@@ -96,21 +133,63 @@ tasks:
     cmds:
       - task: rust:cli:build
 
+  build:cli:fast:
+    desc: "Build a lighter local CLI shape"
+    cmds:
+      - task: rust:cli:build:fast
+
+  build:cli:fast:windows:
+    desc: "Build a lighter local CLI shape (Windows)"
+    cmds:
+      - task: rust:cli:build:fast:windows
+    platforms: [windows]
+
   test:
-    desc: "Run Rust core tests"
+    desc: "Run fast local xberg core tests"
+    cmds:
+      - task: rust:test:fast
+
+  test:fast:
+    desc: "Run fast local xberg core tests"
+    cmds:
+      - task: rust:test:fast
+
+  test:fast:windows:
+    desc: "Run fast local xberg core tests (Windows)"
+    cmds:
+      - task: rust:test:fast:windows
+    platforms: [windows]
+
+  test:fast:cranelift:
+    desc: "Run fast local xberg core tests with nightly Cranelift"
+    cmds:
+      - task: rust:test:fast:cranelift
+
+  test:full:
+    desc: "Run the full Rust CI-parity test flow"
     cmds:
       - task: rust:test
 
   test:all:
     desc: "Run all test suites (Rust core + bindings)"
     cmds:
-      - task: test
+      - task: test:full
       - alef test
 
   test:bindings:
     desc: "Run binding test suites only (skip Rust core)"
     cmds:
       - alef test
+
+  test:web:
+    desc: "Run apps/web unit tests"
+    cmds:
+      - task: node:web:test
+
+  test:mcp:
+    desc: "Run services/mcp-server tests"
+    cmds:
+      - task: node:mcp:test
 
   test:cov:
     desc: "Run all tests with coverage"
@@ -149,6 +228,22 @@ tasks:
       - task: format:check
       - task: lint:check
 
+  check:rust:fast:
+    desc: "Fast local cargo check for the xberg core crate"
+    cmds:
+      - task: rust:check:fast
+
+  check:rust:fast:windows:
+    desc: "Fast local cargo check for the xberg core crate (Windows)"
+    cmds:
+      - task: rust:check:fast:windows
+    platforms: [windows]
+
+  check:rust:fast:cranelift:
+    desc: "Fast local cargo check for the xberg core crate with nightly Cranelift"
+    cmds:
+      - task: rust:check:fast:cranelift
+
   check:android:
     desc: "cargo check xberg-dart + xberg-ffi for Android ABIs"
     cmds:
@@ -163,6 +258,18 @@ tasks:
     desc: "cargo check Android + iOS mobile targets"
     cmds:
       - task: rust:check:mobile
+
+  check:web:
+    desc: "Type-check apps/web and services/mcp-server"
+    cmds:
+      - task: node:web:typecheck
+      - task: node:mcp:typecheck
+
+  doctor:web:
+    desc: "Inspect cached web and wasm artifacts"
+    cmds:
+      - task: node:web:doctor
+
 
   update:
     desc: "Update all dependencies within major versions (minor patches only)"

@@ -5,6 +5,7 @@
 **Goal:** Stand up the lightweight **Node.js TypeScript** service `services/mcp-server` — the single local process that serves the browser UI, the model cache (pinned downloads from `the pinned model repos`), the light metadata store (matters/folders/consent), an AES-GCM key vault, and the MCP host wiring. Also ship `packages/core` shared TS types. This is the backbone every later plan depends on.
 
 **Architecture (per SHARED ARCHITECTURE BRIEF — authoritative):** A fully-local, single-machine app for lawyers. No cloud, no engine API keys, no egress. ONE local service `services/mcp-server` (Node.js + `@modelcontextprotocol/sdk`) that:
+
 - (a) serves built `apps/web` output + `@xberg-io/xberg-wasm` assets as static files at localhost,
 - (b) hosts a tiny HTTP API: model serving (`/models/*`), metadata (`/matters`, `/folders`, `/consent`), and the EdgeVec mirror endpoint (`/rag/mirror`),
 - (c) hosts an MCP server (`mcp-server mcp` stdio, or localhost HTTP/SSE) exposing lawyer tools (stubbed here, implemented in Plan 4),
@@ -14,7 +15,8 @@
 **CORE PRINCIPLE (NON-NEGOTIABLE):** The **browser** runs the full engine — extraction/OCR/chunking via `@xberg-io/xberg-wasm`, e5 embeddings via `onnxruntime-web`, GLiNER PII via `gliner` (GLiNER.js), RAG via `edgevec`, and in-house reversible redaction (pattern from `curtain-privacy`) — all on-device, persisted to IndexedDB/OPFS. The Node service is **thin**: it serves models, holds light metadata + a key vault, and mirrors the browser's edgevec index so MCP `rag_query` works even with the browser closed. The Node service runs **no engine** — no xberg crate, no ORT, no RAG of its own.
 
 **Intro monorepo layout (relevant slice):**
-```
+
+```text
 <repo>/
 ├─ services/
 │  └─ mcp-server/                # Node.js TS service (this plan)
@@ -50,6 +52,7 @@
 - **MCP:** `@modelcontextprotocol/sdk` (npm, TypeScript) — we build our own MCP server (NOT rmcp, NOT xberg-mcp). Five lawyer tools delegate to the mirrored EdgeVec index + light metadata (Plan 4).
 
 **Pinned deps (`services/mcp-server/package.json`):**
+
 ```json
 {
   "name": "@xberg-io/mcp-server",
@@ -71,13 +74,14 @@
   }
 }
 ```
+
 WASM CI build (Plan 6) consumes the prebuilt `@xberg-io/xberg-wasm` npm package — no wasm compile in this service.
 
 ---
 
 ## File Structure (this plan)
 
-```
+```text
 services/mcp-server/
 ├─ package.json                  # deps above; bin xberg-mcp
 ├─ tsconfig.json                 # strict + noUncheckedIndexedAccess; extends root base
@@ -251,3 +255,18 @@ packages/core/
 - **Non-goal:** cloud deployment, multi-tenant SaaS, or any network egress of document content. Fully local, single machine.
 - **Resolved:** npm package is `edgevec` (v0.9.0; `import init, { EdgeVec } from "edgevec"`). It natively provides dense + sparse (BM25) + hybrid RRF + persistence, so FlexSearch/MiniSearch are not required. Browser PII pkg is `gliner` (GLiNER.js); `@lmoe/gliner-onnx` is the Node alternative.
 - **Risk:** Node server holds an encrypted copy of the curtain vault for offline rehydration — it must be AES-GCM and owner-only; loss of the key = no rehydration.
+
+## 2026-07-23 GLiNER2 architecture update
+
+The current published `xberg-wasm` package still does not export an in-binary
+NER engine. Latest upstream Xberg now contains a Candle GLiNER2 core with native
+directory loading and WASM-compatible byte loading, but dispatch and generated
+Node/WASM bindings remain unwired.
+
+The target architecture supersedes the permanent "no engine in Node" rule for
+contextual NER: MCP should call the native Xberg binding while the browser calls
+the WASM build of the same Rust implementation. The model manifest/cache must
+support three checksum-pinned files, immutable revision, exact byte sizes,
+license, and supported languages. The approximately 1.23 GB source checkpoint
+must remain optional and lazy; it must not silently enter the default installer
+or startup warmup.

@@ -40,8 +40,14 @@ struct NativeQueryReport {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = env::args_os().skip(1);
-    let corpus_path = PathBuf::from(args.next().ok_or("usage: granite_release_dump <corpus.json> <model_dir>")?);
-    let model_dir = PathBuf::from(args.next().ok_or("usage: granite_release_dump <corpus.json> <model_dir>")?);
+    let corpus_path = PathBuf::from(
+        args.next()
+            .ok_or("usage: granite_release_dump <corpus.json> <model_dir>")?,
+    );
+    let model_dir = PathBuf::from(
+        args.next()
+            .ok_or("usage: granite_release_dump <corpus.json> <model_dir>")?,
+    );
 
     let file = File::open(&corpus_path)?;
     let fixture: CorpusFixture = serde_json::from_reader(BufReader::new(file))?;

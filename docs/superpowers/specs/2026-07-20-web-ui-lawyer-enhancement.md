@@ -84,6 +84,7 @@ API-driven `matter-nav` for the primary workspace sidebar.
 ## 4. Key Flows
 
 ### 4.1 Ingestion (Folder / Ingest screen)
+
 1. User drops files/folder onto `file-dropzone`.
 2. For each file: call `ingestFolder(matter, folder, file, options)` from the
    adapter; render `IngestProgress` stages (extract→ocr→chunk→embed→pii→index→
@@ -96,6 +97,7 @@ API-driven `matter-nav` for the primary workspace sidebar.
    in `matter-nav` without a reload.
 
 ### 4.2 Document review (Document view + PII + Human review)
+
 1. Open a document → routed to the correct viewer with `document-viewer-sidebar`
    thumbnails.
 2. Right pane = `PiiPanel` showing **token spans only** (masked). Clicking a
@@ -109,6 +111,7 @@ API-driven `matter-nav` for the primary workspace sidebar.
    matter's entities.
 
 ### 4.3 Search (Search screen)
+
 1. Natural-language query → `queryRagForUi(matter, q, topK)` →
    `RetrievedChunkCard`s with citations.
 2. Each card's citation links to `/documents/:id?...&page=:n&bbox=...`,
@@ -182,3 +185,11 @@ API-driven `matter-nav` for the primary workspace sidebar.
 
 See `2026-07-20-web-ui-lawyer-enhancement-plan.md` for the granular STEP 0–11
 build sequence (e-signature excluded).
+
+## 2026-07-23 GLiNER2 review amendment
+
+The review UI must show contextual-NER backend/model identity and supported
+languages. The existing JS detector is transitional; the target is Xberg
+Candle GLiNER2 shared with native MCP. A pinned model alone is not assurance:
+outside English, French, Spanish, German, Italian, Portuguese, and Dutch the UI
+must warn and require human review or a validated fallback.

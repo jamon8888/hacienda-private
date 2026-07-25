@@ -1,125 +1,111 @@
-﻿"use client"
+﻿"use client";
 
-import * as React from "react"
-import {
-  useDefaultLayout,
-  type GroupImperativeHandle,
-  type LayoutStorage,
-} from "react-resizable-panels"
+import * as React from "react";
+import { useDefaultLayout, type GroupImperativeHandle, type LayoutStorage } from "react-resizable-panels";
 
-import { cn } from "@/lib/utils"
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@/components/ui/resizable"
+import { cn } from "@/lib/utils";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 
 type PdfBlockResizableShellProps = {
-  autoSaveId: string
-  className?: string
-  heightClassName?: string
-  initialOrientation?: React.ComponentProps<
-    typeof ResizablePanelGroup
-  >["orientation"]
-  left: React.ReactNode
-  leftDefaultSize?: number
-  leftMinSize?: number
-  right: React.ReactNode
-  rightDefaultSize?: number
-  rightMaxSize?: number
-  rightMinSize?: number
-}
+  autoSaveId: string;
+  className?: string;
+  heightClassName?: string;
+  initialOrientation?: React.ComponentProps<typeof ResizablePanelGroup>["orientation"];
+  left: React.ReactNode;
+  leftDefaultSize?: number;
+  leftMinSize?: number;
+  right: React.ReactNode;
+  rightDefaultSize?: number;
+  rightMaxSize?: number;
+  rightMinSize?: number;
+};
 
 function toPercentSize(size: number) {
-  return `${size}%`
+  return `${size}%`;
 }
 
 function getLayoutSize(
   layout: React.ComponentProps<typeof ResizablePanelGroup>["defaultLayout"],
   panelId: string,
-  fallbackSize: number
+  fallbackSize: number,
 ) {
-  const size = layout?.[panelId]
+  const size = layout?.[panelId];
 
-  return typeof size === "number" && Number.isFinite(size)
-    ? size
-    : fallbackSize
+  return typeof size === "number" && Number.isFinite(size) ? size : fallbackSize;
 }
 
-const HORIZONTAL_LAYOUT_MIN_WIDTH = 900
+const HORIZONTAL_LAYOUT_MIN_WIDTH = 900;
 
 function useElementWidth<T extends HTMLElement>() {
-  const [node, setNode] = React.useState<T | null>(null)
-  const [width, setWidth] = React.useState<number>()
+  const [node, setNode] = React.useState<T | null>(null);
+  const [width, setWidth] = React.useState<number>();
 
   React.useEffect(() => {
-    if (!node || typeof ResizeObserver === "undefined") return
+    if (!node || typeof ResizeObserver === "undefined") return;
 
     const updateWidth = () => {
-      const nextWidth = node.getBoundingClientRect().width
+      const nextWidth = node.getBoundingClientRect().width;
 
       setWidth((currentWidth) =>
-        currentWidth !== undefined && Math.abs(currentWidth - nextWidth) < 0.5
-          ? currentWidth
-          : nextWidth
-      )
-    }
+        currentWidth !== undefined && Math.abs(currentWidth - nextWidth) < 0.5 ? currentWidth : nextWidth,
+      );
+    };
 
-    updateWidth()
+    updateWidth();
 
-    const observer = new ResizeObserver(updateWidth)
-    observer.observe(node)
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(node);
 
-    return () => observer.disconnect()
-  }, [node])
+    return () => observer.disconnect();
+  }, [node]);
 
-  return [setNode, width] as const
+  return [setNode, width] as const;
 }
 
 function useMounted() {
-  const [mounted, setMounted] = React.useState(false)
+  const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
-    setMounted(true)
-  }, [])
+    setMounted(true);
+  }, []);
 
-  return mounted
+  return mounted;
 }
 
 function getSavedLayout(key: string) {
-  if (typeof window === "undefined") return null
+  if (typeof window === "undefined") return null;
 
   try {
-    return window.localStorage.getItem(key)
+    return window.localStorage.getItem(key);
   } catch {
-    return null
+    return null;
   }
 }
 
 function setSavedLayout(key: string, value: string) {
-  if (typeof window === "undefined") return
+  if (typeof window === "undefined") return;
 
   try {
-    window.localStorage.setItem(key, value)
+    window.localStorage.setItem(key, value);
   } catch {
     // Ignore storage failures so previews still render in restricted contexts.
   }
 }
 
 function useHydrationSafeLayoutStorage() {
-  const mounted = useMounted()
+  const mounted = useMounted();
 
   return React.useMemo<LayoutStorage>(
     () => ({
       getItem(key) {
-        return mounted ? getSavedLayout(key) : null
+        return mounted ? getSavedLayout(key) : null;
       },
       setItem(key, value) {
-        if (mounted) setSavedLayout(key, value)
+        if (mounted) setSavedLayout(key, value);
       },
     }),
-    [mounted]
-  )
+    [mounted],
+  );
 }
 
 export function PdfBlockResizableShell({
@@ -149,7 +135,7 @@ export function PdfBlockResizableShell({
       rightMaxSize={rightMaxSize}
       rightMinSize={rightMinSize}
     />
-  )
+  );
 }
 
 function PdfBlockResizableShellWithSavedLayout({
@@ -164,30 +150,23 @@ function PdfBlockResizableShellWithSavedLayout({
   rightDefaultSize = 34,
   rightMaxSize = 52,
   rightMinSize = 24,
-}: Required<Pick<PdfBlockResizableShellProps, "autoSaveId">> &
-  Omit<PdfBlockResizableShellProps, "autoSaveId">) {
-  const [containerRef, containerWidth] = useElementWidth<HTMLDivElement>()
-  const layoutStorage = useHydrationSafeLayoutStorage()
+}: Required<Pick<PdfBlockResizableShellProps, "autoSaveId">> & Omit<PdfBlockResizableShellProps, "autoSaveId">) {
+  const [containerRef, containerWidth] = useElementWidth<HTMLDivElement>();
+  const layoutStorage = useHydrationSafeLayoutStorage();
   const isHorizontal =
-    containerWidth === undefined
-      ? initialOrientation === "horizontal"
-      : containerWidth >= HORIZONTAL_LAYOUT_MIN_WIDTH
-  const orientation = isHorizontal ? "horizontal" : "vertical"
-  const resolvedLeftDefaultSize =
-    leftDefaultSize ?? (isHorizontal ? 100 - rightDefaultSize : 62)
-  const layoutId = `${autoSaveId}-${orientation}`
-  const leftPanelId = `${layoutId}-left`
-  const rightPanelId = `${layoutId}-right`
-  const panelIds = React.useMemo(
-    () => [leftPanelId, rightPanelId],
-    [leftPanelId, rightPanelId]
-  )
+    containerWidth === undefined ? initialOrientation === "horizontal" : containerWidth >= HORIZONTAL_LAYOUT_MIN_WIDTH;
+  const orientation = isHorizontal ? "horizontal" : "vertical";
+  const resolvedLeftDefaultSize = leftDefaultSize ?? (isHorizontal ? 100 - rightDefaultSize : 62);
+  const layoutId = `${autoSaveId}-${orientation}`;
+  const leftPanelId = `${layoutId}-left`;
+  const rightPanelId = `${layoutId}-right`;
+  const panelIds = React.useMemo(() => [leftPanelId, rightPanelId], [leftPanelId, rightPanelId]);
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: layoutId,
     panelIds,
     storage: layoutStorage,
-  })
-  const resolvedRightDefaultSize = isHorizontal ? rightDefaultSize : 38
+  });
+  const resolvedRightDefaultSize = isHorizontal ? rightDefaultSize : 38;
 
   return (
     <PdfBlockResizableShellLayout
@@ -209,19 +188,11 @@ function PdfBlockResizableShellWithSavedLayout({
       rightPanelId={rightPanelId}
       targetLayout={{
         key: `${layoutId}:${defaultLayout ? "saved" : "default"}`,
-        leftSize: getLayoutSize(
-          defaultLayout,
-          leftPanelId,
-          resolvedLeftDefaultSize
-        ),
-        rightSize: getLayoutSize(
-          defaultLayout,
-          rightPanelId,
-          resolvedRightDefaultSize
-        ),
+        leftSize: getLayoutSize(defaultLayout, leftPanelId, resolvedLeftDefaultSize),
+        rightSize: getLayoutSize(defaultLayout, rightPanelId, resolvedRightDefaultSize),
       }}
     />
-  )
+  );
 }
 
 function PdfBlockResizableShellLayout({
@@ -243,48 +214,40 @@ function PdfBlockResizableShellLayout({
   rightPanelId,
   targetLayout,
 }: Omit<PdfBlockResizableShellProps, "autoSaveId"> & {
-  containerRef?: React.Ref<HTMLDivElement>
-  defaultLayout?: React.ComponentProps<
-    typeof ResizablePanelGroup
-  >["defaultLayout"]
-  groupId?: string
-  leftPanelId?: string
-  onLayoutChanged?: React.ComponentProps<
-    typeof ResizablePanelGroup
-  >["onLayoutChanged"]
-  orientation?: React.ComponentProps<typeof ResizablePanelGroup>["orientation"]
-  rightPanelId?: string
+  containerRef?: React.Ref<HTMLDivElement>;
+  defaultLayout?: React.ComponentProps<typeof ResizablePanelGroup>["defaultLayout"];
+  groupId?: string;
+  leftPanelId?: string;
+  onLayoutChanged?: React.ComponentProps<typeof ResizablePanelGroup>["onLayoutChanged"];
+  orientation?: React.ComponentProps<typeof ResizablePanelGroup>["orientation"];
+  rightPanelId?: string;
   targetLayout?: {
-    key: string
-    leftSize: number
-    rightSize: number
-  }
+    key: string;
+    leftSize: number;
+    rightSize: number;
+  };
 }) {
-  const resolvedLeftDefaultSize = leftDefaultSize ?? 62
-  const groupRef = React.useRef<GroupImperativeHandle | null>(null)
-  const appliedTargetLayoutKeyRef = React.useRef<string | null>(null)
+  const resolvedLeftDefaultSize = leftDefaultSize ?? 62;
+  const groupRef = React.useRef<GroupImperativeHandle | null>(null);
+  const appliedTargetLayoutKeyRef = React.useRef<string | null>(null);
 
   React.useLayoutEffect(() => {
-    if (!targetLayout || !leftPanelId || !rightPanelId) return
+    if (!targetLayout || !leftPanelId || !rightPanelId) return;
 
-    const targetLayoutKey = `${targetLayout.key}:${targetLayout.leftSize}:${targetLayout.rightSize}`
-    if (appliedTargetLayoutKeyRef.current === targetLayoutKey) return
+    const targetLayoutKey = `${targetLayout.key}:${targetLayout.leftSize}:${targetLayout.rightSize}`;
+    if (appliedTargetLayoutKeyRef.current === targetLayoutKey) return;
 
-    appliedTargetLayoutKeyRef.current = targetLayoutKey
+    appliedTargetLayoutKeyRef.current = targetLayoutKey;
     groupRef.current?.setLayout({
       [leftPanelId]: targetLayout.leftSize,
       [rightPanelId]: targetLayout.rightSize,
-    })
-  }, [leftPanelId, rightPanelId, targetLayout])
+    });
+  }, [leftPanelId, rightPanelId, targetLayout]);
 
   return (
     <div
       ref={containerRef}
-      className={cn(
-        heightClassName,
-        "relative min-h-[420px] overflow-hidden bg-background",
-        className
-      )}
+      className={cn(heightClassName, "relative min-h-[420px] overflow-hidden bg-background", className)}
     >
       <ResizablePanelGroup
         id={groupId}
@@ -314,6 +277,5 @@ function PdfBlockResizableShellLayout({
         </ResizablePanel>
       </ResizablePanelGroup>
     </div>
-  )
+  );
 }
-

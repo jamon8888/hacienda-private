@@ -5,9 +5,9 @@
 // every real matter/folder/document. Parsing the browser's actual URL directly is the only
 // reliable way to get the real id once the page is running client-side.
 export function routeIdFromLocation(segment: string, fallback: string): string {
-	if (typeof window === "undefined") return fallback;
-	const parts = window.location.pathname.split("/").filter(Boolean);
-	const index = parts.indexOf(segment);
-	const raw = index !== -1 ? parts[index + 1] : undefined;
-	return raw ? decodeURIComponent(raw) : fallback;
+  if (typeof window === "undefined") return fallback;
+  const parts = window.location.pathname.split("/").filter(Boolean);
+  const index = parts.indexOf(segment);
+  const raw = index !== -1 ? parts[index + 1] : undefined;
+  return raw ? decodeURIComponent(raw) : fallback;
 }

@@ -28,7 +28,7 @@ A browser-wasm capability spike (`docs/superpowers/spike-turso-browser-2026-07-2
 
 `packages/wasm-pipeline/src/rag.ts` already documents (and we re-confirmed live in Chromium) that `db.save()`/`EdgeVec.load()` **throw on every reload**:
 
-```
+```text
 "corrupted data: Deserialization failed: This is a feature that PostCard will never implement"
 ```
 
@@ -67,7 +67,7 @@ A browser-wasm capability spike (`docs/superpowers/spike-turso-browser-2026-07-2
 
 Each pipeline stage is an isolated, independently-testable unit behind a single `SearchStore` abstraction. The browser implementation is **EdgeVec-backed**; the Node implementation stays `better-sqlite3` (metadata) + EdgeVec bytes mirror as today.
 
-```
+```text
 ingestFolder (orchestrator)
   ├─ ExtractStage  ── xberg-wasm  (quality ON: quality_processing=true, WebGPU accel, Rust+JS cache, OCR via strategy)
   ├─ EmbedStage    ── e5 ORT session (multithreaded wasm / WebGPU, cached import)
@@ -98,7 +98,7 @@ EdgeVec's `save`/`load` is broken (PostCard `WontImplement`). We persist **ourse
 
 **Binary layout (single `Uint8Array` in IndexedDB, keyed by `matterId`):**
 
-```
+```text
 [ magic 4B ][ version u32 ][ dim u32 ][ nVectors u32 ]
 [ dense: nVectors × dim × f32 ]            // packed Float32
 [ nSparse u32 ]
@@ -216,3 +216,16 @@ Budgets are acceptance criteria — harness fails CI on regression.
 - Exact BM25/idf weighting for the sparse leg (start with simple tf-idf over chunk vocabulary, tune against legal fixtures).
 - Whether to default memory-constrained matters to `searchBQ` (recommend: yes when `scenario.lowRam`).
 - Whether to encrypt the IndexedDB blob at rest (privacy win, small perf cost) — out of scope v1.
+
+## 2026-07-23 GLiNER2 performance amendment
+
+The existing NER analysis and `<600ms/50 chunks` budget describe injected
+JavaScript GLiNER v1. Latest upstream Xberg supplies a Candle GLiNER2 core for
+native and WASM byte loading, but not a wired browser binding.
+
+The successor NerStage must benchmark cold artifact transfer, verification,
+model construction, peak memory, Worker responsiveness, and steady-state
+windowed inference independently. Its conformance gate compares native F32 and
+WASM F16 spans with tolerance and canonical UTF-8 offsets. The 1.23 GB source
+checkpoint and approximately 614 MB converted weights prohibit assuming that
+the legacy latency or memory budget remains valid.

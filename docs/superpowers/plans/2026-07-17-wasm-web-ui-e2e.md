@@ -11,6 +11,7 @@
 **Spec:** `docs/superpowers/specs/2026-07-17-wasm-web-ui-e2e-design.md`
 
 > **Important deviations from the spec (all recorded/consistent with it):**
+>
 > 1. **Adapter layer IS required** (spec Section 2): the real `ingestFolder` is opaque (`{accepted}`) and signature-incompatible with the UI's `IngestResult`-shaped call; the adapter composes the real package's granular exports. UI pages unchanged; does not reimplement engine logic.
 > 2. **`rehydrate_chunk` is browser-side by design.** The browser seals the vault with WebCrypto PBKDF2+AES-GCM (random salt); the server's `KeyVault` uses a different Node KDF + server-side salt file and CANNOT decrypt browser-sealed bytes. Therefore the MCP `rehydrate_chunk` tool returns the stored **ciphertext blob** verbatim (the server acts as a ciphertext vault), and true decryption happens in the browser with the owner passphrase. The Task 7 e2e asserts the tool returns a non-empty ciphertext for a known span — not server-side plaintext. (A 3-line server-tool change in Task 7 makes `rehydrate_chunk` return the stored ciphertext instead of attempting server-side `vault.open`, which would fail by design.)
 
@@ -19,6 +20,7 @@
 ## File Structure
 
 **Engine wiring (apps/web):**
+
 - `apps/web/next.config.mjs` — add `@xberg-io/wasm-pipeline-real` alias; keep `@xberg-io/wasm-pipeline` → `lib/engine/index.ts`.
 - `apps/web/tsconfig.json` — add `paths["@xberg-io/wasm-pipeline-real"]`.
 - `apps/web/package.json` — add dependency `@xberg-io/wasm-pipeline: workspace:*` (real package); add `test:e2e` script.
@@ -29,20 +31,24 @@
 - `apps/web/lib/engine/contract.test.ts` — NEW: asserts barrel exports exist (API contract test from spec Section 2 step 3).
 
 **UI e2e (apps/web):**
+
 - `apps/web/playwright.config.ts` — NEW.
 - `apps/web/e2e/fixtures/` — NEW: tiny `.txt`, `.docx`, `.pdf`, image fixtures.
 - `apps/web/e2e/onboarding.spec.ts`, `matters.spec.ts`, `folders-ingest.spec.ts`, `pii.spec.ts`, `search.spec.ts`, `isolation.spec.ts`, `redact.spec.ts`, `forget.spec.ts` — NEW.
 
 **MCP stdio e2e (services/mcp-server):**
+
 - `services/mcp-server/tests/e2e.mcp.test.mjs` — NEW: spawns `xberg-mcp mcp --data-dir` + SDK client over stdio.
 - `services/mcp-server/package.json` — add `test:e2e:mcp` script.
 
 **Pipeline module harness (packages/wasm-pipeline):**
+
 - `packages/wasm-pipeline/e2e/playwright.config.ts` (or `vitest` config) — NEW.
 - `packages/wasm-pipeline/e2e/ocr.spec.ts`, `embed.spec.ts`, `ner.spec.ts`, `rag.spec.ts`, `ingest.spec.ts`, `runtime.spec.ts` — NEW.
 - `packages/wasm-pipeline/package.json` — add `test:e2e` script.
 
 **CI:**
+
 - `.github/workflows/e2e-web.yml` — NEW.
 
 ---
@@ -50,6 +56,7 @@
 ## Task 1: Add the real package dependency + aliases
 
 **Files:**
+
 - Modify: `apps/web/package.json`
 - Modify: `apps/web/next.config.mjs`
 - Modify: `apps/web/tsconfig.json`
@@ -108,6 +115,7 @@ git commit -m "build(web): wire real wasm-pipeline via non-aliased real specifie
 ## Task 2: Write the engine adapter (replaces the stub)
 
 **Files:**
+
 - Create: `apps/web/lib/engine/adapter.ts`
 - Modify: `apps/web/lib/engine/index.ts`
 
@@ -402,12 +410,14 @@ git commit -m "feat(web): replace engine stub with real-package adapter"
 ## Task 3: Update UI call sites to the adapter context shape
 
 **Files:**
+
 - Modify: `apps/web/app/folders/[id]/FolderView.tsx`
 - Modify: `apps/web/app/search/page.tsx`
 
 - [ ] **Step 1: Update FolderView.tsx to build an IngestContext and call the new ingestFolder**
 
 In `apps/web/app/folders/[id]/FolderView.tsx`:
+
 - Change the engine import to also import the `IngestContext` type:
   `import { ingestFolder, type IngestProgress, type IngestResult, type IngestContext } from "@xberg-io/wasm-pipeline";`
 - Add `Matter` to the core import: `import type { Matter } from "@xberg-io/core";`
@@ -478,6 +488,7 @@ In `apps/web/app/folders/[id]/FolderView.tsx`:
 - [ ] **Step 2: Update search/page.tsx to pass a Matter to queryRag**
 
 In `apps/web/app/search/page.tsx`:
+
 - Change the core import (line 10) to: `import type { RetrievedChunk, Matter } from "@xberg-io/core";`
 - Change the `queryRag` call (line 27) to:
 
@@ -525,11 +536,13 @@ git commit -m "feat(web): wire FolderView + search to adapter context"
 ## Task 4: Build the web UI statically + smoke-serve
 
 **Files:**
+
 - Modify: `apps/web/package.json` (add `test:e2e` script)
 
 - [ ] **Step 1: Add the test:e2e script**
 
 In `apps/web/package.json`, add to `scripts`:
+
 ```json
     "test:e2e": "playwright test"
 ```
@@ -542,12 +555,14 @@ Expected: `apps/web/out/index.html` and assets generated, no type errors.
 - [ ] **Step 3: Copy UI into the server public dir (mirrors CI) and start the server**
 
 Run:
+
 ```powershell
 cd C:\Users\NMarchitecte\Documents\xberg
 pnpm --filter mcp-server build
 Copy-Item -Recurse -Force apps/web/out services/mcp-server/public
 node services/mcp-server/dist/index.js serve --port 8787 --data-dir $env:TEMP/xberg-smoke
 ```
+
 Expected: server logs `serving http://127.0.0.1:8787`. Confirm it boots, then stop it.
 
 - [ ] **Step 4: Commit**
@@ -562,6 +577,7 @@ git commit -m "build(web): add playwright e2e script; verify static export"
 ## Task 5: Playwright config + fixtures
 
 **Files:**
+
 - Create: `apps/web/playwright.config.ts`
 - Create: `apps/web/e2e/fixtures/sample.txt`
 - Create: `apps/web/e2e/fixtures/sample.docx`
@@ -594,7 +610,8 @@ export default defineConfig({
 - [ ] **Step 2: Create fixtures**
 
 Create `apps/web/e2e/fixtures/sample.txt`:
-```
+
+```text
 John Doe can be reached at john.doe@example.com or +1 555 0100.
 The contract relates to the Acme matter and references invoice #12345.
 ```
@@ -613,6 +630,7 @@ git commit -m "test(web): add playwright config + fixtures"
 ## Task 6: UI e2e specs (real Chromium + real models)
 
 **Files:**
+
 - Create: `apps/web/e2e/helpers.ts`
 - Create: `apps/web/e2e/onboarding.spec.ts`
 - Create: `apps/web/e2e/matters.spec.ts`
@@ -782,6 +800,7 @@ git commit -m "test(web): add UI e2e specs (real Chromium + real models)"
 ## Task 7: MCP stdio live-bundle e2e
 
 **Files:**
+
 - Create: `services/mcp-server/tests/e2e.mcp.test.mjs`
 - Modify: `services/mcp-server/package.json` (add `test:e2e:mcp`)
 - Modify: `services/mcp-server/src/mcp/tools.ts` (make `rehydrate_chunk` return the stored ciphertext verbatim — browser-side decryption by design)
@@ -789,6 +808,7 @@ git commit -m "test(web): add UI e2e specs (real Chromium + real models)"
 - [ ] **Step 1: Add the script**
 
 In `services/mcp-server/package.json`, add to `scripts`:
+
 ```json
     "test:e2e:mcp": "node tests/e2e.mcp.test.mjs"
 ```
@@ -907,6 +927,7 @@ git commit -m "test(mcp): add stdio live-bundle e2e"
 ## Task 8: Pipeline module harness (real models)
 
 **Files:**
+
 - Create: `packages/wasm-pipeline/e2e/playwright.config.ts`
 - Create: `packages/wasm-pipeline/e2e/ocr.spec.ts`
 - Create: `packages/wasm-pipeline/e2e/embed.spec.ts`
@@ -919,10 +940,13 @@ git commit -m "test(mcp): add stdio live-bundle e2e"
 - [ ] **Step 1: Add the script + Playwright dep + a browser-runner config**
 
 In `packages/wasm-pipeline/package.json`, add to `devDependencies` (the harness runs in real Chromium):
+
 ```json
     "@playwright/test": "^1.46.0",
 ```
+
 and add the script:
+
 ```json
     "test:e2e": "playwright test -c e2e/playwright.config.ts"
 ```
@@ -958,6 +982,7 @@ git commit -m "test(wasm-pipeline): add real-model module harness"
 ## Task 9: CI workflow
 
 **Files:**
+
 - Create: `.github/workflows/e2e-web.yml`
 
 - [ ] **Step 1: Write the workflow**
@@ -1025,6 +1050,7 @@ git commit -m "ci: add e2e-web workflow (UI + MCP live-bundle + module harness)"
 ## Task 10: Spec sync + final review
 
 **Files:**
+
 - Modify: `docs/superpowers/specs/2026-07-17-wasm-web-ui-e2e-design.md` (Section 2 adapter note already added; verify Sections 3-6 still align).
 
 - [ ] **Step 1: Re-read the spec and confirm Tasks 1-9 cover every section**
@@ -1045,3 +1071,28 @@ Expected: all existing unit tests still pass.
 git add docs/superpowers/specs/2026-07-17-wasm-web-ui-e2e-design.md
 git commit -m "docs: align spec with implementation plan (adapter deviation)"
 ```
+
+## 2026-07-23 GLiNER2 E2E extension (revised to resolve Alef-binding contradiction)
+
+The original plan contained a contradictory constraint: "no changes to Rust core or Alef bindings" while simultaneously requiring "binding-presence smoke tests" and "GLiNER2 dispatch tests" that would need those exact changes. This section replaces that with a split-gate approach.
+
+### Split-gate testing strategy
+
+**Gate 1: Legacy fast-gate (no Alef changes required)**
+
+- [ ] Adapter selects legacy injected JS NER or wired Xberg Candle WASM backend during migration (feature-flagged, no binding changes)
+- [ ] Corrupt/truncated `from_bytes` cases tested via in-memory fixtures (no model download)
+- [ ] Worker cancellation, initialization progress, cache quota, recovery tested without blocking the page
+
+**Gate 2: Target migration gate (Alef binding changes REQUIRED)**
+
+- [ ] **Alef binding generation explicitly included**: Run `alef generate` as part of this gate's CI job so GLiNER2 Candle types flow into Node/Python/Go/Ruby/PHP/Java/C#/Elixir/WASM/Dart/Kotlin/Swift/Zig/R bindings
+- [ ] **Binding freshness verification**: CI step runs `alef generate && git diff --exit-code packages/ crates/xberg-node/ crates/xberg-wasm/ crates/xberg-ffi/` to fail if generated bindings drift
+- [ ] Binding-presence smoke test: each generated language package compiles and the GLiNER2 entry point is resolvable
+- [ ] Separately cached real-model job for native/WASM span parity, Unicode offsets, long-window boundaries, seven supported languages, explicit unsupported-language behavior
+
+### Migration rule
+
+- Legacy fast-gate tests MUST NOT depend on Alef-generated bindings
+- Target migration gate tests MUST run after `alef generate` and freshness check passes
+- The "no changes to Alef bindings" restriction is LIFTED for Gate 2 — it is the explicit goal

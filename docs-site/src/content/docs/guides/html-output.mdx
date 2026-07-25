@@ -264,6 +264,7 @@ If you set `class_prefix` to `"my-"`, all classes become `my-doc`, `my-content`,
 ## Security
 
 :::caution[Security considerations]
+
 - `class_prefix` is validated to prevent HTML injection - `</style>` sequences are stripped from user CSS - `css_file` is limited to 1 MiB - When serving HTML to untrusted users, sanitize CSS at the application layer
 :::
 

@@ -37,11 +37,13 @@
 ### Task 1: Scaffold the `xberg-rag` crate
 
 **Files:**
+
 - Create: `crates/xberg-rag/Cargo.toml`
 - Create: `crates/xberg-rag/src/lib.rs`
 - Modify: `Cargo.toml` (root) — `members` list + `[workspace.dependencies]`
 
 **Interfaces:**
+
 - Produces: an empty but buildable `xberg-rag` library crate; `pub const EMBED_DIM: usize = 768;`.
 
 - [ ] **Step 1: Register the crate and add workspace deps**
@@ -143,11 +145,13 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ### Task 2: Core types + error
 
 **Files:**
+
 - Create: `crates/xberg-rag/src/error.rs`
 - Create: `crates/xberg-rag/src/types.rs`
 - Modify: `crates/xberg-rag/src/lib.rs` (wire modules + re-exports)
 
 **Interfaces:**
+
 - Produces:
   - `struct IndexedChunk { doc_id: String, chunk_index: u32, text: String, page: Option<u32>, citation: Option<String>, vector: Vec<f32> }`
   - `struct RetrievedChunk { doc_id: String, chunk_index: u32, text: String, score: f32, citation: Option<String>, page: Option<u32> }`
@@ -278,16 +282,17 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ### Task 3: `SearchStore` trait + flat cosine backend
 
 **Files:**
+
 - Create: `crates/xberg-rag/src/store.rs`
 - Create: `crates/xberg-rag/src/flat.rs`
 - Modify: `crates/xberg-rag/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `IndexedChunk`, `RetrievedChunk`, `RagError`, `Result` (Task 2).
 - Produces:
   - `trait SearchStore: Sized` with `new(dim) -> Self`, `ingest(&mut self, &[IndexedChunk]) -> Result<()>`, `search(&self, &[f32], top_k) -> Result<Vec<RetrievedChunk>>`, `len(&self) -> usize`, `is_empty(&self) -> bool`, `snapshot(&self) -> Result<Vec<u8>>`, `load(&[u8]) -> Result<Self>`.
   - `struct FlatStore` implementing it (P1's only backend). `snapshot`/`load` are stubbed here (delegate to `snapshot` module in Task 4) — in this task they return `RagError::Snapshot("unimplemented".into())` so the trait is complete but persistence tests wait for Task 4.
-
 - [ ] **Step 1: Write the failing test**
 
 Write `crates/xberg-rag/src/store.rs`:
@@ -480,12 +485,13 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ### Task 4: Versioned `rkyv` snapshot round-trip
 
 **Files:**
+
 - Modify: `crates/xberg-rag/src/snapshot.rs` (replace the Task 3 stub)
 
 **Interfaces:**
+
 - Consumes: `IndexedChunk`, `RagError`, `Result`.
 - Produces: `pub(crate) fn encode(dim: usize, chunks: &[IndexedChunk]) -> Result<Vec<u8>>` and `pub(crate) fn decode(bytes: &[u8]) -> Result<(usize, Vec<IndexedChunk>)>`. Format: `b"XRAG"` (4) + version `u16` LE (2) + `rkyv`-archived `SnapshotBody { dim: u32, chunks: Vec<IndexedChunk> }`. `pub const SNAPSHOT_VERSION: u16 = 1`.
-
 - [ ] **Step 1: Write the failing test**
 
 Replace `crates/xberg-rag/src/snapshot.rs` with:
@@ -609,13 +615,14 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ### Task 5: Gate R1 — prove `edgevec` 0.9.0 compiles native + wasm32
 
 **Files:**
+
 - Create: `crates/xberg-rag/examples/edgevec_smoke.rs`
 - Create: `docs/superpowers/notes/2026-07-21-edgevec-native-spike.md` (findings)
 
 **Interfaces:**
+
 - Consumes: `edgevec` 0.9.0 behind the `hnsw` feature (Task 1).
 - Produces: proof (two green builds) that the P2 HNSW backend can link `edgevec` on both targets, plus a findings note recording the exact native API surface (insert/search/hybrid names) P2 will bind. **No production code** — this is the risk gate from spec R1.
-
 - [ ] **Step 1: Write the smoke example**
 
 Create `crates/xberg-rag/examples/edgevec_smoke.rs`. Insert a couple of vectors and run one search, using edgevec's actual native API (consult `https://docs.rs/edgevec/0.9.0`). Skeleton to adapt to the real symbols:
@@ -662,6 +669,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ## Self-Review
 
 **1. Spec coverage (against P1 scope in R5 = "`xberg-rag` extraction + SearchStore"):**
+
 - `xberg-rag` crate created → Task 1. ✓
 - `SearchStore` trait (spec Section 1 signatures) → Task 3. ✓ (P1 subset: `search`; `hybrid_search` is P2 when the sparse/BM25 backend lands — noted below.)
 - Versioned `rkyv` snapshot (spec Section 4, `SNAPSHOT_MAGIC`/`SNAPSHOT_VERSION`) → Task 4. ✓

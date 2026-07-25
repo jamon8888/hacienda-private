@@ -322,9 +322,10 @@ build-output-musl-node/
 
 poly.local.toml
 
-# BEGIN ai-rulez (DO NOT EDIT - managed by ai-rulez)
-.ai-rulez/.generated-manifest.json
-# END ai-rulez
 
 # Brainstorm companion mockups (generated)
 .superpowers/
+
+# BEGIN ai-rulez (DO NOT EDIT - managed by ai-rulez)
+.ai-rulez/.generated-manifest.json
+# END ai-rulez

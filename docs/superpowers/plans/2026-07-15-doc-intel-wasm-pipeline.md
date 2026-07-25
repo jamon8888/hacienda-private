@@ -15,7 +15,7 @@ summary: >
   browser-native runtimes, not xberg; there is no native server.
 ---
 
-# Plan 2 — packages/wasm-pipeline (browser-side engine: xberg-wasm + browser-native runtimes)
+## Plan 2 — packages/wasm-pipeline (browser-side engine: xberg-wasm + browser-native runtimes)
 
 **Depends on:** Plan 1 (`2026-07-15-doc-intel-scaffold-core`) — provides the localhost API
 contracts (`http://localhost:8787`), the `packages/core` shared TS types (`AuthScopes`,
@@ -26,7 +26,7 @@ package.
 
 ---
 
-## Goal
+### Goal
 
 Produce a framework-agnostic, ESM TypeScript library `packages/wasm-pipeline` that runs the
 **entire privacy-sensitive pipeline on the user's device**:
@@ -51,7 +51,7 @@ It then mirrors the serialized EdgeVec index + light metadata to the Node servic
 
 ---
 
-## Context
+### Context
 
 Compute model (verified against xberg source + upstream reality):
 
@@ -83,9 +83,9 @@ Shared contracts this package must honor (from `packages/core`):
 
 ---
 
-## Approach / Tasks (concrete files under `packages/wasm-pipeline/`)
+### Approach / Tasks (concrete files under `packages/wasm-pipeline/`)
 
-### Task 1 — Scaffold `packages/wasm-pipeline/package.json`
+#### Task 1 — Scaffold `packages/wasm-pipeline/package.json`
 
 - [ ] **Step 1:** Write `package.json` (ESM, pinned deps).
 
@@ -126,7 +126,7 @@ Shared contracts this package must honor (from `packages/core`):
 
 ---
 
-### Task 2 — `src/index.ts`: load wasm + public `extractDocument`
+#### Task 2 — `src/index.ts`: load wasm + public `extractDocument`
 
 - [ ] **Step 1:** Write `src/index.ts` — wasm init + top-level extract entry.
 
@@ -155,7 +155,7 @@ export async function extractDocument(
 
 ---
 
-### Task 3 — `src/ocr.ts`: Tesseract OCR (xberg-wasm, wasm-safe)
+#### Task 3 — `src/ocr.ts`: Tesseract OCR (xberg-wasm, wasm-safe)
 
 - [ ] **Step 1:** Write `src/ocr.ts`. In-browser OCR uses the Tesseract backend compiled into
   `xberg-wasm` (`ocr-wasm`). candle OCR (TrOCR/PaddleOCR-VL) is native-only and **out of scope for
@@ -180,7 +180,7 @@ export function withTesseractOcr(
 
 ---
 
-### Task 4 — `src/chunk.ts`: xberg chunking (citation-preserving)
+#### Task 4 — `src/chunk.ts`: xberg chunking (citation-preserving)
 
 - [ ] **Step 1:** Write `src/chunk.ts` — call xberg's chunker; each `Chunk` carries `page?`/`bbox?`.
 
@@ -196,7 +196,7 @@ export function chunkExtraction(doc: ExtractionResult, cfg: ChunkingConfig): Chu
 
 ---
 
-### Task 5 — `src/embed.ts`: e5 embeddings via `onnxruntime-web`
+#### Task 5 — `src/embed.ts`: e5 embeddings via `onnxruntime-web`
 
 - [ ] **Step 1:** Write `src/embed.ts`. Loads the **same** `multilingual-e5-base` ONNX the
   Node service serves (`/models/e5.onnx`, pinned). Returns 768d vectors compatible with the
@@ -226,7 +226,7 @@ export async function embedChunks(chunks: Chunk[]): Promise<number[][]> {
 
 ---
 
-### Task 6 — `src/ner.ts`: GLiNER PII via `gliner` (GLiNER.js)
+#### Task 6 — `src/ner.ts`: GLiNER PII via `gliner` (GLiNER.js)
 
 - [ ] **Step 1:** Write `src/ner.ts`. Loads the **same** `gliner-pii` ONNX the Node service serves,
   served locally by the Node service (`/models/gliner-pii.onnx`, pinned). Returns `PiiEntity[]`.
@@ -255,7 +255,7 @@ export async function detectPii(text: string): Promise<PiiEntity[]> {
 
 ---
 
-### Task 7 — `src/rag.ts`: in-browser RAG via `edgevec`
+#### Task 7 — `src/rag.ts`: in-browser RAG via `edgevec`
 
 - [ ] **Step 1:** Write `src/rag.ts` — build + persist an `edgevec` index (`import init, { EdgeVec } from "edgevec"`)
   from the browser-computed e5 vectors + chunk text + citations. `edgevec` provides dense HNSW + sparse/BM25 + hybrid
@@ -285,7 +285,7 @@ export async function retrieve(matterId: string, queryVec: number[], topK: numbe
 
 ---
 
-### Task 7b — `src/redact.ts`: in-browser reversible redaction (in-house, pattern from `curtain-privacy`)
+#### Task 7b — `src/redact.ts`: in-browser reversible redaction (in-house, pattern from `curtain-privacy`)
 
 - [ ] **Step 1:** Write `src/redact.ts` — apply in-house reversible tokenization (span → `{{CATEGORY_n}}`) to PII
   spans; encrypt originals into the browser AES-GCM key vault (WebCrypto). Redacted text holds
@@ -306,7 +306,7 @@ export async function redactDocument(text: string, pii: PiiEntity[]): Promise<{ 
 
 ---
 
-### Task 8 — `src/mirror.ts`: persist index locally + mirror to Node
+#### Task 8 — `src/mirror.ts`: persist index locally + mirror to Node
 
 - [ ] **Step 1:** Write `src/mirror.ts` — after building the EdgeVec index, serialize it and POST to
   the Node service `POST /rag/mirror` (matter-scoped) so `rag_query` works when the browser is closed.
@@ -331,7 +331,7 @@ export async function pushMirror(matter: Matter, indexBlob: Blob, cipher: Uint8A
 
 ---
 
-### Task 9 — `src/ingest.ts`: full on-device pipeline
+#### Task 9 — `src/ingest.ts`: full on-device pipeline
 
 - [ ] **Step 1:** Write `src/ingest.ts` — extract → OCR → chunk → embed (e5) → PII (GLiNER) →
   build EdgeVec index → redact (curtain) → push mirror. All on-device; only the mirror + light
@@ -360,7 +360,7 @@ export async function ingestFolder(
 
 ---
 
-### Task 10 — `src/query.ts`: query the local EdgeVec index (browser)
+#### Task 10 — `src/query.ts`: query the local EdgeVec index (browser)
 
 - [ ] **Step 1:** Write `src/query.ts` — embed the query with the browser's e5 (same model) and run
   hybrid retrieval over the local EdgeVec index. This is the primary path (browser open).
@@ -381,7 +381,7 @@ export async function queryRag(
 
 ---
 
-### Task 11 — Public barrel + build + typecheck
+#### Task 11 — Public barrel + build + typecheck
 
 - [ ] **Step 1:** `src/index.ts` re-exports `ocr`, `chunk`, `embed`, `ner`, `rag`, `redact`,
   `mirror`, `ingest`, `query`.
@@ -392,7 +392,7 @@ export async function queryRag(
 
 ---
 
-## Principle: xberg for extract/OCR/chunk; browser-native runtimes for the rest
+### Principle: xberg for extract/OCR/chunk; browser-native runtimes for the rest
 
 - **Extraction / OCR / chunking** → `@xberg-io/xberg-wasm` (xberg, prebuilt, consumed as-is).
 - **Embeddings (e5, 768d)** → `onnxruntime-web` with the **same pinned `multilingual-e5-base`
@@ -409,7 +409,7 @@ export async function queryRag(
 
 ---
 
-## Depends on
+### Depends on
 
 - **Plan 1** (`2026-07-15-doc-intel-scaffold-core`): localhost API contracts
   (`POST /rag/mirror` accepts the EdgeVec index file + encrypted curtain vault, `/models/e5.onnx`,
@@ -419,7 +419,7 @@ export async function queryRag(
 
 ---
 
-## Verification
+### Verification
 
 - [ ] `pnpm --filter wasm-pipeline build` — emits `dist/index.js` + `dist/index.d.ts`.
 - [ ] `pnpm --filter wasm-pipeline typecheck` — `tsc --noEmit` clean under `strict` +
@@ -435,7 +435,7 @@ export async function queryRag(
 
 ---
 
-## Risks / Non-goals
+### Risks / Non-goals
 
 - **xberg has no wasm ORT** (verified): GLiNER/e5 cannot run in `@xberg-io/xberg-wasm`. We use
   `onnxruntime-web` + `GLiNER.js` — browser-native, not xberg. This is the explicitly chosen
@@ -452,3 +452,21 @@ export async function queryRag(
   only a read-only replica for offline MCP. Verify the `EdgeVec` npm package name/API before build.
 - **Users never run cargo.** `@xberg-io/xberg-wasm` is a prebuilt npm package; ORT-Web/`gliner`/`edgevec`
   are npm deps.
+
+### 2026-07-23 GLiNER2 migration update (pinned to Xberg `b06fbc71cc5f2a5aed425b56dba105122f7cd4c2`)
+
+The statement that Xberg cannot run NER in WASM is now time-qualified. Upstream
+Xberg revision `b06fbc71cc5f2a5aed425b56dba105122f7cd4c2` adds a Candle GLiNER2
+`from_bytes` path that compiles for WASM, but the published `xberg-wasm`
+binding still exposes only injected JavaScript NER and has no in-binary fallback.
+
+- [ ] Add the Candle feature through canonical Xberg/Alef inputs and expose a
+  stateful GLiNER2 model handle; do not hand-edit generated WASM files.
+- [ ] Fetch and verify safetensors, tokenizer, and encoder config before passing
+  bytes into WASM; run initialization/inference in a Worker.
+- [ ] Integrate the backend with extraction/redaction as well as direct NER.
+- [ ] Share labels, thresholds, windowing, UTF-8 offsets, and golden fixtures
+  with native MCP.
+- [ ] Gate cutover on real-model browser tests, download/init progress,
+  cancellation, cache quota, peak memory, and supported-language disclosure.
+- [ ] Keep GLiNER.js/ORT as a transitional fallback, not the target engine.

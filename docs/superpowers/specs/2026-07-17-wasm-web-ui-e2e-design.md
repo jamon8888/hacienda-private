@@ -42,7 +42,7 @@ only one satisfying all six decisions above.)
 
 ## Section 1 — Architecture & Test Topology
 
-```
+```text
 GitHub Actions (Ubuntu, real Chromium)
   1. pnpm install --frozen-lockfile  (better-sqlite3 prebuilt; npx playwright install chromium)
   2. Build apps/web (static export -> apps/web/out)
@@ -62,6 +62,7 @@ GitHub Actions (Ubuntu, real Chromium)
 ```
 
 Key invariants:
+
 - **One shared data dir** between the server (step 5) and the MCP process (step 7)
   proves the UI→server→MCP chain is consistent. Both processes are launched with
   the **same `--data-dir`** so they share the SQLite file (`dbPath`) and the mirror
@@ -160,6 +161,7 @@ server on `:8787`. Real models load from `/models/*`.
 models (not fixtures) are the heavy part.
 
 **Specs:**
+
 1. `onboarding.spec.ts` — `/` redirects to `/onboarding`; "Enter workspace" lands on
    `/matters`. Shared `beforeEach` asserts `crossOriginIsolated === true` on every page.
 2. `matters.spec.ts` — create a matter via UI; assert it persists (`GET /matters`).
@@ -221,6 +223,7 @@ Scopes/consent are granted via the same consent store the UI writes
 
 New `packages/wasm-pipeline/e2e/` + a Playwright (or `vitest` + `playwright` runner)
 config that loads the package in real Chromium and tests modules not driven by the UI:
+
 - `ocr.spec.ts` — fixture image → `withTesseractOcr` returns text.
 - `embed.spec.ts` — `embedChunks`/`embedQuery` return 768-dim vectors; determinism
   (same input → same vector).
@@ -241,6 +244,7 @@ Reuses the same pinned models served by the local server (or loaded directly fro
 ## Section 6 — CI Workflow
 
 New `.github/workflows/e2e-web.yml`:
+
 1. `pnpm install --frozen-lockfile` (better-sqlite3 prebuilt;
    `npx playwright install chromium`).
 2. Build UI: `pnpm --filter web build` → `apps/web/out`.
@@ -258,6 +262,7 @@ Gated by: real models already pinned (T7 done) → no HF egress. Generous timeou
 (models ~1–2 GB served locally; first ONNX session init is slow).
 
 ### Additions to `package.json` scripts
+
 - `apps/web`: `"test:e2e": "playwright test"` (add `playwright.config.ts`).
 - `packages/wasm-pipeline`: `"test:e2e": "<runner command>"`.
 - `services/mcp-server`: `"test:e2e:mcp": "node tests/run-e2e-mcp.mjs"` (spawns server-less stdio MCP child + sdk client).
@@ -265,6 +270,7 @@ Gated by: real models already pinned (T7 done) → no HF egress. Generous timeou
 ---
 
 ## Open risks / mitigations
+
 - **CI model download size:** mitigated — models are pinned locally, copied into the
   data dir; no network fetch in CI.
 - **WebGPU unavailable in CI runners:** mitigated — `scenario.ts` falls back to WASM
@@ -274,6 +280,19 @@ Gated by: real models already pinned (T7 done) → no HF egress. Generous timeou
   bundle; CI job dependencies enforce this.
 
 ## Out of scope (explicit)
+
 - No HTTP MCP transport added (UI keeps REST; MCP stays stdio).
 - No mocked-ML fast gate (user chose real models only).
 - No changes to the Rust core or Alef bindings (covered by existing `task test`).
+
+## 2026-07-23 GLiNER2 test-topology amendment
+
+During migration, CI must identify whether it is testing legacy injected
+JavaScript NER or Xberg Candle GLiNER2. The target suite adds dispatch/binding
+presence, invalid-byte handling, real-model native-versus-WASM parity,
+canonical UTF-8 offsets, long-window overlap, seven supported-language
+fixtures, and unsupported-language UX.
+
+The full model is too large for every fast job. Keep invalid-input and binding
+smokes in the normal WASM matrix, and use one explicitly cached, checksum-pinned
+real-model job for parity and resource measurements.

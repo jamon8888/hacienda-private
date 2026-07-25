@@ -2,6 +2,51 @@ version: "3"
 internal: true
 
 tasks:
+  wasm:build:fast:
+    desc: "Incremental local build for crates/xberg-wasm"
+    cmds:
+      - bash scripts/task/web-artifact-cache.sh wasm
+
+  web:build:fast:
+    desc: "Incremental local static export build for apps/web"
+    cmds:
+      - bash scripts/task/web-artifact-cache.sh web
+
+  web:typecheck:
+    desc: "Type-check apps/web"
+    cmds:
+      - pnpm --dir apps/web run typecheck
+
+  web:test:
+    desc: "Run apps/web unit tests"
+    cmds:
+      - pnpm --dir apps/web run test
+
+  mcp:typecheck:
+    desc: "Type-check services/mcp-server"
+    cmds:
+      - pnpm --dir services/mcp-server run typecheck
+
+  mcp:test:
+    desc: "Run services/mcp-server tests"
+    cmds:
+      - pnpm --dir services/mcp-server run test
+
+  web:e2e:install:
+    desc: "Install Playwright Chromium only when missing"
+    cmds:
+      - bash scripts/task/web-artifact-cache.sh playwright
+
+  web:doctor:
+    desc: "Inspect cached web and wasm artifacts"
+    cmds:
+      - bash scripts/task/web-artifact-cache.sh doctor
+
+  mcp:build:
+    desc: "Build services/mcp-server"
+    cmds:
+      - pnpm --dir services/mcp-server run build
+
   update:
     desc: "Update Node.js dependencies within major versions (pnpm up)"
     silent: false

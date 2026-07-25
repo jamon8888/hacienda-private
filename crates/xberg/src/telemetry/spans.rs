@@ -61,6 +61,7 @@ pub(crate) fn pipeline_processor_span(stage: &str, processor_name: &str) -> trac
 }
 
 /// Create an OCR operation span.
+#[cfg_attr(not(any(feature = "ocr", feature = "ocr-wasm")), allow(dead_code))]
 pub(crate) fn ocr_span(backend: &str, language: &str) -> tracing::Span {
     tracing::info_span!(
         "xberg.ocr",
@@ -70,6 +71,7 @@ pub(crate) fn ocr_span(backend: &str, language: &str) -> tracing::Span {
 }
 
 /// Create a model inference span.
+#[cfg_attr(not(feature = "layout-detection"), allow(dead_code))]
 pub(crate) fn model_inference_span(model_name: &str) -> tracing::Span {
     tracing::info_span!(
         "xberg.model.inference",

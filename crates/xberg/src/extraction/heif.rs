@@ -44,6 +44,7 @@ pub(crate) fn is_heif_container(bytes: &[u8]) -> bool {
 /// Decoded as interleaved RGBA, then re-encoded as PNG so the result can flow
 /// through the existing OCR / image pipeline without further special-casing.
 #[cfg(feature = "heic")]
+#[cfg_attr(not(feature = "heic"), allow(dead_code))]
 pub(crate) fn decode_heic_to_png(bytes: &[u8]) -> Result<Vec<u8>> {
     use image::ImageEncoder;
     use image::codecs::png::PngEncoder;

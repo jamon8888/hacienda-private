@@ -46,11 +46,13 @@
 ## Task 1: `Principal` type + honest `authorize()`
 
 **Files:**
+
 - Create: `services/mcp-server/src/principal.ts`
 - Create: `services/mcp-server/src/mcp/scopes.ts`
 - Test: `services/mcp-server/tests/scopes.test.ts`
 
 **Interfaces:**
+
 - Consumes: `AuthScopes` from `@xberg-io/core` (`= "read" | "ingest" | "redact" | "admin"`), `AppError` from `../error.js`.
 - Produces:
   - `interface Principal { subject: string; scopes: AuthScopes[] }` (in `principal.ts`)
@@ -145,10 +147,12 @@ git commit -m "feat(mcp-server): Principal type + honest scope-only authorize()"
 ## Task 2: `auth.ts` — session token, launch scopes, origin guard, Bearer auth
 
 **Files:**
+
 - Create: `services/mcp-server/src/auth.ts`
 - Test: `services/mcp-server/tests/auth.test.ts`
 
 **Interfaces:**
+
 - Consumes: `Principal` from `./principal.js`, `AuthScopes` from `@xberg-io/core`, `AppError` from `./error.js`, `node:crypto` (`randomBytes`, `timingSafeEqual`), `node:fs`, `node:path`, `node:http` `IncomingMessage` (type only).
 - Produces:
   - `function loadOrCreateSessionToken(dataDir: string): string` — returns existing token from `<dataDir>/session.token` or generates 32 random bytes (hex), writing the file 0600.
@@ -369,10 +373,12 @@ git commit -m "feat(mcp-server): session token, launch scopes, origin+Bearer HTT
 ## Task 3: `audit_log` table + `recordAudit`/`getAudit`
 
 **Files:**
+
 - Modify: `services/mcp-server/src/store.ts` (add table to `SCHEMA`, add two methods)
 - Test: `services/mcp-server/tests/audit.test.ts`
 
 **Interfaces:**
+
 - Consumes: existing `MetadataStore` / `openStore` / `randomUUID`.
 - Produces:
   - `interface AuditEntry { id: string; actor: string; scope: string; action: string; matter_id: string | null; created_at: string }`
@@ -502,10 +508,12 @@ git commit -m "feat(mcp-server): audit_log table + recordAudit/getAudit"
 ## Task 4: `injectToken(html, token)` for the served UI
 
 **Files:**
+
 - Modify: `services/mcp-server/src/static.ts` (add `injectToken`)
 - Test: `services/mcp-server/tests/static.test.ts`
 
 **Interfaces:**
+
 - Produces: `function injectToken(html: string, token: string): string` — inserts `<script>window.__XBERG_TOKEN__=<json>;</script>` immediately after the first `<head>` if present, else prepends it.
 
 - [ ] **Step 1: Write the failing test**
@@ -577,10 +585,12 @@ git commit -m "feat(mcp-server): injectToken helper for served UI"
 ## Task 5: Wire the HTTP surface — guard, scopes, token injection, audit
 
 **Files:**
+
 - Modify: `services/mcp-server/src/index.ts`
 - Test: `services/mcp-server/tests/http-auth.test.ts`
 
 **Interfaces:**
+
 - Consumes: `authenticateHttp`, `injectToken`, `authorize`, `AppError`, `createAppContext`, `buildConfig`.
 - Produces:
   - `interface HttpAuth { token: string; scopes: AuthScopes[] }`
@@ -908,10 +918,12 @@ git commit -m "feat(mcp-server): enforce origin guard, session token, scopes, an
 ## Task 6: Wire `main()` and the MCP-stdio principal
 
 **Files:**
+
 - Modify: `services/mcp-server/src/index.ts` (`main()`)
 - Modify: `services/mcp-server/src/mcp/mod.ts` (`runMcp` signature + log)
 
 **Interfaces:**
+
 - Consumes: `loadOrCreateSessionToken`, `resolveLaunchScopes`, `ownerPrincipal` from `./auth.js`; `Principal` from `../principal.js`.
 - Produces: `runMcp(ctx: AppContext, principal: Principal): Promise<void>` (gains `principal`). `main()` loads the token + scopes, passes `HttpAuth` to `createHttpServer`, and passes `ownerPrincipal(scopes)` to `runMcp`.
 
@@ -1009,6 +1021,7 @@ curl -s -o /dev/null -w "%{http_code}\n" -H "Authorization: Bearer $TOKEN" http:
 curl -s http://127.0.0.1:8799/ | grep -o "__XBERG_TOKEN__"
 kill $SRV
 ```
+
 Expected: `401`, then `200`, then `__XBERG_TOKEN__`.
 
 - [ ] **Step 5: Commit**
@@ -1023,6 +1036,7 @@ git commit -m "feat(mcp-server): wire session token + owner principal into main(
 ## Task 7: Close out — README note + issue reference
 
 **Files:**
+
 - Modify: `services/mcp-server/README.md` (if present; else create a short one)
 
 **Interfaces:** none.

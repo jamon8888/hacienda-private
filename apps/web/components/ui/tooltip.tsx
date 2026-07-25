@@ -1,25 +1,24 @@
-﻿"use client"
+﻿"use client";
 
-import type React from "react"
-import { isValidElement } from "react"
-import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip"
+import type React from "react";
+import { isValidElement } from "react";
+import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
 
-export const TooltipCreateHandle: typeof TooltipPrimitive.createHandle =
-  TooltipPrimitive.createHandle
+export const TooltipCreateHandle: typeof TooltipPrimitive.createHandle = TooltipPrimitive.createHandle;
 
 export function TooltipProvider({
   delayDuration,
   delay = delayDuration,
   ...props
 }: TooltipPrimitive.Provider.Props & {
-  delayDuration?: TooltipPrimitive.Provider.Props["delay"]
+  delayDuration?: TooltipPrimitive.Provider.Props["delay"];
 }): React.ReactElement {
-  return <TooltipPrimitive.Provider delay={delay} {...props} />
+  return <TooltipPrimitive.Provider delay={delay} {...props} />;
 }
 
-export const Tooltip: typeof TooltipPrimitive.Root = TooltipPrimitive.Root
+export const Tooltip: typeof TooltipPrimitive.Root = TooltipPrimitive.Root;
 
 export function TooltipTrigger({
   asChild,
@@ -27,22 +26,20 @@ export function TooltipTrigger({
   render,
   ...props
 }: TooltipPrimitive.Trigger.Props & {
-  asChild?: boolean
+  asChild?: boolean;
 }): React.ReactElement {
   return (
     <TooltipPrimitive.Trigger
       data-slot="tooltip-trigger"
       render={
         render ??
-        (asChild && isValidElement(children)
-          ? (children as React.ReactElement<Record<string, unknown>>)
-          : undefined)
+        (asChild && isValidElement(children) ? (children as React.ReactElement<Record<string, unknown>>) : undefined)
       }
       {...props}
     >
       {asChild && isValidElement(children) ? undefined : children}
     </TooltipPrimitive.Trigger>
-  )
+  );
 }
 
 export function TooltipPopup({
@@ -55,11 +52,11 @@ export function TooltipPopup({
   portalProps,
   ...props
 }: TooltipPrimitive.Popup.Props & {
-  align?: TooltipPrimitive.Positioner.Props["align"]
-  side?: TooltipPrimitive.Positioner.Props["side"]
-  sideOffset?: TooltipPrimitive.Positioner.Props["sideOffset"]
-  anchor?: TooltipPrimitive.Positioner.Props["anchor"]
-  portalProps?: TooltipPrimitive.Portal.Props
+  align?: TooltipPrimitive.Positioner.Props["align"];
+  side?: TooltipPrimitive.Positioner.Props["side"];
+  sideOffset?: TooltipPrimitive.Positioner.Props["sideOffset"];
+  anchor?: TooltipPrimitive.Positioner.Props["anchor"];
+  portalProps?: TooltipPrimitive.Portal.Props;
 }): React.ReactElement {
   return (
     <TooltipPrimitive.Portal {...portalProps}>
@@ -74,7 +71,7 @@ export function TooltipPopup({
         <TooltipPrimitive.Popup
           className={cn(
             "relative flex h-(--popup-height,auto) w-(--popup-width,auto) origin-(--transform-origin) rounded-md border bg-popover text-xs text-balance text-popover-foreground shadow-md/5 transition-[width,height,scale,opacity] not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-md)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] data-ending-style:scale-98 data-ending-style:opacity-0 data-instant:duration-0 data-starting-style:scale-98 data-starting-style:opacity-0 dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
-            className
+            className,
           )}
           data-slot="tooltip-popup"
           {...props}
@@ -88,8 +85,7 @@ export function TooltipPopup({
         </TooltipPrimitive.Popup>
       </TooltipPrimitive.Positioner>
     </TooltipPrimitive.Portal>
-  )
+  );
 }
 
-export { TooltipPrimitive, TooltipPopup as TooltipContent }
-
+export { TooltipPrimitive, TooltipPopup as TooltipContent };
