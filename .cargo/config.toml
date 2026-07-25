@@ -32,12 +32,12 @@ linker = "musl-gcc"
 
 [target.wasm32-unknown-unknown]
 rustflags = [
-    "-C",
-    "target-feature=+bulk-memory",
-    "--cfg",
-    "getrandom_backend=\"wasm_js\"",
-    "-C",
-    "link-arg=--allow-multiple-definition",
+  "-C",
+  "target-feature=+bulk-memory",
+  "--cfg",
+  "getrandom_backend=\"wasm_js\"",
+  "-C",
+  "link-arg=--allow-multiple-definition",
 ]
 
 [env]

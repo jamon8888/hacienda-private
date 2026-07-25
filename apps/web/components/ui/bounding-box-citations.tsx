@@ -1,6 +1,6 @@
-﻿"use client"
+﻿"use client";
 
-import * as React from "react"
+import * as React from "react";
 import {
   CompactSelection,
   DataEditor,
@@ -17,7 +17,7 @@ import {
   type Rectangle,
   type TextCell,
   type Theme,
-} from "@glideapps/glide-data-grid"
+} from "@glideapps/glide-data-grid";
 import {
   ArrowLeft01Icon,
   CancelCircleIcon,
@@ -27,9 +27,9 @@ import {
   SourceCodeSquareIcon,
   TextCheckIcon,
   Undo02Icon,
-} from "@hugeicons/core-free-icons"
-import { HugeiconsIcon } from "@hugeicons/react"
-import { Virtualizer as DiffsVirtualizer } from "@pierre/diffs"
+} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Virtualizer as DiffsVirtualizer } from "@pierre/diffs";
 import {
   File,
   MultiFileDiff,
@@ -38,80 +38,69 @@ import {
   type VirtualFileMetrics,
   type WorkerInitializationRenderOptions,
   type WorkerPoolOptions,
-} from "@pierre/diffs/react"
-import { flushSync } from "react-dom"
+} from "@pierre/diffs/react";
+import { flushSync } from "react-dom";
 
 const emptyGridSelection: GridSelection = {
   columns: CompactSelection.empty(),
   rows: CompactSelection.empty(),
-}
+};
 
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-import "@glideapps/glide-data-grid/dist/index.css"
+import "@glideapps/glide-data-grid/dist/index.css";
 
-export type JsonPrimitive = string | number | boolean | null
-export type JsonValue = JsonPrimitive | JsonObject | JsonArray
-export type JsonObject = { [key: string]: JsonValue }
-export type JsonArray = JsonValue[]
-export type SchemaPropertyType =
-  | "string"
-  | "number"
-  | "integer"
-  | "boolean"
-  | "object"
-  | "array"
+export type JsonPrimitive = string | number | boolean | null;
+export type JsonValue = JsonPrimitive | JsonObject | JsonArray;
+export type JsonObject = { [key: string]: JsonValue };
+export type JsonArray = JsonValue[];
+export type SchemaPropertyType = "string" | "number" | "integer" | "boolean" | "object" | "array";
 
 export type ReviewFieldSchema = {
-  type: SchemaPropertyType
-  title?: string
-  description?: string
-  enum?: Array<string | number>
-  properties?: Record<string, ReviewFieldSchema>
-  items?: ReviewFieldSchema
-}
+  type: SchemaPropertyType;
+  title?: string;
+  description?: string;
+  enum?: Array<string | number>;
+  properties?: Record<string, ReviewFieldSchema>;
+  items?: ReviewFieldSchema;
+};
 
 export type HighlightArea = {
-  left: number
-  top: number
-  width: number
-  height: number
-}
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
 
 export type ReviewField = {
-  key: string
-  schema: ReviewFieldSchema
-  actual: JsonValue
-  expected: JsonValue
-  location?: ReviewLocation
-  metadataPath?: string
-}
+  key: string;
+  schema: ReviewFieldSchema;
+  actual: JsonValue;
+  expected: JsonValue;
+  location?: ReviewLocation;
+  metadataPath?: string;
+};
 
 export type ReviewLocation = {
-  page: number
-  area: HighlightArea
-}
+  page: number;
+  area: HighlightArea;
+};
 
 export type ReviewCitation = {
-  page: number
-  polygon?: Array<{ x: number; y: number }>
-  pageWidth: number
-  pageHeight: number
-}
+  page: number;
+  polygon?: Array<{ x: number; y: number }>;
+  pageWidth: number;
+  pageHeight: number;
+};
 
 export type ReviewMetadataEntry = {
-  citations?: ReviewCitation[]
-}
+  citations?: ReviewCitation[];
+};
 
 function ScrollAreaVirtualizer({
   children,
@@ -120,71 +109,59 @@ function ScrollAreaVirtualizer({
   contentStyle,
   scrollFade = true,
 }: {
-  children: React.ReactNode
-  className?: string
-  contentClassName?: string
-  contentStyle?: React.CSSProperties
-  scrollFade?: boolean
+  children: React.ReactNode;
+  className?: string;
+  contentClassName?: string;
+  contentStyle?: React.CSSProperties;
+  scrollFade?: boolean;
 }) {
-  const [virtualizer] = React.useState(() =>
-    typeof window !== "undefined" ? new DiffsVirtualizer() : undefined
-  )
-  const viewportRef = React.useRef<HTMLDivElement | null>(null)
-  const contentRef = React.useRef<HTMLDivElement | null>(null)
+  const [virtualizer] = React.useState(() => (typeof window !== "undefined" ? new DiffsVirtualizer() : undefined));
+  const viewportRef = React.useRef<HTMLDivElement | null>(null);
+  const contentRef = React.useRef<HTMLDivElement | null>(null);
   const syncVirtualizer = React.useCallback(() => {
-    if (!virtualizer) return
+    if (!virtualizer) return;
 
-    const viewport = viewportRef.current
-    const content = contentRef.current
+    const viewport = viewportRef.current;
+    const content = contentRef.current;
 
     if (viewport && content) {
-      virtualizer.setup(viewport, content)
-      return
+      virtualizer.setup(viewport, content);
+      return;
     }
 
-    virtualizer.cleanUp()
-  }, [virtualizer])
+    virtualizer.cleanUp();
+  }, [virtualizer]);
   const setViewportRef = React.useCallback(
     (node: HTMLDivElement | null) => {
-      viewportRef.current = node
-      syncVirtualizer()
+      viewportRef.current = node;
+      syncVirtualizer();
     },
-    [syncVirtualizer]
-  )
+    [syncVirtualizer],
+  );
   const setContentRef = React.useCallback(
     (node: HTMLDivElement | null) => {
-      contentRef.current = node
-      syncVirtualizer()
+      contentRef.current = node;
+      syncVirtualizer();
     },
-    [syncVirtualizer]
-  )
+    [syncVirtualizer],
+  );
 
   React.useEffect(() => {
-    return () => virtualizer?.cleanUp()
-  }, [virtualizer])
+    return () => virtualizer?.cleanUp();
+  }, [virtualizer]);
 
   return (
     <VirtualizerContext.Provider value={virtualizer}>
-      <ScrollArea
-        className={className}
-        scrollFade={scrollFade}
-        scrollbarOverflowOnly
-        viewportRef={setViewportRef}
-      >
-        <div
-          ref={setContentRef}
-          className={contentClassName}
-          style={contentStyle}
-        >
+      <ScrollArea className={className} scrollFade={scrollFade} scrollbarOverflowOnly viewportRef={setViewportRef}>
+        <div ref={setContentRef} className={contentClassName} style={contentStyle}>
           {children}
         </div>
       </ScrollArea>
     </VirtualizerContext.Provider>
-  )
+  );
 }
 
-const REVIEW_HIGHLIGHT_STYLE =
-  "border-blue-500/70 bg-blue-500/12 shadow-[0_4px_16px_rgb(59_130_246_/_10%)]"
+const REVIEW_HIGHLIGHT_STYLE = "border-blue-500/70 bg-blue-500/12 shadow-[0_4px_16px_rgb(59_130_246_/_10%)]";
 
 const CODE_FILE_THEME = {
   "--diffs-light-bg": "var(--color-code)",
@@ -197,10 +174,10 @@ const CODE_FILE_THEME = {
   "--diffs-fg-number-override": "var(--color-muted-foreground)",
   "--diffs-font-size": "0.8rem",
   "--diffs-line-height": "1.625",
-} as React.CSSProperties
+} as React.CSSProperties;
 
-const CODE_FONT_SIZE_PX = 12.8
-const CODE_LINE_HEIGHT_PX = CODE_FONT_SIZE_PX * 1.625
+const CODE_FONT_SIZE_PX = 12.8;
+const CODE_LINE_HEIGHT_PX = CODE_FONT_SIZE_PX * 1.625;
 
 const CODE_VIRTUAL_FILE_METRICS = {
   hunkLineCount: 50,
@@ -209,7 +186,7 @@ const CODE_VIRTUAL_FILE_METRICS = {
   spacing: 8,
   paddingTop: 0,
   paddingBottom: 8,
-} satisfies VirtualFileMetrics
+} satisfies VirtualFileMetrics;
 
 const CODE_HIGHLIGHTER_OPTIONS = {
   theme: {
@@ -217,74 +194,67 @@ const CODE_HIGHLIGHTER_OPTIONS = {
     dark: "pierre-dark-soft",
   },
   langs: ["json"],
-} satisfies WorkerInitializationRenderOptions
+} satisfies WorkerInitializationRenderOptions;
 
 const CODE_WORKER_POOL_OPTIONS = {
   workerFactory: () =>
     new Worker(new URL("@pierre/diffs/worker/worker.js", import.meta.url), {
       type: "module",
     }),
-} satisfies WorkerPoolOptions
+} satisfies WorkerPoolOptions;
 
 function readIsDarkTheme() {
-  return (
-    typeof document !== "undefined" &&
-    document.documentElement.classList.contains("dark")
-  )
+  return typeof document !== "undefined" && document.documentElement.classList.contains("dark");
 }
 
 // A single shared MutationObserver backs every consumer. Each grid previously
 // created its own observer (two, via useHumanReviewGridTheme), so opening a
 // nested array view spun up and tore down several observers at once.
-const darkThemeListeners = new Set<(isDark: boolean) => void>()
-let darkThemeObserver: MutationObserver | null = null
-let sharedIsDarkTheme = false
+const darkThemeListeners = new Set<(isDark: boolean) => void>();
+let darkThemeObserver: MutationObserver | null = null;
+let sharedIsDarkTheme = false;
 
 function ensureDarkThemeObserver() {
-  if (
-    darkThemeObserver ||
-    typeof document === "undefined" ||
-    typeof MutationObserver === "undefined"
-  ) {
-    return
+  if (darkThemeObserver || typeof document === "undefined" || typeof MutationObserver === "undefined") {
+    return;
   }
 
-  sharedIsDarkTheme = readIsDarkTheme()
+  sharedIsDarkTheme = readIsDarkTheme();
   darkThemeObserver = new MutationObserver(() => {
-    const nextIsDark = readIsDarkTheme()
-    if (nextIsDark === sharedIsDarkTheme) return
+    const nextIsDark = readIsDarkTheme();
+    if (nextIsDark === sharedIsDarkTheme) return;
 
-    sharedIsDarkTheme = nextIsDark
-    darkThemeListeners.forEach((listener) => listener(nextIsDark))
-  })
+    sharedIsDarkTheme = nextIsDark;
+    darkThemeListeners.forEach((listener) => listener(nextIsDark));
+  });
   darkThemeObserver.observe(document.documentElement, {
     attributes: true,
     attributeFilter: ["class"],
-  })
+  });
 }
 
 function useIsDarkTheme() {
-  const [isDark, setIsDark] = React.useState(readIsDarkTheme)
+  const [isDark, setIsDark] = React.useState(readIsDarkTheme);
 
   React.useEffect(() => {
-    ensureDarkThemeObserver()
-    setIsDark(sharedIsDarkTheme)
-    darkThemeListeners.add(setIsDark)
+    ensureDarkThemeObserver();
+    setIsDark(sharedIsDarkTheme);
+    darkThemeListeners.add(setIsDark);
 
     return () => {
-      darkThemeListeners.delete(setIsDark)
+      darkThemeListeners.delete(setIsDark);
       if (darkThemeListeners.size === 0 && darkThemeObserver) {
-        darkThemeObserver.disconnect()
-        darkThemeObserver = null
+        darkThemeObserver.disconnect();
+        darkThemeObserver = null;
       }
-    }
-  }, [])
+    };
+  }, []);
 
-  return isDark
+  return isDark;
 }
 
 function useHumanReviewGridTheme() {
-  const isDark = useIsDarkTheme()
+  const isDark = useIsDarkTheme();
 
   return React.useMemo<Partial<Theme>>(
     () => ({
@@ -313,8 +283,8 @@ function useHumanReviewGridTheme() {
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       editorFontSize: "13px",
     }),
-    [isDark]
-  )
+    [isDark],
+  );
 }
 
 export const REVIEW_FIELDS: ReviewField[] = [
@@ -564,22 +534,20 @@ export const REVIEW_FIELDS: ReviewField[] = [
       ],
     },
   },
-]
+];
 
-function getCitationLocation(
-  citation: ReviewCitation
-): ReviewLocation | undefined {
-  const polygon = citation.polygon
+function getCitationLocation(citation: ReviewCitation): ReviewLocation | undefined {
+  const polygon = citation.polygon;
   if (!polygon?.length || !citation.pageWidth || !citation.pageHeight) {
-    return undefined
+    return undefined;
   }
 
-  const xs = polygon.map((point) => point.x)
-  const ys = polygon.map((point) => point.y)
-  const left = Math.min(...xs)
-  const top = Math.min(...ys)
-  const right = Math.max(...xs)
-  const bottom = Math.max(...ys)
+  const xs = polygon.map((point) => point.x);
+  const ys = polygon.map((point) => point.y);
+  const left = Math.min(...xs);
+  const top = Math.min(...ys);
+  const right = Math.max(...xs);
+  const bottom = Math.max(...ys);
 
   return {
     page: citation.page,
@@ -589,110 +557,90 @@ function getCitationLocation(
       width: ((right - left) / citation.pageWidth) * 100,
       height: ((bottom - top) / citation.pageHeight) * 100,
     },
-  }
+  };
 }
 
 export function getMetadataLocation(
   metadata: Record<string, ReviewMetadataEntry> | undefined,
-  metadataPath: string | undefined
+  metadataPath: string | undefined,
 ) {
-  if (!metadata || !metadataPath) return undefined
+  if (!metadata || !metadataPath) return undefined;
 
-  const citation = metadata[metadataPath]?.citations?.find(
-    (candidate) => candidate.polygon?.length
-  )
+  const citation = metadata[metadataPath]?.citations?.find((candidate) => candidate.polygon?.length);
 
-  return citation ? getCitationLocation(citation) : undefined
+  return citation ? getCitationLocation(citation) : undefined;
 }
 
 export function getReviewFieldLocation(
   field: ReviewField | undefined,
-  resolveLocation?: (metadataPath: string) => ReviewLocation | undefined
+  resolveLocation?: (metadataPath: string) => ReviewLocation | undefined,
 ) {
-  if (!field) return undefined
+  if (!field) return undefined;
 
-  return (
-    field.location ??
-    resolveLocation?.(field.metadataPath ?? field.key) ??
-    undefined
-  )
+  return field.location ?? resolveLocation?.(field.metadataPath ?? field.key) ?? undefined;
 }
 
 export function getReviewLocationKey(location: ReviewLocation | undefined) {
-  if (!location) return null
+  if (!location) return null;
 
-  const { area } = location
-  return [location.page, area.left, area.top, area.width, area.height].join(":")
+  const { area } = location;
+  return [location.page, area.left, area.top, area.width, area.height].join(":");
 }
 
-function valuesFromFields(
-  fields: ReviewField[],
-  valueKey: "actual" | "expected"
-) {
+function valuesFromFields(fields: ReviewField[], valueKey: "actual" | "expected") {
   return fields.reduce<JsonObject>((values, field) => {
-    values[field.key] = field[valueKey]
-    return values
-  }, {})
+    values[field.key] = field[valueKey];
+    return values;
+  }, {});
 }
 
 function formatJson(value: unknown) {
-  return JSON.stringify(value, null, 2)
+  return JSON.stringify(value, null, 2);
 }
 
 function isJsonObject(value: JsonValue): value is JsonObject {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isJsonArray(value: JsonValue): value is JsonArray {
-  return Array.isArray(value)
+  return Array.isArray(value);
 }
 
 function getObjectValue(value: JsonValue, key: string): JsonValue {
-  if (!isJsonObject(value)) return null
-  return value[key] ?? null
+  if (!isJsonObject(value)) return null;
+  return value[key] ?? null;
 }
 
-function setObjectValue(
-  value: JsonValue,
-  key: string,
-  childValue: JsonValue
-): JsonObject {
+function setObjectValue(value: JsonValue, key: string, childValue: JsonValue): JsonObject {
   return {
     ...(isJsonObject(value) ? value : {}),
     [key]: childValue,
-  }
+  };
 }
 
 function getArrayValue(value: JsonValue): JsonArray {
-  return isJsonArray(value) ? value : []
+  return isJsonArray(value) ? value : [];
 }
 
-function setArrayItemValue(
-  value: JsonValue,
-  index: number,
-  childValue: JsonValue
-): JsonArray {
-  const nextValue = getArrayValue(value).slice()
-  nextValue[index] = childValue
-  return nextValue
+function setArrayItemValue(value: JsonValue, index: number, childValue: JsonValue): JsonArray {
+  const nextValue = getArrayValue(value).slice();
+  nextValue[index] = childValue;
+  return nextValue;
 }
 
 function getPrimitiveValue(value: JsonValue): JsonPrimitive {
-  return isJsonObject(value) || isJsonArray(value) ? null : value
+  return isJsonObject(value) || isJsonArray(value) ? null : value;
 }
 
 function jsonValuesEqual(left: JsonValue, right: JsonValue) {
-  return formatJson(left) === formatJson(right)
+  return formatJson(left) === formatJson(right);
 }
 
-export function findReviewField(
-  fields: ReviewField[],
-  fieldKey: string | undefined
-): ReviewField | undefined {
-  if (!fieldKey) return undefined
+export function findReviewField(fields: ReviewField[], fieldKey: string | undefined): ReviewField | undefined {
+  if (!fieldKey) return undefined;
 
   for (const field of fields) {
-    if (field.key === fieldKey) return field
+    if (field.key === fieldKey) return field;
 
     if (field.schema.type === "object") {
       const childFields = Object.entries(field.schema.properties ?? {}).map(
@@ -702,27 +650,24 @@ export function findReviewField(
           actual: getObjectValue(field.actual, key),
           expected: getObjectValue(field.expected, key),
           metadataPath: `${field.metadataPath ?? field.key}.${key}`,
-        })
-      )
-      const childField = findReviewField(childFields, fieldKey)
-      if (childField) return childField
+        }),
+      );
+      const childField = findReviewField(childFields, fieldKey);
+      if (childField) return childField;
     }
   }
 
-  return undefined
+  return undefined;
 }
 
 function formatValue(value: JsonValue) {
-  if (value === null) return "NULL"
-  if (isJsonObject(value) || isJsonArray(value)) return formatJson(value)
-  if (typeof value === "boolean") return value ? "true" : "false"
-  return String(value)
+  if (value === null) return "NULL";
+  if (isJsonObject(value) || isJsonArray(value)) return formatJson(value);
+  if (typeof value === "boolean") return value ? "true" : "false";
+  return String(value);
 }
 
-function areGridRangesEqual(
-  left: Readonly<Rectangle> | undefined,
-  right: Readonly<Rectangle> | undefined
-) {
+function areGridRangesEqual(left: Readonly<Rectangle> | undefined, right: Readonly<Rectangle> | undefined) {
   return (
     left === right ||
     (left !== undefined &&
@@ -731,52 +676,46 @@ function areGridRangesEqual(
       left.y === right.y &&
       left.width === right.width &&
       left.height === right.height)
-  )
+  );
 }
 
 function areGridRangeStacksEqual(
   left: readonly Readonly<Rectangle>[] | undefined,
-  right: readonly Readonly<Rectangle>[] | undefined
+  right: readonly Readonly<Rectangle>[] | undefined,
 ) {
-  if (left === right) return true
-  if (!left || !right || left.length !== right.length) return false
+  if (left === right) return true;
+  if (!left || !right || left.length !== right.length) return false;
 
-  return left.every((range, index) => areGridRangesEqual(range, right[index]))
+  return left.every((range, index) => areGridRangesEqual(range, right[index]));
 }
 
 function areGridSelectionsEqual(left: GridSelection, right: GridSelection) {
-  const leftCurrent = left.current
-  const rightCurrent = right.current
+  const leftCurrent = left.current;
+  const rightCurrent = right.current;
 
   return (
     leftCurrent?.cell[0] === rightCurrent?.cell[0] &&
     leftCurrent?.cell[1] === rightCurrent?.cell[1] &&
     areGridRangesEqual(leftCurrent?.range, rightCurrent?.range) &&
-    areGridRangeStacksEqual(
-      leftCurrent?.rangeStack,
-      rightCurrent?.rangeStack
-    ) &&
+    areGridRangeStacksEqual(leftCurrent?.rangeStack, rightCurrent?.rangeStack) &&
     left.columns.equals(right.columns) &&
     left.rows.equals(right.rows)
-  )
+  );
 }
 
 function getGridSelectionRanges(selection: GridSelection | undefined) {
-  const current = selection?.current
-  if (!current) return []
+  const current = selection?.current;
+  if (!current) return [];
 
-  return [...(current.rangeStack ?? []), current.range]
+  return [...(current.rangeStack ?? []), current.range];
 }
 
-function areArrayNestedViewsEqual(
-  left: ArrayNestedView[],
-  right: ArrayNestedView[]
-) {
-  if (left === right) return true
-  if (left.length !== right.length) return false
+function areArrayNestedViewsEqual(left: ArrayNestedView[], right: ArrayNestedView[]) {
+  if (left === right) return true;
+  if (left.length !== right.length) return false;
 
   return left.every((view, index) => {
-    const other = right[index]
+    const other = right[index];
 
     return (
       view.rowIndex === other?.rowIndex &&
@@ -784,18 +723,16 @@ function areArrayNestedViewsEqual(
       view.title === other.title &&
       view.schema === other.schema &&
       Object.is(view.value, other.value)
-    )
-  })
+    );
+  });
 }
 
-type HumanReviewOverlayCell = TextCell | NumberCell
+type HumanReviewOverlayCell = TextCell | NumberCell;
 
-type HumanReviewTextOverlayEditorProps = React.ComponentProps<
-  ProvideEditorComponent<HumanReviewOverlayCell>
-> & {
-  overlayOpenRef: React.MutableRefObject<boolean>
-  readOnly?: boolean
-}
+type HumanReviewTextOverlayEditorProps = React.ComponentProps<ProvideEditorComponent<HumanReviewOverlayCell>> & {
+  overlayOpenRef: React.MutableRefObject<boolean>;
+  readOnly?: boolean;
+};
 
 function HumanReviewTextOverlayEditor({
   isHighlighted,
@@ -805,29 +742,25 @@ function HumanReviewTextOverlayEditor({
   validatedSelection,
   value,
 }: HumanReviewTextOverlayEditorProps) {
-  const initialValue =
-    value.kind === GridCellKind.Number ? value.displayData : value.data
-  const [entryValue, setEntryValue] = React.useState(initialValue)
-  const latestValueRef = React.useRef(initialValue)
-  const finishedRef = React.useRef(false)
+  const initialValue = value.kind === GridCellKind.Number ? value.displayData : value.data;
+  const [entryValue, setEntryValue] = React.useState(initialValue);
+  const latestValueRef = React.useRef(initialValue);
+  const finishedRef = React.useRef(false);
 
   const finishEditing = React.useCallback(
-    (
-      shouldSave: boolean,
-      movement: readonly [-1 | 0 | 1, -1 | 0 | 1] = [0, 0]
-    ) => {
-      if (finishedRef.current) return
+    (shouldSave: boolean, movement: readonly [-1 | 0 | 1, -1 | 0 | 1] = [0, 0]) => {
+      if (finishedRef.current) return;
 
-      finishedRef.current = true
-      overlayOpenRef.current = false
+      finishedRef.current = true;
+      overlayOpenRef.current = false;
 
       if (!shouldSave || readOnly) {
-        onFinishedEditing(undefined, movement)
-        return
+        onFinishedEditing(undefined, movement);
+        return;
       }
 
       if (value.kind === GridCellKind.Number) {
-        const numericValue = Number(latestValueRef.current)
+        const numericValue = Number(latestValueRef.current);
 
         onFinishedEditing(
           {
@@ -835,9 +768,9 @@ function HumanReviewTextOverlayEditor({
             data: Number.isFinite(numericValue) ? numericValue : value.data,
             displayData: latestValueRef.current,
           },
-          movement
-        )
-        return
+          movement,
+        );
+        return;
       }
 
       onFinishedEditing(
@@ -846,72 +779,69 @@ function HumanReviewTextOverlayEditor({
           data: latestValueRef.current,
           displayData: latestValueRef.current,
         },
-        movement
-      )
+        movement,
+      );
     },
-    [onFinishedEditing, overlayOpenRef, readOnly, value]
-  )
+    [onFinishedEditing, overlayOpenRef, readOnly, value],
+  );
 
-  const handleEntryChange = React.useCallback(
-    (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-      event.stopPropagation()
-      latestValueRef.current = event.target.value
-      setEntryValue(event.target.value)
-    },
-    []
-  )
+  const handleEntryChange = React.useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    event.stopPropagation();
+    latestValueRef.current = event.target.value;
+    setEntryValue(event.target.value);
+  }, []);
   const handleKeyDown = React.useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      event.stopPropagation()
+      event.stopPropagation();
 
       if (event.key === "Escape") {
-        event.preventDefault()
-        finishEditing(false)
-        return
+        event.preventDefault();
+        finishEditing(false);
+        return;
       }
 
       if (event.key === "Tab") {
-        event.preventDefault()
-        finishEditing(true, [event.shiftKey ? -1 : 1, 0])
-        return
+        event.preventDefault();
+        finishEditing(true, [event.shiftKey ? -1 : 1, 0]);
+        return;
       }
 
       if (event.key === "Enter" && !event.shiftKey) {
-        event.preventDefault()
-        finishEditing(true, [0, 1])
+        event.preventDefault();
+        finishEditing(true, [0, 1]);
       }
     },
-    [finishEditing]
-  )
+    [finishEditing],
+  );
 
   React.useEffect(() => {
-    overlayOpenRef.current = true
+    overlayOpenRef.current = true;
 
     return () => {
-      overlayOpenRef.current = false
-    }
-  }, [overlayOpenRef])
+      overlayOpenRef.current = false;
+    };
+  }, [overlayOpenRef]);
 
   React.useEffect(() => {
     const handlePointerOutside = (event: PointerEvent | MouseEvent) => {
-      const input = document.querySelector<HTMLTextAreaElement>(".gdg-input")
-      const overlayRoot = input?.closest(".gdg-clip-region")
+      const input = document.querySelector<HTMLTextAreaElement>(".gdg-input");
+      const overlayRoot = input?.closest(".gdg-clip-region");
 
       if (!overlayRoot || overlayRoot.contains(event.target as Node | null)) {
-        return
+        return;
       }
 
-      finishEditing(true)
-    }
+      finishEditing(true);
+    };
 
-    document.addEventListener("pointerdown", handlePointerOutside, true)
-    document.addEventListener("contextmenu", handlePointerOutside, true)
+    document.addEventListener("pointerdown", handlePointerOutside, true);
+    document.addEventListener("contextmenu", handlePointerOutside, true);
 
     return () => {
-      document.removeEventListener("pointerdown", handlePointerOutside, true)
-      document.removeEventListener("contextmenu", handlePointerOutside, true)
-    }
-  }, [finishEditing])
+      document.removeEventListener("pointerdown", handlePointerOutside, true);
+      document.removeEventListener("contextmenu", handlePointerOutside, true);
+    };
+  }, [finishEditing]);
 
   return (
     <TextCellEntry
@@ -924,15 +854,15 @@ function HumanReviewTextOverlayEditor({
       onChange={handleEntryChange}
       onKeyDown={handleKeyDown}
     />
-  )
+  );
 }
 
 function getFieldIcon(type: SchemaPropertyType) {
-  if (type === "number" || type === "integer") return InputNumericIcon
-  if (type === "boolean") return TextCheckIcon
-  if (type === "array") return SecondBracketIcon
-  if (type === "object") return SourceCodeSquareIcon
-  return InputTextIcon
+  if (type === "number" || type === "integer") return InputNumericIcon;
+  if (type === "boolean") return TextCheckIcon;
+  if (type === "array") return SecondBracketIcon;
+  if (type === "object") return SourceCodeSquareIcon;
+  return InputTextIcon;
 }
 
 function HumanReviewValueInput({
@@ -941,10 +871,10 @@ function HumanReviewValueInput({
   value,
   onChange,
 }: {
-  readOnly?: boolean
-  schema: ReviewFieldSchema
-  value: JsonPrimitive
-  onChange: (value: JsonPrimitive) => void
+  readOnly?: boolean;
+  schema: ReviewFieldSchema;
+  value: JsonPrimitive;
+  onChange: (value: JsonPrimitive) => void;
 }) {
   if (schema.enum?.length) {
     return (
@@ -962,7 +892,7 @@ function HumanReviewValueInput({
           ))}
         </select>
       </span>
-    )
+    );
   }
 
   if (schema.type === "number" || schema.type === "integer") {
@@ -973,11 +903,11 @@ function HumanReviewValueInput({
         type="number"
         value={value === null ? "" : String(value)}
         onChange={(event) => {
-          const nextValue = event.currentTarget.value
-          onChange(nextValue === "" ? null : Number(nextValue))
+          const nextValue = event.currentTarget.value;
+          onChange(nextValue === "" ? null : Number(nextValue));
         }}
       />
-    )
+    );
   }
 
   if (schema.type === "boolean") {
@@ -989,10 +919,7 @@ function HumanReviewValueInput({
             type="button"
             size="sm"
             variant={value === option ? "outline" : "ghost"}
-            className={cn(
-              "h-7 shadow-none",
-              value === option && "bg-background dark:bg-input"
-            )}
+            className={cn("h-7 shadow-none", value === option && "bg-background dark:bg-input")}
             disabled={readOnly}
             onClick={() => onChange(option)}
           >
@@ -1000,7 +927,7 @@ function HumanReviewValueInput({
           </Button>
         ))}
       </div>
-    )
+    );
   }
 
   return (
@@ -1010,105 +937,92 @@ function HumanReviewValueInput({
       value={value === null ? "" : String(value)}
       onChange={(event) => onChange(event.currentTarget.value)}
     />
-  )
+  );
 }
 
 function getArrayItemSchema(schema: ReviewFieldSchema): ReviewFieldSchema {
-  return schema.items ?? { type: "string" }
+  return schema.items ?? { type: "string" };
 }
 
 function isComplexSchema(schema: ReviewFieldSchema) {
-  return schema.type === "object" || schema.type === "array"
+  return schema.type === "object" || schema.type === "array";
 }
 
 function summarizeComplexValue(value: JsonValue) {
-  if (isJsonArray(value)) return `${value.length} items`
-  if (isJsonObject(value)) return `${Object.keys(value).length} fields`
-  return formatValue(value)
+  if (isJsonArray(value)) return `${value.length} items`;
+  if (isJsonObject(value)) return `${Object.keys(value).length} fields`;
+  return formatValue(value);
 }
 
-function getCellValueForArrayColumn(
-  rowValue: JsonValue,
-  itemSchema: ReviewFieldSchema,
-  columnId: string
-) {
+function getCellValueForArrayColumn(rowValue: JsonValue, itemSchema: ReviewFieldSchema, columnId: string) {
   if (itemSchema.type === "object") {
-    return getObjectValue(rowValue, columnId)
+    return getObjectValue(rowValue, columnId);
   }
 
-  return rowValue
+  return rowValue;
 }
 
-function getCellSchemaForArrayColumn(
-  itemSchema: ReviewFieldSchema,
-  columnId: string
-) {
+function getCellSchemaForArrayColumn(itemSchema: ReviewFieldSchema, columnId: string) {
   if (itemSchema.type === "object") {
-    return itemSchema.properties?.[columnId] ?? { type: "string" }
+    return itemSchema.properties?.[columnId] ?? { type: "string" };
   }
 
-  return itemSchema
+  return itemSchema;
 }
 
-function applyPrimitiveEdit(
-  schema: ReviewFieldSchema,
-  value: EditableGridCell
-): JsonValue | undefined {
+function applyPrimitiveEdit(schema: ReviewFieldSchema, value: EditableGridCell): JsonValue | undefined {
   if (schema.type === "boolean" && value.kind === GridCellKind.Boolean) {
-    return value.data
+    return value.data;
   }
 
-  if (
-    (schema.type === "number" || schema.type === "integer") &&
-    value.kind === GridCellKind.Number
-  ) {
-    return value.data ?? null
+  if ((schema.type === "number" || schema.type === "integer") && value.kind === GridCellKind.Number) {
+    return value.data ?? null;
   }
 
   if (value.kind === GridCellKind.Text) {
     if (schema.type === "number" || schema.type === "integer") {
-      return value.data.trim() === "" ? null : Number(value.data)
+      return value.data.trim() === "" ? null : Number(value.data);
     }
 
-    return value.data
+    return value.data;
   }
 
-  return undefined
+  return undefined;
 }
 
 type ArrayNestedView = {
-  rowIndex: number
-  columnId: string
-  title: string
-  schema: ReviewFieldSchema
-  value: JsonValue
-}
+  rowIndex: number;
+  columnId: string;
+  title: string;
+  schema: ReviewFieldSchema;
+  value: JsonValue;
+};
 
-type ArrayReviewSide = "actual" | "expected"
+type ArrayReviewSide = "actual" | "expected";
 
 type SyncedArrayNestedView = {
-  activeSide: ArrayReviewSide | null
-  stack: ArrayNestedView[]
-}
+  activeSide: ArrayReviewSide | null;
+  stack: ArrayNestedView[];
+};
 
 type SyncedArraySelection = {
-  activeSide: ArrayReviewSide | null
-  depth: number
-  gridSelection: GridSelection
-}
+  activeSide: ArrayReviewSide | null;
+  depth: number;
+  gridSelection: GridSelection;
+};
 
-export type HumanReviewTheme = "light" | "dark"
+export type HumanReviewTheme = "light" | "dark";
 
 const EMPTY_SYNCED_ARRAY_NESTED_VIEW: SyncedArrayNestedView = {
   activeSide: null,
   stack: [],
-}
+};
 
 const EMPTY_SYNCED_ARRAY_SELECTION: SyncedArraySelection = {
   activeSide: null,
   depth: 0,
   gridSelection: emptyGridSelection,
-}
+};
 
 function setNestedArrayValue({
   value,
@@ -1116,26 +1030,19 @@ function setNestedArrayValue({
   nestedStack,
   nextNestedValue,
 }: {
-  value: JsonValue
-  schema: ReviewFieldSchema
-  nestedStack: ArrayNestedView[]
-  nextNestedValue: JsonValue
+  value: JsonValue;
+  schema: ReviewFieldSchema;
+  nestedStack: ArrayNestedView[];
+  nextNestedValue: JsonValue;
 }): JsonValue {
-  const [currentView, ...remainingViews] = nestedStack
+  const [currentView, ...remainingViews] = nestedStack;
 
-  if (!currentView) return nextNestedValue
+  if (!currentView) return nextNestedValue;
 
-  const itemSchema = getArrayItemSchema(schema)
-  const rowValue = getArrayValue(value)[currentView.rowIndex] ?? null
-  const cellSchema = getCellSchemaForArrayColumn(
-    itemSchema,
-    currentView.columnId
-  )
-  const currentCellValue = getCellValueForArrayColumn(
-    rowValue,
-    itemSchema,
-    currentView.columnId
-  )
+  const itemSchema = getArrayItemSchema(schema);
+  const rowValue = getArrayValue(value)[currentView.rowIndex] ?? null;
+  const cellSchema = getCellSchemaForArrayColumn(itemSchema, currentView.columnId);
+  const currentCellValue = getCellValueForArrayColumn(rowValue, itemSchema, currentView.columnId);
   const nextCellValue: JsonValue = remainingViews.length
     ? setNestedArrayValue({
         value: currentCellValue,
@@ -1143,13 +1050,11 @@ function setNestedArrayValue({
         nestedStack: remainingViews,
         nextNestedValue,
       })
-    : nextNestedValue
+    : nextNestedValue;
   const nextRowValue: JsonValue =
-    itemSchema.type === "object"
-      ? setObjectValue(rowValue, currentView.columnId, nextCellValue)
-      : nextCellValue
+    itemSchema.type === "object" ? setObjectValue(rowValue, currentView.columnId, nextCellValue) : nextCellValue;
 
-  return setArrayItemValue(value, currentView.rowIndex, nextRowValue)
+  return setArrayItemValue(value, currentView.rowIndex, nextRowValue);
 }
 
 function getNestedArrayValue({
@@ -1157,33 +1062,26 @@ function getNestedArrayValue({
   schema,
   nestedStack,
 }: {
-  value: JsonValue
-  schema: ReviewFieldSchema
-  nestedStack: ArrayNestedView[]
+  value: JsonValue;
+  schema: ReviewFieldSchema;
+  nestedStack: ArrayNestedView[];
 }): JsonValue {
-  const [currentView, ...remainingViews] = nestedStack
+  const [currentView, ...remainingViews] = nestedStack;
 
-  if (!currentView) return value
+  if (!currentView) return value;
 
-  const itemSchema = getArrayItemSchema(schema)
-  const rowValue = getArrayValue(value)[currentView.rowIndex] ?? null
-  const cellSchema = getCellSchemaForArrayColumn(
-    itemSchema,
-    currentView.columnId
-  )
-  const cellValue = getCellValueForArrayColumn(
-    rowValue,
-    itemSchema,
-    currentView.columnId
-  )
+  const itemSchema = getArrayItemSchema(schema);
+  const rowValue = getArrayValue(value)[currentView.rowIndex] ?? null;
+  const cellSchema = getCellSchemaForArrayColumn(itemSchema, currentView.columnId);
+  const cellValue = getCellValueForArrayColumn(rowValue, itemSchema, currentView.columnId);
 
-  if (!remainingViews.length) return cellValue
+  if (!remainingViews.length) return cellValue;
 
   return getNestedArrayValue({
     value: cellValue,
     schema: cellSchema,
     nestedStack: remainingViews,
-  })
+  });
 }
 
 function HumanReviewArrayValueGrid({
@@ -1206,88 +1104,61 @@ function HumanReviewArrayValueGrid({
   resolveArrayItemMetadataPath,
   resolveLocation,
 }: {
-  activeNestedSide?: ArrayReviewSide | null
-  activeSelectionSide?: ArrayReviewSide | null
-  label: string
-  nestedStackBaseDepth?: number
-  readOnly?: boolean
-  schema: ReviewFieldSchema
-  selectionDepth?: number
-  sharedGridSelection?: GridSelection
-  sharedNestedStack?: ArrayNestedView[]
-  value: JsonValue
-  viewSide?: ArrayReviewSide
-  metadataPath?: string
-  onChange?: (value: JsonValue) => void
-  onGridSelectionChange?: (
-    selection: GridSelection,
-    side: ArrayReviewSide,
-    depth: number
-  ) => void
-  onNestedStackChange?: (
-    stack: ArrayNestedView[],
-    side: ArrayReviewSide
-  ) => void
-  onLocationHover?: (location?: ReviewLocation) => void
-  resolveArrayItemMetadataPath?: (
-    metadataPath: string,
-    rowIndex: number,
-    rowValue: JsonValue
-  ) => string | undefined
-  resolveLocation?: (metadataPath: string) => ReviewLocation | undefined
+  activeNestedSide?: ArrayReviewSide | null;
+  activeSelectionSide?: ArrayReviewSide | null;
+  label: string;
+  nestedStackBaseDepth?: number;
+  readOnly?: boolean;
+  schema: ReviewFieldSchema;
+  selectionDepth?: number;
+  sharedGridSelection?: GridSelection;
+  sharedNestedStack?: ArrayNestedView[];
+  value: JsonValue;
+  viewSide?: ArrayReviewSide;
+  metadataPath?: string;
+  onChange?: (value: JsonValue) => void;
+  onGridSelectionChange?: (selection: GridSelection, side: ArrayReviewSide, depth: number) => void;
+  onNestedStackChange?: (stack: ArrayNestedView[], side: ArrayReviewSide) => void;
+  onLocationHover?: (location?: ReviewLocation) => void;
+  resolveArrayItemMetadataPath?: (metadataPath: string, rowIndex: number, rowValue: JsonValue) => string | undefined;
+  resolveLocation?: (metadataPath: string) => ReviewLocation | undefined;
 }) {
-  const rows = getArrayValue(value)
-  const itemSchema = getArrayItemSchema(schema)
-  const gridTheme = useHumanReviewGridTheme()
-  const isDark = useIsDarkTheme()
-  const [localNestedStack, setLocalNestedStack] = React.useState<
-    ArrayNestedView[]
-  >([])
-  const [localGridSelection, setLocalGridSelection] =
-    React.useState<GridSelection>(emptyGridSelection)
-  const fastTextOverlayOpenRef = React.useRef(false)
-  const nestedStack = sharedNestedStack ?? localNestedStack
-  const visibleNestedStack = nestedStack.slice(nestedStackBaseDepth)
-  const activeNestedView = visibleNestedStack[0] ?? null
+  const rows = getArrayValue(value);
+  const itemSchema = getArrayItemSchema(schema);
+  const gridTheme = useHumanReviewGridTheme();
+  const isDark = useIsDarkTheme();
+  const [localNestedStack, setLocalNestedStack] = React.useState<ArrayNestedView[]>([]);
+  const [localGridSelection, setLocalGridSelection] = React.useState<GridSelection>(emptyGridSelection);
+  const fastTextOverlayOpenRef = React.useRef(false);
+  const nestedStack = sharedNestedStack ?? localNestedStack;
+  const visibleNestedStack = nestedStack.slice(nestedStackBaseDepth);
+  const activeNestedView = visibleNestedStack[0] ?? null;
   const activeNestedValue = activeNestedView
     ? getNestedArrayValue({
         value,
         schema,
         nestedStack: [activeNestedView],
       })
-    : null
-  const isActiveNestedSource =
-    Boolean(activeNestedView) && activeNestedSide === viewSide
+    : null;
+  const isActiveNestedSource = Boolean(activeNestedView) && activeNestedSide === viewSide;
   const isMirroredNestedTarget =
-    Boolean(activeNestedView) &&
-    activeNestedSide !== null &&
-    activeNestedSide !== viewSide
-  const blueCellText = isDark ? "rgb(147, 197, 253)" : "rgb(37, 99, 235)"
-  const selectedCellBackground = isDark
-    ? "rgba(37, 99, 235, 0.2)"
-    : "rgba(219, 234, 254, 0.85)"
-  const mirroredCellBackground = isDark
-    ? "rgba(167, 139, 250, 0.18)"
-    : "rgba(237, 233, 254, 0.9)"
-  const mirroredHighlightRegions = React.useMemo<
-    React.ComponentProps<typeof DataEditor>["highlightRegions"]
-  >(() => {
-    if (
-      !activeSelectionSide ||
-      activeSelectionSide === viewSide ||
-      selectionDepth !== nestedStackBaseDepth
-    ) {
-      return undefined
+    Boolean(activeNestedView) && activeNestedSide !== null && activeNestedSide !== viewSide;
+  const blueCellText = isDark ? "rgb(147, 197, 253)" : "rgb(37, 99, 235)";
+  const selectedCellBackground = isDark ? "rgba(37, 99, 235, 0.2)" : "rgba(219, 234, 254, 0.85)";
+  const mirroredCellBackground = isDark ? "rgba(167, 139, 250, 0.18)" : "rgba(237, 233, 254, 0.9)";
+  const mirroredHighlightRegions = React.useMemo<React.ComponentProps<typeof DataEditor>["highlightRegions"]>(() => {
+    if (!activeSelectionSide || activeSelectionSide === viewSide || selectionDepth !== nestedStackBaseDepth) {
+      return undefined;
     }
 
-    const ranges = getGridSelectionRanges(sharedGridSelection)
-    if (!ranges.length) return undefined
+    const ranges = getGridSelectionRanges(sharedGridSelection);
+    if (!ranges.length) return undefined;
 
     return ranges.map((range) => ({
       color: mirroredCellBackground,
       range,
       style: "dashed" as const,
-    }))
+    }));
   }, [
     activeSelectionSide,
     mirroredCellBackground,
@@ -1295,34 +1166,27 @@ function HumanReviewArrayValueGrid({
     selectionDepth,
     sharedGridSelection,
     viewSide,
-  ])
+  ]);
 
   const setNestedStack = React.useCallback(
-    (
-      updater:
-        | ArrayNestedView[]
-        | ((current: ArrayNestedView[]) => ArrayNestedView[])
-    ) => {
+    (updater: ArrayNestedView[] | ((current: ArrayNestedView[]) => ArrayNestedView[])) => {
       if (onNestedStackChange) {
-        const nextStack =
-          typeof updater === "function" ? updater(nestedStack) : updater
+        const nextStack = typeof updater === "function" ? updater(nestedStack) : updater;
 
-        onNestedStackChange(nextStack, viewSide)
-        return
+        onNestedStackChange(nextStack, viewSide);
+        return;
       }
 
-      setLocalNestedStack(updater)
+      setLocalNestedStack(updater);
     },
-    [nestedStack, onNestedStackChange, viewSide]
-  )
+    [nestedStack, onNestedStackChange, viewSide],
+  );
 
   const handleGridSelectionChange = React.useCallback(
     (selection: GridSelection) => {
       flushSync(() => {
-        setLocalGridSelection((current) =>
-          areGridSelectionsEqual(current, selection) ? current : selection
-        )
-      })
+        setLocalGridSelection((current) => (areGridSelectionsEqual(current, selection) ? current : selection));
+      });
 
       if (onGridSelectionChange) {
         if (
@@ -1330,34 +1194,28 @@ function HumanReviewArrayValueGrid({
           sharedGridSelection &&
           areGridSelectionsEqual(sharedGridSelection, selection)
         ) {
-          return
+          return;
         }
 
         React.startTransition(() => {
-          onGridSelectionChange(selection, viewSide, nestedStackBaseDepth)
-        })
-        return
+          onGridSelectionChange(selection, viewSide, nestedStackBaseDepth);
+        });
+        return;
       }
     },
-    [
-      activeSelectionSide,
-      nestedStackBaseDepth,
-      onGridSelectionChange,
-      sharedGridSelection,
-      viewSide,
-    ]
-  )
+    [activeSelectionSide, nestedStackBaseDepth, onGridSelectionChange, sharedGridSelection, viewSide],
+  );
 
   const columns = React.useMemo<GridColumn[]>(() => {
     if (itemSchema.type === "object") {
-      const propertyEntries = Object.entries(itemSchema.properties ?? {})
+      const propertyEntries = Object.entries(itemSchema.properties ?? {});
 
       if (propertyEntries.length) {
         return propertyEntries.map(([key, propertySchema]) => ({
           id: key,
           title: propertySchema.title ?? key,
           width: isComplexSchema(propertySchema) ? 148 : 132,
-        }))
+        }));
       }
     }
 
@@ -1367,31 +1225,23 @@ function HumanReviewArrayValueGrid({
         title: itemSchema.title ?? "Value",
         width: isComplexSchema(itemSchema) ? 148 : 180,
       },
-    ]
-  }, [itemSchema])
+    ];
+  }, [itemSchema]);
 
   const getCellContent = React.useCallback(
     ([col, row]: Item): GridCell => {
-      const column = columns[col]
-      const columnId = String(column?.id ?? "value")
-      const rowValue = rows[row] ?? null
-      const cellSchema = getCellSchemaForArrayColumn(itemSchema, columnId)
-      const cellValue = getCellValueForArrayColumn(
-        rowValue,
-        itemSchema,
-        columnId
-      )
-      const matchedNestedCell =
-        activeNestedView?.rowIndex === row &&
-        activeNestedView.columnId === columnId
+      const column = columns[col];
+      const columnId = String(column?.id ?? "value");
+      const rowValue = rows[row] ?? null;
+      const cellSchema = getCellSchemaForArrayColumn(itemSchema, columnId);
+      const cellValue = getCellValueForArrayColumn(rowValue, itemSchema, columnId);
+      const matchedNestedCell = activeNestedView?.rowIndex === row && activeNestedView.columnId === columnId;
       const nestedCellTheme: Partial<Theme> | undefined = matchedNestedCell
         ? {
-            bgCell: isMirroredNestedTarget
-              ? mirroredCellBackground
-              : selectedCellBackground,
+            bgCell: isMirroredNestedTarget ? mirroredCellBackground : selectedCellBackground,
             textDark: blueCellText,
           }
-        : undefined
+        : undefined;
 
       if (isComplexSchema(cellSchema)) {
         return {
@@ -1406,7 +1256,7 @@ function HumanReviewArrayValueGrid({
             textDark: blueCellText,
             ...(nestedCellTheme ?? {}),
           },
-        }
+        };
       }
 
       if (cellSchema.type === "boolean") {
@@ -1415,7 +1265,7 @@ function HumanReviewArrayValueGrid({
           data: typeof cellValue === "boolean" ? cellValue : false,
           allowOverlay: false,
           readonly: readOnly,
-        }
+        };
       }
 
       if (cellSchema.type === "number" || cellSchema.type === "integer") {
@@ -1425,26 +1275,16 @@ function HumanReviewArrayValueGrid({
           displayData: typeof cellValue === "number" ? String(cellValue) : "",
           allowOverlay: true,
           readonly: false,
-        }
+        };
       }
 
       return {
         kind: GridCellKind.Text,
-        data:
-          cellValue === null ||
-          isJsonObject(cellValue) ||
-          isJsonArray(cellValue)
-            ? ""
-            : String(cellValue),
-        displayData:
-          cellValue === null ||
-          isJsonObject(cellValue) ||
-          isJsonArray(cellValue)
-            ? ""
-            : String(cellValue),
+        data: cellValue === null || isJsonObject(cellValue) || isJsonArray(cellValue) ? "" : String(cellValue),
+        displayData: cellValue === null || isJsonObject(cellValue) || isJsonArray(cellValue) ? "" : String(cellValue),
         allowOverlay: true,
         readonly: false,
-      }
+      };
     },
     [
       activeNestedView,
@@ -1456,123 +1296,93 @@ function HumanReviewArrayValueGrid({
       readOnly,
       rows,
       selectedCellBackground,
-    ]
-  )
+    ],
+  );
 
   const updateCellValue = React.useCallback(
     ([col, row]: Item, nextCell: EditableGridCell) => {
-      if (readOnly || !onChange) return
+      if (readOnly || !onChange) return;
 
-      const column = columns[col]
-      const columnId = String(column?.id ?? "value")
-      const rowValue = rows[row] ?? null
-      const cellSchema = getCellSchemaForArrayColumn(itemSchema, columnId)
-      const nextValue = applyPrimitiveEdit(cellSchema, nextCell)
+      const column = columns[col];
+      const columnId = String(column?.id ?? "value");
+      const rowValue = rows[row] ?? null;
+      const cellSchema = getCellSchemaForArrayColumn(itemSchema, columnId);
+      const nextValue = applyPrimitiveEdit(cellSchema, nextCell);
 
-      if (nextValue === undefined) return
+      if (nextValue === undefined) return;
 
-      const nextRowValue =
-        itemSchema.type === "object"
-          ? setObjectValue(rowValue, columnId, nextValue)
-          : nextValue
+      const nextRowValue = itemSchema.type === "object" ? setObjectValue(rowValue, columnId, nextValue) : nextValue;
 
-      onChange(setArrayItemValue(value, row, nextRowValue))
+      onChange(setArrayItemValue(value, row, nextRowValue));
     },
-    [columns, itemSchema, onChange, readOnly, rows, value]
-  )
-  const provideEditor = React.useCallback<
-    NonNullable<React.ComponentProps<typeof DataEditor>["provideEditor"]>
-  >(
+    [columns, itemSchema, onChange, readOnly, rows, value],
+  );
+  const provideEditor = React.useCallback<NonNullable<React.ComponentProps<typeof DataEditor>["provideEditor"]>>(
     (cell) => {
-      if (
-        cell.kind !== GridCellKind.Text &&
-        cell.kind !== GridCellKind.Number
-      ) {
-        return undefined
+      if (cell.kind !== GridCellKind.Text && cell.kind !== GridCellKind.Number) {
+        return undefined;
       }
 
       return {
         editor: (props) => {
-          if (
-            props.value.kind !== GridCellKind.Text &&
-            props.value.kind !== GridCellKind.Number
-          ) {
-            return null
+          if (props.value.kind !== GridCellKind.Text && props.value.kind !== GridCellKind.Number) {
+            return null;
           }
 
           return (
             <HumanReviewTextOverlayEditor
-              {...(props as React.ComponentProps<
-                ProvideEditorComponent<HumanReviewOverlayCell>
-              >)}
+              {...(props as React.ComponentProps<ProvideEditorComponent<HumanReviewOverlayCell>>)}
               overlayOpenRef={fastTextOverlayOpenRef}
               readOnly={readOnly}
             />
-          )
+          );
         },
-      }
+      };
     },
-    [readOnly]
-  )
-  const handleOutsideClick = React.useCallback(
-    () => !fastTextOverlayOpenRef.current,
-    []
-  )
+    [readOnly],
+  );
+  const handleOutsideClick = React.useCallback(() => !fastTextOverlayOpenRef.current, []);
   const handleItemHovered = React.useCallback(
     (args: GridMouseEventArgs) => {
-      if (!onLocationHover || !resolveLocation || !metadataPath) return
+      if (!onLocationHover || !resolveLocation || !metadataPath) return;
 
       if (args.kind !== "cell") {
-        onLocationHover(undefined)
-        return
+        onLocationHover(undefined);
+        return;
       }
 
-      const [col, row] = args.location
-      const column = columns[col]
-      const rowValue = rows[row]
+      const [col, row] = args.location;
+      const column = columns[col];
+      const rowValue = rows[row];
       if (!column || rowValue === undefined) {
-        onLocationHover(undefined)
-        return
+        onLocationHover(undefined);
+        return;
       }
 
-      const columnId = String(column.id ?? "value")
+      const columnId = String(column.id ?? "value");
       const rowMetadataPath = resolveArrayItemMetadataPath
         ? resolveArrayItemMetadataPath(metadataPath, row, rowValue)
-        : `${metadataPath}[${row}]`
+        : `${metadataPath}[${row}]`;
       if (!rowMetadataPath) {
-        onLocationHover(undefined)
-        return
+        onLocationHover(undefined);
+        return;
       }
 
-      const propertyMetadataPath =
-        itemSchema.type === "object"
-          ? `${rowMetadataPath}.${columnId}`
-          : rowMetadataPath
+      const propertyMetadataPath = itemSchema.type === "object" ? `${rowMetadataPath}.${columnId}` : rowMetadataPath;
 
-      onLocationHover(
-        resolveLocation(propertyMetadataPath) ??
-          resolveLocation(rowMetadataPath)
-      )
+      onLocationHover(resolveLocation(propertyMetadataPath) ?? resolveLocation(rowMetadataPath));
     },
-    [
-      columns,
-      itemSchema.type,
-      metadataPath,
-      onLocationHover,
-      resolveArrayItemMetadataPath,
-      resolveLocation,
-      rows,
-    ]
-  )
+    [columns, itemSchema.type, metadataPath, onLocationHover, resolveArrayItemMetadataPath, resolveLocation, rows],
+  );
 
   const openNestedCell = React.useCallback(
     ([col, row]: Item) => {
-      const column = columns[col]
-      const columnId = String(column?.id ?? "value")
-      const rowValue = rows[row] ?? null
-      const cellSchema = getCellSchemaForArrayColumn(itemSchema, columnId)
+      const column = columns[col];
+      const columnId = String(column?.id ?? "value");
+      const rowValue = rows[row] ?? null;
+      const cellSchema = getCellSchemaForArrayColumn(itemSchema, columnId);
 
-      if (!isComplexSchema(cellSchema)) return
+      if (!isComplexSchema(cellSchema)) return;
 
       setNestedStack((current) => {
         const nextView = {
@@ -1581,25 +1391,22 @@ function HumanReviewArrayValueGrid({
           title: `${column?.title ?? columnId} / row ${row + 1}`,
           schema: cellSchema,
           value: getCellValueForArrayColumn(rowValue, itemSchema, columnId),
-        }
-        const currentView = current[nestedStackBaseDepth]
+        };
+        const currentView = current[nestedStackBaseDepth];
 
-        if (
-          currentView?.rowIndex === nextView.rowIndex &&
-          currentView.columnId === nextView.columnId
-        ) {
-          return current
+        if (currentView?.rowIndex === nextView.rowIndex && currentView.columnId === nextView.columnId) {
+          return current;
         }
 
-        return [...current.slice(0, nestedStackBaseDepth), nextView]
-      })
+        return [...current.slice(0, nestedStackBaseDepth), nextView];
+      });
     },
-    [columns, itemSchema, nestedStackBaseDepth, rows, setNestedStack]
-  )
+    [columns, itemSchema, nestedStackBaseDepth, rows, setNestedStack],
+  );
 
   const updateNestedValue = React.useCallback(
     (nextNestedValue: JsonValue) => {
-      if (!activeNestedView || readOnly || !onChange) return
+      if (!activeNestedView || readOnly || !onChange) return;
 
       onChange(
         setNestedArrayValue({
@@ -1607,35 +1414,21 @@ function HumanReviewArrayValueGrid({
           schema,
           nestedStack: visibleNestedStack.slice(0, 1),
           nextNestedValue,
-        })
-      )
+        }),
+      );
       setNestedStack((current) =>
-        current.map((view, index) =>
-          index === nestedStackBaseDepth
-            ? { ...view, value: nextNestedValue }
-            : view
-        )
-      )
+        current.map((view, index) => (index === nestedStackBaseDepth ? { ...view, value: nextNestedValue } : view)),
+      );
     },
-    [
-      activeNestedView,
-      nestedStackBaseDepth,
-      onChange,
-      readOnly,
-      schema,
-      setNestedStack,
-      value,
-      visibleNestedStack,
-    ]
-  )
+    [activeNestedView, nestedStackBaseDepth, onChange, readOnly, schema, setNestedStack, value, visibleNestedStack],
+  );
 
   return (
     <div
       onMouseLeave={() => onLocationHover?.(undefined)}
       className={cn(
         "relative overflow-hidden rounded-md border bg-background transition-[border-color,background-color,box-shadow] focus-within:border-blue-500/50 focus-within:shadow-[0_0_0_1px_rgb(59_130_246_/_8%)] hover:border-blue-500/50",
-        isActiveNestedSource &&
-          "border-blue-500/60 bg-blue-500/5 shadow-[0_0_0_1px_rgb(59_130_246_/_10%)]"
+        isActiveNestedSource && "border-blue-500/60 bg-blue-500/5 shadow-[0_0_0_1px_rgb(59_130_246_/_10%)]",
       )}
     >
       <div>
@@ -1677,27 +1470,18 @@ function HumanReviewArrayValueGrid({
               size="icon-sm"
               className="size-6 text-muted-foreground"
               onClick={() =>
-                setNestedStack((current) =>
-                  current.slice(
-                    0,
-                    Math.max(nestedStackBaseDepth, current.length - 1)
-                  )
-                )
+                setNestedStack((current) => current.slice(0, Math.max(nestedStackBaseDepth, current.length - 1)))
               }
               aria-label="Back to parent array"
             >
               <HugeiconsIcon icon={ArrowLeft01Icon} className="size-3.5" />
             </Button>
-            <div className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
-              {activeNestedView.title}
-            </div>
+            <div className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">{activeNestedView.title}</div>
           </div>
           <div className="min-h-0 flex-1 overflow-auto p-2">
             {activeNestedView.schema.type === "array" ? (
               <HumanReviewArrayValueGrid
-                label={
-                  activeNestedView.schema.title ?? activeNestedView.columnId
-                }
+                label={activeNestedView.schema.title ?? activeNestedView.columnId}
                 nestedStackBaseDepth={nestedStackBaseDepth + 1}
                 readOnly={readOnly}
                 schema={activeNestedView.schema}
@@ -1727,7 +1511,7 @@ function HumanReviewArrayValueGrid({
         </div>
       ) : null}
     </div>
-  )
+  );
 }
 
 function HumanReviewObjectValueEditor({
@@ -1737,20 +1521,16 @@ function HumanReviewObjectValueEditor({
   readOnly = false,
   onChange,
 }: {
-  schema: ReviewFieldSchema
-  value: JsonValue
-  originalValue: JsonValue
-  readOnly?: boolean
-  onChange: (value: JsonValue) => void
+  schema: ReviewFieldSchema;
+  value: JsonValue;
+  originalValue: JsonValue;
+  readOnly?: boolean;
+  onChange: (value: JsonValue) => void;
 }) {
-  const propertyEntries = Object.entries(schema.properties ?? {})
+  const propertyEntries = Object.entries(schema.properties ?? {});
 
   if (!propertyEntries.length) {
-    return (
-      <div className="rounded-md bg-background px-2 py-1.5 text-sm text-muted-foreground">
-        No properties
-      </div>
-    )
+    return <div className="rounded-md bg-background px-2 py-1.5 text-sm text-muted-foreground">No properties</div>;
   }
 
   return (
@@ -1767,54 +1547,35 @@ function HumanReviewObjectValueEditor({
           value={getObjectValue(value, propertyKey)}
           originalValue={getObjectValue(originalValue, propertyKey)}
           readOnly={readOnly}
-          onChange={(childValue) =>
-            !readOnly &&
-            onChange(setObjectValue(value, propertyKey, childValue))
-          }
+          onChange={(childValue) => !readOnly && onChange(setObjectValue(value, propertyKey, childValue))}
           onUndo={() =>
-            !readOnly &&
-            onChange(
-              setObjectValue(
-                value,
-                propertyKey,
-                getObjectValue(originalValue, propertyKey)
-              )
-            )
+            !readOnly && onChange(setObjectValue(value, propertyKey, getObjectValue(originalValue, propertyKey)))
           }
-          onSetNull={() =>
-            !readOnly && onChange(setObjectValue(value, propertyKey, null))
-          }
+          onSetNull={() => !readOnly && onChange(setObjectValue(value, propertyKey, null))}
         />
       ))}
     </div>
-  )
+  );
 }
 
 type HumanReviewFieldCardProps = {
-  field: ReviewField
-  value: JsonValue
-  originalValue: JsonValue
-  active?: boolean
-  activeFieldKey?: string
-  readOnly?: boolean
-  showExpected?: boolean
-  onChange: (value: JsonValue) => void
-  onFieldFocus?: (field: ReviewField) => void
-  onLocationHover?: (location?: ReviewLocation) => void
-  onUndo: () => void
-  onSetNull: () => void
-  resolveArrayItemMetadataPath?: (
-    metadataPath: string,
-    rowIndex: number,
-    rowValue: JsonValue
-  ) => string | undefined
-  resolveLocation?: (metadataPath: string) => ReviewLocation | undefined
-}
+  field: ReviewField;
+  value: JsonValue;
+  originalValue: JsonValue;
+  active?: boolean;
+  activeFieldKey?: string;
+  readOnly?: boolean;
+  showExpected?: boolean;
+  onChange: (value: JsonValue) => void;
+  onFieldFocus?: (field: ReviewField) => void;
+  onLocationHover?: (location?: ReviewLocation) => void;
+  onUndo: () => void;
+  onSetNull: () => void;
+  resolveArrayItemMetadataPath?: (metadataPath: string, rowIndex: number, rowValue: JsonValue) => string | undefined;
+  resolveLocation?: (metadataPath: string) => ReviewLocation | undefined;
+};
 
-function areHumanReviewFieldCardPropsEqual(
-  previous: HumanReviewFieldCardProps,
-  next: HumanReviewFieldCardProps
-) {
+function areHumanReviewFieldCardPropsEqual(previous: HumanReviewFieldCardProps, next: HumanReviewFieldCardProps) {
   return (
     previous.field === next.field &&
     Object.is(previous.value, next.value) &&
@@ -1825,16 +1586,12 @@ function areHumanReviewFieldCardPropsEqual(
     previous.showExpected === next.showExpected &&
     previous.onFieldFocus === next.onFieldFocus &&
     previous.onLocationHover === next.onLocationHover &&
-    previous.resolveArrayItemMetadataPath ===
-      next.resolveArrayItemMetadataPath &&
+    previous.resolveArrayItemMetadataPath === next.resolveArrayItemMetadataPath &&
     previous.resolveLocation === next.resolveLocation
-  )
+  );
 }
 
-const HumanReviewFieldCard = React.memo(
-  HumanReviewFieldCardBase,
-  areHumanReviewFieldCardPropsEqual
-)
+const HumanReviewFieldCard = React.memo(HumanReviewFieldCardBase, areHumanReviewFieldCardPropsEqual);
 
 function HumanReviewFieldCardBase({
   field,
@@ -1852,33 +1609,29 @@ function HumanReviewFieldCardBase({
   resolveArrayItemMetadataPath,
   resolveLocation,
 }: HumanReviewFieldCardProps) {
-  const isExpectedEditable = showExpected && !readOnly
-  const modified = showExpected && !jsonValuesEqual(value, originalValue)
-  const Icon = getFieldIcon(field.schema.type)
-  const propertyEntries = Object.entries(field.schema.properties ?? {})
+  const isExpectedEditable = showExpected && !readOnly;
+  const modified = showExpected && !jsonValuesEqual(value, originalValue);
+  const Icon = getFieldIcon(field.schema.type);
+  const propertyEntries = Object.entries(field.schema.properties ?? {});
   const [syncedArrayNestedView, setSyncedArrayNestedView] =
-    React.useState<SyncedArrayNestedView>(EMPTY_SYNCED_ARRAY_NESTED_VIEW)
+    React.useState<SyncedArrayNestedView>(EMPTY_SYNCED_ARRAY_NESTED_VIEW);
   const [syncedArraySelection, setSyncedArraySelection] =
-    React.useState<SyncedArraySelection>(EMPTY_SYNCED_ARRAY_SELECTION)
-  const updateSyncedArrayNestedView = React.useCallback(
-    (stack: ArrayNestedView[], side: ArrayReviewSide) => {
-      const activeSide = stack.length ? side : null
+    React.useState<SyncedArraySelection>(EMPTY_SYNCED_ARRAY_SELECTION);
+  const updateSyncedArrayNestedView = React.useCallback((stack: ArrayNestedView[], side: ArrayReviewSide) => {
+    const activeSide = stack.length ? side : null;
 
-      setSyncedArrayNestedView((current) =>
-        current.activeSide === activeSide &&
-        areArrayNestedViewsEqual(current.stack, stack)
-          ? current
-          : {
-              activeSide,
-              stack,
-            }
-      )
-    },
-    []
-  )
+    setSyncedArrayNestedView((current) =>
+      current.activeSide === activeSide && areArrayNestedViewsEqual(current.stack, stack)
+        ? current
+        : {
+            activeSide,
+            stack,
+          },
+    );
+  }, []);
   const updateSyncedArraySelection = React.useCallback(
     (gridSelection: GridSelection, side: ArrayReviewSide, depth: number) => {
-      const activeSide = gridSelection.current ? side : null
+      const activeSide = gridSelection.current ? side : null;
 
       setSyncedArraySelection((current) =>
         current.activeSide === activeSide &&
@@ -1889,15 +1642,15 @@ function HumanReviewFieldCardBase({
               activeSide,
               depth,
               gridSelection,
-            }
-      )
+            },
+      );
     },
-    []
-  )
+    [],
+  );
   const focusAndHoverField = React.useCallback(() => {
-    onFieldFocus?.(field)
-    onLocationHover?.(getReviewFieldLocation(field, resolveLocation))
-  }, [field, onFieldFocus, onLocationHover, resolveLocation])
+    onFieldFocus?.(field);
+    onLocationHover?.(getReviewFieldLocation(field, resolveLocation));
+  }, [field, onFieldFocus, onLocationHover, resolveLocation]);
 
   return (
     <div
@@ -1907,28 +1660,18 @@ function HumanReviewFieldCardBase({
       onMouseLeave={() => onLocationHover?.(undefined)}
       className={cn(
         "rounded-lg border bg-background p-3 transition-[border-color,background-color,box-shadow] focus-within:border-blue-500/50 focus-within:bg-blue-500/5 hover:border-blue-500/50 hover:bg-blue-500/5 focus-visible:ring-2 focus-visible:ring-blue-500/20 focus-visible:outline-none",
-        active &&
-          "border-blue-500/60 bg-blue-500/5 shadow-[0_0_0_1px_rgb(59_130_246_/_8%)]"
+        active && "border-blue-500/60 bg-blue-500/5 shadow-[0_0_0_1px_rgb(59_130_246_/_8%)]",
       )}
     >
       <div className="mb-3 flex min-h-8 items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-2">
             <div className="min-w-0">
-              <div className="truncate text-sm font-medium">
-                {field.schema.title ?? field.key}
-              </div>
+              <div className="truncate text-sm font-medium">{field.schema.title ?? field.key}</div>
             </div>
-            <span
-              className={cn(
-                "size-2 shrink-0 rounded-full bg-amber-400",
-                !modified && "opacity-0"
-              )}
-            />
+            <span className={cn("size-2 shrink-0 rounded-full bg-amber-400", !modified && "opacity-0")} />
           </div>
-          <div className="truncate text-xs text-muted-foreground">
-            {field.key}
-          </div>
+          <div className="truncate text-xs text-muted-foreground">{field.key}</div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {isExpectedEditable && modified ? (
@@ -1986,7 +1729,7 @@ function HumanReviewFieldCardBase({
                   actual: getObjectValue(field.actual, propertyKey),
                   expected: getObjectValue(originalValue, propertyKey),
                   metadataPath: `${field.metadataPath ?? field.key}.${propertyKey}`,
-                }
+                };
 
                 return (
                   <HumanReviewFieldCard
@@ -1998,28 +1741,18 @@ function HumanReviewFieldCardBase({
                     activeFieldKey={activeFieldKey}
                     readOnly={readOnly}
                     showExpected={showExpected}
-                    onChange={(childValue) =>
-                      onChange(setObjectValue(value, propertyKey, childValue))
-                    }
+                    onChange={(childValue) => onChange(setObjectValue(value, propertyKey, childValue))}
                     onFieldFocus={onFieldFocus}
                     onLocationHover={onLocationHover}
-                    onUndo={() =>
-                      onChange(
-                        setObjectValue(value, propertyKey, childField.expected)
-                      )
-                    }
-                    onSetNull={() =>
-                      onChange(setObjectValue(value, propertyKey, null))
-                    }
+                    onUndo={() => onChange(setObjectValue(value, propertyKey, childField.expected))}
+                    onSetNull={() => onChange(setObjectValue(value, propertyKey, null))}
                     resolveArrayItemMetadataPath={resolveArrayItemMetadataPath}
                     resolveLocation={resolveLocation}
                   />
-                )
+                );
               })
             ) : (
-              <div className="rounded-md bg-background px-2 py-1.5 text-sm text-muted-foreground">
-                No properties
-              </div>
+              <div className="rounded-md bg-background px-2 py-1.5 text-sm text-muted-foreground">No properties</div>
             )}
           </div>
         </div>
@@ -2069,22 +1802,14 @@ function HumanReviewFieldCardBase({
         <div className={cn("grid gap-2", showExpected && "sm:grid-cols-2")}>
           <div className="rounded-md border bg-muted/30 p-2">
             {field.schema.description ? (
-              <p className="mb-2 text-xs text-muted-foreground">
-                {field.schema.description}
-              </p>
+              <p className="mb-2 text-xs text-muted-foreground">{field.schema.description}</p>
             ) : null}
-            <div className="mb-1 text-[11px] font-medium text-muted-foreground">
-              Actual
-            </div>
-            <div className="min-h-7 rounded-md bg-background px-2 py-1.5 text-sm">
-              {formatValue(field.actual)}
-            </div>
+            <div className="mb-1 text-[11px] font-medium text-muted-foreground">Actual</div>
+            <div className="min-h-7 rounded-md bg-background px-2 py-1.5 text-sm">{formatValue(field.actual)}</div>
           </div>
           {showExpected ? (
             <div className="rounded-md border bg-muted/30 p-2">
-              <div className="mb-1 text-[11px] font-medium text-muted-foreground">
-                Expected
-              </div>
+              <div className="mb-1 text-[11px] font-medium text-muted-foreground">Expected</div>
               <HumanReviewValueInput
                 readOnly={readOnly}
                 schema={field.schema}
@@ -2096,22 +1821,15 @@ function HumanReviewFieldCardBase({
         </div>
       )}
     </div>
-  )
+  );
 }
 
-export function HumanReviewHighlight({
-  location,
-}: {
-  location: ReviewLocation
-}) {
-  const area = location.area
+export function HumanReviewHighlight({ location }: { location: ReviewLocation }) {
+  const area = location.area;
 
   return (
     <div
-      className={cn(
-        "pointer-events-none absolute z-10 border",
-        REVIEW_HIGHLIGHT_STYLE
-      )}
+      className={cn("pointer-events-none absolute z-10 border", REVIEW_HIGHLIGHT_STYLE)}
       style={{
         left: `${area.left}%`,
         top: `${area.top}%`,
@@ -2119,7 +1837,7 @@ export function HumanReviewHighlight({
         height: `${area.height}%`,
       }}
     />
-  )
+  );
 }
 
 export function JsonDiffView({
@@ -2127,9 +1845,9 @@ export function JsonDiffView({
   expected,
   theme = "light",
 }: {
-  actual: JsonObject
-  expected: JsonObject
-  theme?: HumanReviewTheme
+  actual: JsonObject;
+  expected: JsonObject;
+  theme?: HumanReviewTheme;
 }) {
   const oldFile = React.useMemo(
     () => ({
@@ -2137,22 +1855,19 @@ export function JsonDiffView({
       contents: formatJson(actual),
       lang: "json",
     }),
-    [actual]
-  )
+    [actual],
+  );
   const newFile = React.useMemo(
     () => ({
       name: "expected.json",
       contents: formatJson(expected),
       lang: "json",
     }),
-    [expected]
-  )
+    [expected],
+  );
 
   return (
-    <ScrollAreaVirtualizer
-      className="h-full bg-surface/60"
-      contentClassName="min-w-full"
-    >
+    <ScrollAreaVirtualizer className="h-full bg-surface/60" contentClassName="min-w-full">
       <div className="bounding-box-citations-diff h-full text-xs">
         <MultiFileDiff
           className="block min-w-full"
@@ -2173,7 +1888,7 @@ export function JsonDiffView({
         />
       </div>
     </ScrollAreaVirtualizer>
-  )
+  );
 }
 
 export function JsonCodeView({
@@ -2181,30 +1896,27 @@ export function JsonCodeView({
   theme = "light",
   value,
 }: {
-  name?: string
-  theme?: HumanReviewTheme
-  value: JsonValue
+  name?: string;
+  theme?: HumanReviewTheme;
+  value: JsonValue;
 }) {
   const file = React.useMemo(() => {
-    const contents = formatJson(value)
+    const contents = formatJson(value);
 
     return {
       name,
       contents,
       lang: "json" as const,
       cacheKey: contents,
-    }
-  }, [name, value])
+    };
+  }, [name, value]);
 
   return (
     <div
       data-rehype-pretty-code-figure
       className="relative m-0! h-full overflow-hidden rounded-none! bg-code text-code-foreground"
     >
-      <WorkerPoolContextProvider
-        poolOptions={CODE_WORKER_POOL_OPTIONS}
-        highlighterOptions={CODE_HIGHLIGHTER_OPTIONS}
-      >
+      <WorkerPoolContextProvider poolOptions={CODE_WORKER_POOL_OPTIONS} highlighterOptions={CODE_HIGHLIGHTER_OPTIONS}>
         <ScrollAreaVirtualizer
           key={`${file.cacheKey}:${theme}`}
           className="h-full min-w-0"
@@ -2229,7 +1941,7 @@ export function JsonCodeView({
         </ScrollAreaVirtualizer>
       </WorkerPoolContextProvider>
     </div>
-  )
+  );
 }
 
 export function HumanReviewPanel({
@@ -2244,50 +1956,36 @@ export function HumanReviewPanel({
   showExpected = true,
   theme = "light",
 }: {
-  fields?: ReviewField[]
-  activeFieldKey?: string
-  className?: string
-  onFieldFocus?: (field: ReviewField) => void
-  onLocationHover?: (location?: ReviewLocation) => void
+  fields?: ReviewField[];
+  activeFieldKey?: string;
+  className?: string;
+  onFieldFocus?: (field: ReviewField) => void;
+  onLocationHover?: (location?: ReviewLocation) => void;
   // Fires whenever the reviewer edits a field's expected value — the panel otherwise holds all
   // review state internally with no way for a parent to read it back out for saving.
-  onExpectedChange?: (expected: JsonObject) => void
-  resolveArrayItemMetadataPath?: (
-    metadataPath: string,
-    rowIndex: number,
-    rowValue: JsonValue
-  ) => string | undefined
-  resolveLocation?: (metadataPath: string) => ReviewLocation | undefined
-  showExpected?: boolean
-  theme?: HumanReviewTheme
+  onExpectedChange?: (expected: JsonObject) => void;
+  resolveArrayItemMetadataPath?: (metadataPath: string, rowIndex: number, rowValue: JsonValue) => string | undefined;
+  resolveLocation?: (metadataPath: string) => ReviewLocation | undefined;
+  showExpected?: boolean;
+  theme?: HumanReviewTheme;
 } = {}) {
-  const [activeTab, setActiveTab] = React.useState("form")
-  const actualValues = React.useMemo(
-    () => valuesFromFields(fields, "actual"),
-    [fields]
-  )
-  const initialExpectedValues = React.useMemo(
-    () => valuesFromFields(fields, "expected"),
-    [fields]
-  )
-  const [expected, setExpected] = React.useState<JsonObject>(
-    initialExpectedValues
-  )
+  const [activeTab, setActiveTab] = React.useState("form");
+  const actualValues = React.useMemo(() => valuesFromFields(fields, "actual"), [fields]);
+  const initialExpectedValues = React.useMemo(() => valuesFromFields(fields, "expected"), [fields]);
+  const [expected, setExpected] = React.useState<JsonObject>(initialExpectedValues);
 
   React.useEffect(() => {
-    setExpected(initialExpectedValues)
-  }, [initialExpectedValues])
+    setExpected(initialExpectedValues);
+  }, [initialExpectedValues]);
 
   React.useEffect(() => {
-    onExpectedChange?.(expected)
+    onExpectedChange?.(expected);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expected])
+  }, [expected]);
 
   const updateValue = React.useCallback((key: string, value: JsonValue) => {
-    setExpected((current) =>
-      Object.is(current[key], value) ? current : { ...current, [key]: value }
-    )
-  }, [])
+    setExpected((current) => (Object.is(current[key], value) ? current : { ...current, [key]: value }));
+  }, []);
 
   return (
     <TooltipProvider delay={200}>
@@ -2315,14 +2013,9 @@ export function HumanReviewPanel({
                 <HumanReviewFieldCard
                   key={field.key}
                   field={field}
-                  value={
-                    showExpected ? (expected[field.key] ?? null) : field.actual
-                  }
+                  value={showExpected ? (expected[field.key] ?? null) : field.actual}
                   originalValue={showExpected ? field.expected : field.actual}
-                  active={
-                    field.key === activeFieldKey ||
-                    activeFieldKey?.startsWith(`${field.key}.`)
-                  }
+                  active={field.key === activeFieldKey || activeFieldKey?.startsWith(`${field.key}.`)}
                   activeFieldKey={activeFieldKey}
                   showExpected={showExpected}
                   onChange={(value) => updateValue(field.key, value)}
@@ -2339,17 +2032,12 @@ export function HumanReviewPanel({
         </TabsContent>
         <TabsContent value="json" keepMounted className="min-h-0 flex-1">
           {showExpected ? (
-            <JsonDiffView
-              actual={actualValues}
-              expected={expected}
-              theme={theme}
-            />
+            <JsonDiffView actual={actualValues} expected={expected} theme={theme} />
           ) : (
             <JsonCodeView value={actualValues} theme={theme} />
           )}
         </TabsContent>
       </Tabs>
     </TooltipProvider>
-  )
+  );
 }
-

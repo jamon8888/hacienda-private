@@ -33,6 +33,7 @@ failed to load external data file: http://127.0.0.1:8799/models/gliner-pii.int8.
 ```
 
 Notes / caveats for the next session:
+
 - This is an ONNX "external data" (weights stored separately from the graph) loading failure
   in GLiNER's own onnxruntime-web (gliner depends on `onnxruntime-web@1.19.2`, a different copy
   than embed's 1.27.0). GLiNER's tokenizer JSONs load fine (200 OK); the model GET is the issue.
@@ -60,6 +61,7 @@ longer-lived manual browser tab the same stage instead surfaced the explicit
 difference — both are the same GLiNER-stage failure.)
 
 **UPDATE (2026-07-22): the "missing external-data file" hypothesis is DISPROVEN.**
+
 - `gliner-pii.int8.onnx` is a full 183MB **self-contained** model with embedded weights, and its
   SHA256 **matches the manifest** (`c76c9092…​cb061400`) — intact, not corrupt. A full-file scan
   finds **zero** `external_data` / `onnx_data` / `data_location` / `location` markers. There is no
@@ -87,6 +89,7 @@ difference — both are the same GLiNER-stage failure.)
   from the onnxruntime-web worker-URL crash fixed above.
 
 Original (pre-disproof) external-data notes, kept for the record:
+
 - `services/mcp-server/models/manifest.json` maps `gliner-pii-int8` → a SINGLE file
   `gliner-pii.int8.onnx` (HF `onnx-community/gliner_small-v2.1/onnx/model_int8.onnx`, 183MB).
   There is **no sibling `.onnx_data` external-weights file** in the manifest or the model cache
@@ -249,6 +252,7 @@ config.module.rules.push({
 ```
 
 **Caveats to verify before committing:**
+
 - Cheap pre-check: after rebuild, if the ort chunk hash is STILL byte-identical to the
   pristine build, webpack ignored the option (Next.js may override `module.parser`, or the
   option name/placement is wrong) — do not bother browser-testing, rethink the mechanism.
@@ -298,13 +302,13 @@ that fix was committed. Both are long since superseded: the actual fix is commit
 
 ---
 
-# Final resolution (branch `fix/gliner-model-serving`, 2026-07-22)
+## Final resolution (branch `fix/gliner-model-serving`, 2026-07-22)
 
 Picking up from the GLiNER blocker above, three MORE bugs were found in sequence, each
 masking the next until fixed. All are now resolved or worked around; the full critical-path
 e2e passes.
 
-## Bug 2: mcp-server blocks its single Node event loop serving giant models
+### Bug 2: mcp-server blocks its single Node event loop serving giant models
 
 `services/mcp-server/src/index.ts` `serveFile()` did `res.end(readFileSync(filePath))` —
 reading a 200–800 MB model FULLY into memory synchronously before responding. `models.ts`
@@ -315,6 +319,7 @@ serialize on the single event loop and can look exactly like a multi-minute hang
 browser's side — which is exactly how the GLiNER blocker above first presented.
 
 **Fix:**
+
 - `serveFile` now streams via `createReadStream(filePath).pipe(res)` instead of `readFileSync`.
 - `ensureModel` now caches `` `${mtimeMs}:${size}` `` per cached model path after a successful
   SHA256 verification, and skips re-hashing on subsequent requests for the same unchanged file
@@ -323,7 +328,7 @@ browser's side — which is exactly how the GLiNER blocker above first presented
 Verified: with this fix alone, GLiNER's `initialize()` + `inference()` completed successfully
 in-browser for the first time (previously silently stuck at "Processing…" indefinitely).
 
-## Bug 3: `appendIndex` hangs forever on the first document of every matter
+### Bug 3: `appendIndex` hangs forever on the first document of every matter
 
 Already described above for the onnxruntime crash's era, but this is where it actually bit:
 once Bug 2 was fixed, ingestion reached `packages/wasm-pipeline/src/rag.ts`'s `appendIndex()`,
@@ -338,7 +343,7 @@ persisted this matter (via the mirror accumulator's presence in `idb-keyval`, fe
 reused for both `appendIndex` and `mergeIntoAccumulator`), so it passes that in directly —
 `load()` is only ever called when the caller is certain a saved index exists.
 
-## Bug 4: `EdgeVec.load()` cannot deserialize what `EdgeVec.save()` writes (edgevec@0.9.0)
+### Bug 4: `EdgeVec.load()` cannot deserialize what `EdgeVec.save()` writes (edgevec@0.9.0)
 
 With Bug 3 fixed, the *second* document into any matter (`hasExistingIndex: true`, so `load()`
 now actually executes) failed fast with:
@@ -348,6 +353,7 @@ corrupted data: Deserialization failed: This is a feature that PostCard will nev
 ```
 
 Investigated thoroughly before treating this as unfixable-in-app-code:
+
 - Ruled out **metadata value types**: reproduced identically with the exact mixed
   string/number metadata (`doc_id`, `chunk_index`, `text`, ...), with ALL-STRING metadata
   (every value coerced via `String(...)`), and with **zero metadata at all** (bare
@@ -378,7 +384,7 @@ current (every `appendIndex` call ends with `save()`), it just cannot be loaded 
 live instance in a fresh page session. This is a known residual limitation, not silently
 swept under the rug — worth revisiting if/when edgevec ships a version without this bug.
 
-## Bug 5 (test-only): ambiguous Playwright locator, never previously exercised
+### Bug 5 (test-only): ambiguous Playwright locator, never previously exercised
 
 Once bugs 2–4 were fixed and the two-file e2e path actually ran end-to-end for the first
 time ever, it failed immediately on a **pre-existing latent bug in the test itself** (written
@@ -389,7 +395,7 @@ row, the transient upload-progress row, and the final "Ingested documents" card)
 Playwright strict-mode violation, not a functional failure. Fixed by scoping the assertion to
 the "Ingested documents" list container specifically (`content.locator("div.mt-6.grid.gap-3")`).
 
-## Verification (this final round)
+### Verification (this final round)
 
 - `pnpm --filter @xberg-io/wasm-pipeline typecheck` + `test` — 32/32 pass
 - `pnpm --filter mcp-server typecheck` + `test` — 85/85 pass
@@ -400,7 +406,7 @@ the "Ingested documents" list container specifically (`content.locator("div.mt-6
   keyed by both distinct doc IDs — the exact guarantee PR #24 needed.
 - **Full Playwright e2e (`apps/web/e2e/critical-path.spec.ts`): `1 passed` (~53–57s).**
 
-## Files changed (this final round)
+### Files changed (this final round)
 
 - `services/mcp-server/src/index.ts` — `serveFile` streams instead of `readFileSync`.
 - `services/mcp-server/src/models.ts` — `ensureModel` caches the mtime+size stamp of the last

@@ -40,7 +40,10 @@ export async function mergeIntoAccumulator(
   passphrase: string,
 ): Promise<MatterMirrorAccumulator> {
   const priorEntries = prior
-    ? await openVault({ cipher: Uint8Array.from(prior.vaultCipher), salt: Uint8Array.from(prior.vaultSalt) }, passphrase)
+    ? await openVault(
+        { cipher: Uint8Array.from(prior.vaultCipher), salt: Uint8Array.from(prior.vaultSalt) },
+        passphrase,
+      )
     : [];
   const sealed = await sealVault([...priorEntries, ...add.entries], passphrase);
   return {

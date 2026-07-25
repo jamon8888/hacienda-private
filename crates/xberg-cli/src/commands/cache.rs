@@ -285,8 +285,7 @@ pub fn warm_command(
     format: WireFormat,
     all_embeddings: bool,
     embedding_model: Option<String>,
-    #[cfg_attr(not(feature = "layout-detection"), allow(unused_variables))]
-    all_table_models: bool,
+    #[cfg_attr(not(feature = "layout-detection"), allow(unused_variables))] all_table_models: bool,
     all_grammars: bool,
     grammar_groups: Option<Vec<String>>,
     grammars: Option<Vec<String>>,

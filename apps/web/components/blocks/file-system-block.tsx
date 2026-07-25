@@ -7,5 +7,5 @@ export type FileSystemBlockProps = FileSystemProps;
 // The PDF, DOCX, XLSX, and image viewer dialogs are built into FileSystem;
 // the block exists as a composed, installable example of the full browser.
 export function FileSystemBlock(props: FileSystemBlockProps) {
-	return <FileSystem {...props} />;
+  return <FileSystem {...props} />;
 }

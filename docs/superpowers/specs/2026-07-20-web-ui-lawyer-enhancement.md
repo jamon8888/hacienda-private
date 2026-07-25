@@ -84,6 +84,7 @@ API-driven `matter-nav` for the primary workspace sidebar.
 ## 4. Key Flows
 
 ### 4.1 Ingestion (Folder / Ingest screen)
+
 1. User drops files/folder onto `file-dropzone`.
 2. For each file: call `ingestFolder(matter, folder, file, options)` from the
    adapter; render `IngestProgress` stages (extract→ocr→chunk→embed→pii→index→
@@ -96,6 +97,7 @@ API-driven `matter-nav` for the primary workspace sidebar.
    in `matter-nav` without a reload.
 
 ### 4.2 Document review (Document view + PII + Human review)
+
 1. Open a document → routed to the correct viewer with `document-viewer-sidebar`
    thumbnails.
 2. Right pane = `PiiPanel` showing **token spans only** (masked). Clicking a
@@ -109,6 +111,7 @@ API-driven `matter-nav` for the primary workspace sidebar.
    matter's entities.
 
 ### 4.3 Search (Search screen)
+
 1. Natural-language query → `queryRagForUi(matter, q, topK)` →
    `RetrievedChunkCard`s with citations.
 2. Each card's citation links to `/documents/:id?...&page=:n&bbox=...`,

@@ -34,8 +34,8 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use candle_core::{DType, Device, Tensor};
 use candle_core::safetensors::Load;
+use candle_core::{DType, Device, Tensor};
 use safetensors::SafeTensors;
 use serde::Deserialize;
 
@@ -121,7 +121,7 @@ impl LoraAdapter {
         let mut by_module: HashMap<String, (Option<Tensor>, Option<Tensor>)> = HashMap::new();
         for (key, view) in st.tensors() {
             let (module_path, slot) = parse_lora_key(&key)?;
-            
+
             // Use candle_core's Load trait to load tensors from SafeTensors view
             // This supports F32, F16, BF16, F64, I64 without manual byte parsing.
             let tensor = Tensor::load(&view, device)

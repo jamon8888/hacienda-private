@@ -20,11 +20,11 @@ import type { Matter, RetrievedChunk } from "@xberg-io/core";
 const TOKEN_PATTERN = /\{\{(?:C\d+_)?([A-Z0-9_]+?)_\d+\}\}/g;
 
 function piiKindsInChunk(text: string): Set<string> {
-	const kinds = new Set<string>();
-	for (const match of text.matchAll(TOKEN_PATTERN)) {
-		if (match[1]) kinds.add(match[1]);
-	}
-	return kinds;
+  const kinds = new Set<string>();
+  for (const match of text.matchAll(TOKEN_PATTERN)) {
+    if (match[1]) kinds.add(match[1]);
+  }
+  return kinds;
 }
 
 export function SearchPageInner() {

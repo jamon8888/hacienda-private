@@ -28,12 +28,7 @@ import {
   selectScenario,
   type IndexedChunk,
 } from "@xberg-io/wasm-pipeline-real";
-import {
-  mergeIntoAccumulator,
-  accumulatorKey,
-  type MatterMirrorAccumulator,
-  type MirrorChunk,
-} from "./mirror-merge";
+import { mergeIntoAccumulator, accumulatorKey, type MatterMirrorAccumulator, type MirrorChunk } from "./mirror-merge";
 
 export interface ExtractedDocument {
   doc_id: string;

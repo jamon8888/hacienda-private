@@ -17,12 +17,14 @@
   - If `ls /Volumes/xbergtmp` fails, remount: `hdiutil attach /Volumes/ExtremeSSD/xbergtmp.sparseimage`.
   - Always export `TMPDIR=/Volumes/xbergtmp/` for any build/test.
   - `apps/web/.next` and `apps/web/out` MUST be symlinks onto the APFS volume. Verify with `ls -la apps/web/.next apps/web/out`. If either is a real directory, recreate:
-    ```
+
+    ```text
     rm -rf apps/web/.next apps/web/out
     mkdir -p /Volumes/xbergtmp/web-next /Volumes/xbergtmp/web-out
     ln -s /Volumes/xbergtmp/web-next apps/web/.next
     ln -s /Volumes/xbergtmp/web-out apps/web/out
     ```
+
     (At plan time `.next` is a symlink but `out` is a real exFAT dir — recreate `out` before the first build.)
   - Playwright Chromium lives at `/Volumes/ExtremeSSD/.cache/ms-playwright`; the e5 model cache symlink in `apps/web/e2e/start-server.mjs` points at `/Volumes/xbergtmp/xberg-e2e-model-cache` (already in place).
   - After any macOS/Finder op, purge stray AppleDouble files: `find . -maxdepth 4 -iname "._*" -not -path "*/node_modules/*" -delete`.
@@ -30,10 +32,12 @@
   - Finding 1: `pnpm --filter mcp-server test`, `pnpm --filter @xberg-io/wasm-pipeline test`, `pnpm --filter web test`, then the full build + e2e (below).
   - Finding 2: `pnpm --filter web typecheck` + build, then manual browser deep-link check (e2e optional).
   - Build + e2e (from `apps/web`):
-    ```
+
+    ```text
     TMPDIR=/Volumes/xbergtmp/ pnpm run build
     PLAYWRIGHT_BROWSERS_PATH=/Volumes/ExtremeSSD/.cache/ms-playwright TMPDIR=/Volumes/xbergtmp/ pnpm exec playwright test
     ```
+
 - **Branch:** create `fix/coderabbit-major-findings` from up-to-date `main` before any edit.
 
 ---
@@ -41,6 +45,7 @@
 ## File Structure
 
 **Finding 1 (client-side cumulative merge):**
+
 - Create `apps/web/lib/engine/mirror-merge.ts` — pure, testable cumulative-merge core: the per-matter tokenized accumulator type and `mergeIntoAccumulator()` (opens the prior sealed vault, appends the new document's entries, reseals; concatenates tokenized pii/chunks). No plaintext at rest.
 - Create `apps/web/lib/engine/mirror-merge.test.ts` — proves both documents' pii/chunks survive a merge and the resealed vault opens to all entries.
 - Modify `packages/wasm-pipeline/src/rag.ts` — add `appendIndex(matterId, items)` that loads the existing matter index if present and inserts into it (additive), instead of always starting fresh.
@@ -51,6 +56,7 @@
 - (Optional) Modify `services/mcp-server/src/mirror.test.ts` (create if absent) — a regression test documenting that `saveMirror` replaces the whole matter dir (the constraint that forces client-side merge).
 
 **Finding 2 (citation deep-link):**
+
 - Create `apps/web/lib/citation-target.ts` — pure `parseCitationTarget(params)` → `{ page?, bbox? }` with validation.
 - Create `apps/web/lib/citation-target.test.ts` — parser unit tests (valid, missing, malformed).
 - Modify `apps/web/app/documents/[id]/DocumentView.tsx` — read `useSearchParams`, parse, pass a `citationTarget` prop down.
@@ -90,12 +96,14 @@ export function parseCitationTarget(params: URLSearchParams | { get(k: string): 
 ## Task 1: Finding 1 — cumulative client-side mirror merge
 
 **Files:**
+
 - Create: `apps/web/lib/engine/mirror-merge.ts`, `apps/web/lib/engine/mirror-merge.test.ts`
 - Modify: `packages/wasm-pipeline/src/rag.ts`, `apps/web/lib/engine/adapter.ts:85-185`, `apps/web/app/folders/[id]/FolderView.tsx:81-130`
 - Create: `apps/web/e2e/fixtures/contract-note-2.csv`
 - Modify: `apps/web/e2e/critical-path.spec.ts`
 
 **Interfaces:**
+
 - Consumes: `sealVault`, `openVault`, `RedactionEntry` from `@xberg-io/wasm-pipeline-real`; `get`/`set` from `idb-keyval`; existing `buildIndex`/`serializeIndex`/`loadIndex` from `rag.ts`.
 - Produces: `mergeIntoAccumulator`, `accumulatorKey`, `MatterMirrorAccumulator` (Task 1 internal); `appendIndex` (used by adapter).
 
@@ -260,11 +268,13 @@ Expected: PASS (existing `mirror.test.ts` unaffected; no new unit test for `appe
 In `apps/web/lib/engine/adapter.ts`:
 
 1. Add imports:
+
 ```ts
 import { get, set } from "idb-keyval";
 import { appendIndex, sealVault, openVault } from "@xberg-io/wasm-pipeline-real"; // sealVault/openVault already used elsewhere? add appendIndex to the existing import block
 import { mergeIntoAccumulator, accumulatorKey, type MatterMirrorAccumulator, type MirrorChunk } from "./mirror-merge";
 ```
+
 (`sealVault` is already imported in the existing `@xberg-io/wasm-pipeline-real` block; add `appendIndex` there. `openVault` is already imported for `rehydrateSpanForUi`.)
 
 2. Replace the index build + push section (currently `const db = await buildIndex(...)` through `await pushMirror(...)`, lines ~134-155) with:
@@ -412,7 +422,7 @@ If `services/mcp-server/src/mirror.test.ts` does not exist, create a minimal tes
 
 - [ ] **Step 13: Full verification gate (exFAT)**
 
-```
+```text
 cd /Volumes/ExtremeSSD/hacienda-private
 ls /Volumes/xbergtmp >/dev/null || hdiutil attach /Volumes/ExtremeSSD/xbergtmp.sparseimage
 ls -la apps/web/out   # if not a symlink, recreate .next/out per Global Constraints
@@ -424,11 +434,12 @@ cd apps/web
 TMPDIR=/Volumes/xbergtmp/ pnpm run build
 PLAYWRIGHT_BROWSERS_PATH=/Volumes/ExtremeSSD/.cache/ms-playwright TMPDIR=/Volumes/xbergtmp/ pnpm exec playwright test
 ```
+
 Expected: all green; e2e shows both documents present after the second upload.
 
 - [ ] **Step 14: Purge AppleDouble + commit Finding 1**
 
-```
+```text
 cd /Volumes/ExtremeSSD/hacienda-private
 find . -maxdepth 4 -iname "._*" -not -path "*/node_modules/*" -delete
 git status   # confirm only intended files staged; no ._* files
@@ -448,6 +459,7 @@ full cumulative bundle each ingest, and process the upload batch
 sequentially. Store a per-document mirror locally for collision-free
 rehydrate. Cover the two-file case in the e2e."
 ```
+
 **Do not push.** Ask the user for explicit push confirmation.
 
 ---
@@ -455,10 +467,12 @@ rehydrate. Cover the two-file case in the e2e."
 ## Task 2: Finding 2 — citation `page`/`bbox` deep-link reaches the viewer
 
 **Files:**
+
 - Create: `apps/web/lib/citation-target.ts`, `apps/web/lib/citation-target.test.ts`
 - Modify: `apps/web/app/documents/[id]/DocumentView.tsx`, `apps/web/components/DocumentDualView.tsx`, `apps/web/components/document-router.tsx`
 
 **Interfaces:**
+
 - Consumes: `RetrievedChunkCard`'s existing param format — `page` = `String(chunk.page)` (integer), `bbox` = `JSON.stringify({x,y,w,h})` (PDF-point corners). `PDFViewerHandle.scrollToPageArea(pageNumber, { top, left?, width?, height? })` and `renderPageOverlay({ pageNumber, pageWidth, pageHeight, scale, rotation })` from `apps/web/components/ui/pdf-viewer.tsx`.
 - Produces: `parseCitationTarget`, `CitationTarget` (used by DocumentView → DualView → Router).
 
@@ -548,9 +562,11 @@ Expected: PASS.
 - [ ] **Step 5: Read the target params in `DocumentView` and pass them down**
 
 In `apps/web/app/documents/[id]/DocumentView.tsx`:
+
 1. Add imports: `import { useSearchParams } from "next/navigation";` and `import { parseCitationTarget } from "@/lib/citation-target";`.
 2. Inside the component: `const searchParams = useSearchParams();` and `const citationTarget = parseCitationTarget(searchParams);`.
 3. Pass to the dual view:
+
 ```tsx
 <DocumentDualView
   mimeType={stored.mimeType}
@@ -565,8 +581,10 @@ In `apps/web/app/documents/[id]/DocumentView.tsx`:
 - [ ] **Step 6: Forward `citationTarget` through `DocumentDualView`**
 
 In `apps/web/components/DocumentDualView.tsx`:
+
 1. Extend props: add `import type { CitationTarget } from "@/lib/citation-target";` and `citationTarget?: CitationTarget;` to `DocumentDualViewProps`.
 2. Destructure `citationTarget` and pass it to `DocumentRouter`:
+
 ```tsx
 <DocumentRouter mimeType={mimeType} fileName={fileName} src={src} textContent={textContent} citationTarget={citationTarget} />
 ```
@@ -574,6 +592,7 @@ In `apps/web/components/DocumentDualView.tsx`:
 - [ ] **Step 7: Wire the PDF branch in `document-router.tsx`**
 
 In `apps/web/components/document-router.tsx`:
+
 1. Add `import { useRef, useEffect } from "react";`, `import type { CitationTarget } from "@/lib/citation-target";`, and `import type { PDFViewerHandle } from "@/components/ui/pdf-viewer";`.
 2. Add `citationTarget?: CitationTarget;` to `DocumentRouterProps` and destructure it.
 3. Replace the `case "pdf":` return with a dedicated component that owns the ref + overlay so hooks are legal:
@@ -642,11 +661,13 @@ function PdfWithCitation({
 - [ ] **Step 8: Typecheck + unit tests**
 
 Run:
-```
+
+```text
 cd /Volumes/ExtremeSSD/hacienda-private
 TMPDIR=/Volumes/xbergtmp/ pnpm --filter web typecheck
 TMPDIR=/Volumes/xbergtmp/ pnpm --filter web test
 ```
+
 Expected: PASS. Resolve any prop-type mismatches surfaced by threading `citationTarget`.
 
 - [ ] **Step 9: Build**
@@ -660,7 +681,7 @@ Ingest a **PDF** into a folder, open its document, then visit `/documents/<id>?p
 
 - [ ] **Step 11: Purge AppleDouble + commit Finding 2**
 
-```
+```text
 cd /Volumes/ExtremeSSD/hacienda-private
 find . -maxdepth 4 -iname "._*" -not -path "*/node_modules/*" -delete
 git status
@@ -675,6 +696,7 @@ and validate them, thread a CitationTarget through DocumentDualView and
 DocumentRouter, and drive the PDF viewer's scrollToPageArea plus a bbox
 highlight overlay. Missing or malformed params fall back to normal opening."
 ```
+
 **Do not push.** Ask the user for explicit push confirmation.
 
 ---
@@ -682,6 +704,7 @@ highlight overlay. Missing or malformed params fall back to normal opening."
 ## Self-Review
 
 **Spec coverage:**
+
 - Finding 1 steps 1-4 (read mirror/ingest semantics → decide approach → add multi-file test → run all suites + build/e2e): covered — investigation done in-plan, approach = full cumulative client-side merge, Task 1 Steps 1/11 add unit + e2e coverage, Step 13 runs every suite.
 - Finding 2 steps 1-5 (find param format → read params in DocumentView → forward to viewer → handle missing/invalid → test/typecheck/build): covered by Task 2 Steps 1-11.
 - Commit style (one per finding, `fix(web):`, no AI attribution) + push-gating: covered in Global Constraints and each commit step.

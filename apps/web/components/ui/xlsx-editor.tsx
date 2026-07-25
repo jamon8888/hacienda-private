@@ -1,6 +1,6 @@
-﻿"use client"
+﻿"use client";
 
-import * as React from "react"
+import * as React from "react";
 import {
   useXlsxViewer,
   useXlsxViewerController,
@@ -15,7 +15,7 @@ import {
   type XlsxCellStyleInput,
   type XlsxSheetData,
   type XlsxTableHeaderMenuRenderProps,
-} from "@extend-ai/react-xlsx"
+} from "@extend-ai/react-xlsx";
 import {
   Add01Icon,
   AlignBoxBottomCenterIcon,
@@ -57,12 +57,12 @@ import {
   TextWrapIcon,
   Undo02Icon,
   Upload01Icon,
-} from "@hugeicons/core-free-icons"
-import { HugeiconsIcon } from "@hugeicons/react"
+} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { ColorPicker, ColorPickerPanel } from "@/components/ui/color-picker"
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { ColorPicker, ColorPickerPanel } from "@/components/ui/color-picker";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -73,104 +73,75 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Group, GroupSeparator, GroupText } from "@/components/ui/group"
-import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Separator } from "@/components/ui/separator"
-import { Spinner } from "@/components/ui/spinner"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
-import {
-  renderXlsxScroller,
-  WorkbookSheetTabs,
-  WorkbookTableHeaderMenu,
-} from "@/components/ui/xlsx-viewer"
+} from "@/components/ui/dropdown-menu";
+import { Group, GroupSeparator, GroupText } from "@/components/ui/group";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Spinner } from "@/components/ui/spinner";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { renderXlsxScroller, WorkbookSheetTabs, WorkbookTableHeaderMenu } from "@/components/ui/xlsx-viewer";
 
-const XLSX_LOADING_INDICATOR_DELAY_MS = 300
-const XLSX_EDITOR_READ_ONLY_THRESHOLD_BYTES = 5 * 1024 * 1024
-const XLSX_DROPDOWN_Z_INDEX_CLASS = "z-40"
-const ZOOM_OPTIONS = [50, 75, 100, 125, 150, 200, 400] as const
-const DEFAULT_FONT_FAMILY = "Arial"
-const FONT_FAMILIES = [
-  "Arial",
-  "Times New Roman",
-  "Georgia",
-  "Helvetica",
-  "Courier New",
-] as const
-const FONT_SIZE_OPTIONS = [
-  8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48,
-] as const
-const DEFAULT_TEXT_COLOR = "#111827"
-const DEFAULT_FILL_COLOR = "#fde68a"
-const DEFAULT_BORDER_COLOR = "#111827"
+const XLSX_LOADING_INDICATOR_DELAY_MS = 300;
+const XLSX_EDITOR_READ_ONLY_THRESHOLD_BYTES = 5 * 1024 * 1024;
+const XLSX_DROPDOWN_Z_INDEX_CLASS = "z-40";
+const ZOOM_OPTIONS = [50, 75, 100, 125, 150, 200, 400] as const;
+const DEFAULT_FONT_FAMILY = "Arial";
+const FONT_FAMILIES = ["Arial", "Times New Roman", "Georgia", "Helvetica", "Courier New"] as const;
+const FONT_SIZE_OPTIONS = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48] as const;
+const DEFAULT_TEXT_COLOR = "#111827";
+const DEFAULT_FILL_COLOR = "#fde68a";
+const DEFAULT_BORDER_COLOR = "#111827";
 const XLSX_EDITOR_SELECT_CHROME_CLASS =
-  "shadow-none before:shadow-none not-data-disabled:not-focus-visible:not-aria-invalid:not-data-pressed:before:shadow-none dark:not-data-disabled:not-focus-visible:not-aria-invalid:not-data-pressed:before:shadow-none"
+  "shadow-none before:shadow-none not-data-disabled:not-focus-visible:not-aria-invalid:not-data-pressed:before:shadow-none dark:not-data-disabled:not-focus-visible:not-aria-invalid:not-data-pressed:before:shadow-none";
 const XLSX_EDITOR_FORMULA_INPUT_CHROME_CLASS =
-  "has-disabled:opacity-100 dark:has-disabled:before:shadow-[0_-1px_--theme(--color-white/6%)]"
+  "has-disabled:opacity-100 dark:has-disabled:before:shadow-[0_-1px_--theme(--color-white/6%)]";
 
 type UploadedWorkbook = {
-  buffer: ArrayBuffer
-  fileName: string
-  identity: string
-}
+  buffer: ArrayBuffer;
+  fileName: string;
+  identity: string;
+};
 
 type NumberFormatOption = {
-  formatString?: string
-  formatType: NonNullable<XlsxCellStyleInput["numberFormat"]>["formatType"]
-  icon: React.ComponentProps<typeof HugeiconsIcon>["icon"]
-  id?: number
-  label: string
-  value: string
-}
+  formatString?: string;
+  formatType: NonNullable<XlsxCellStyleInput["numberFormat"]>["formatType"];
+  icon: React.ComponentProps<typeof HugeiconsIcon>["icon"];
+  id?: number;
+  label: string;
+  value: string;
+};
 
 type BorderOption = {
-  action: XlsxBorderAction
-  icon: React.ComponentProps<typeof HugeiconsIcon>["icon"]
-  label: string
-}
+  action: XlsxBorderAction;
+  icon: React.ComponentProps<typeof HugeiconsIcon>["icon"];
+  label: string;
+};
 
-type XlsxResolvedCellStyle = XlsxSheetData["styleById"][number]
-type XlsxResolvedStyleGroup = Record<string, unknown>
+type XlsxResolvedCellStyle = XlsxSheetData["styleById"][number];
+type XlsxResolvedStyleGroup = Record<string, unknown>;
 
-type HorizontalAlignment = NonNullable<XlsxCellAlignmentInput["horizontal"]>
+type HorizontalAlignment = NonNullable<XlsxCellAlignmentInput["horizontal"]>;
 
-type VerticalAlignment = NonNullable<XlsxCellAlignmentInput["vertical"]>
+type VerticalAlignment = NonNullable<XlsxCellAlignmentInput["vertical"]>;
 
-type HorizontalAlignmentToggleValue = Extract<
-  HorizontalAlignment,
-  "left" | "center" | "right"
->
+type HorizontalAlignmentToggleValue = Extract<HorizontalAlignment, "left" | "center" | "right">;
 
-type VerticalAlignmentToggleValue = Extract<
-  VerticalAlignment,
-  "top" | "center" | "bottom"
->
+type VerticalAlignmentToggleValue = Extract<VerticalAlignment, "top" | "center" | "bottom">;
 
-type XlsxFontToggleValue = "bold" | "italic" | "underline" | "strikethrough"
+type XlsxFontToggleValue = "bold" | "italic" | "underline" | "strikethrough";
 
-type XlsxMergeRegion = XlsxCellRange
+type XlsxMergeRegion = XlsxCellRange;
 
-type XlsxBorderEdgeKey = "bottom" | "left" | "top" | "right"
+type XlsxBorderEdgeKey = "bottom" | "left" | "top" | "right";
 
-type XlsxBorderAction = "all" | "outside" | "none" | XlsxBorderEdgeKey
+type XlsxBorderAction = "all" | "outside" | "none" | XlsxBorderEdgeKey;
 
 type XlsxWorksheetWithMergeRegions = {
-  mergedRegions?: unknown[]
-  unmergeCells?: (range: string) => boolean
-}
+  mergedRegions?: unknown[];
+  unmergeCells?: (range: string) => boolean;
+};
 
 const NUMBER_FORMAT_OPTIONS: NumberFormatOption[] = [
   {
@@ -207,216 +178,182 @@ const NUMBER_FORMAT_OPTIONS: NumberFormatOption[] = [
     label: "Date",
     value: "Date",
   },
-]
+];
 
-const GENERAL_NUMBER_FORMAT_VALUE = "General"
-const BUILTIN_NUMBER_FORMAT_VALUE_PREFIX = "builtin:"
+const GENERAL_NUMBER_FORMAT_VALUE = "General";
+const BUILTIN_NUMBER_FORMAT_VALUE_PREFIX = "builtin:";
 
 function formatWorkbookName(fileName: string | undefined, url: string) {
-  if (fileName?.trim()) return fileName
+  if (fileName?.trim()) return fileName;
 
-  const pathname = url.split("?")[0] ?? ""
-  const rawName = pathname.split("/").pop() ?? "workbook.xlsx"
+  const pathname = url.split("?")[0] ?? "";
+  const rawName = pathname.split("/").pop() ?? "workbook.xlsx";
 
   try {
-    return decodeURIComponent(rawName)
+    return decodeURIComponent(rawName);
   } catch {
-    return rawName
+    return rawName;
   }
 }
 
 function useDelayedLoadingIndicator(isLoading: boolean, delayMs: number) {
-  const [showSpinner, setShowSpinner] = React.useState(false)
+  const [showSpinner, setShowSpinner] = React.useState(false);
 
   React.useEffect(() => {
     if (!isLoading) {
-      setShowSpinner(false)
-      return
+      setShowSpinner(false);
+      return;
     }
 
     const timeoutId = window.setTimeout(() => {
-      setShowSpinner(true)
-    }, delayMs)
+      setShowSpinner(true);
+    }, delayMs);
 
-    return () => window.clearTimeout(timeoutId)
-  }, [delayMs, isLoading])
+    return () => window.clearTimeout(timeoutId);
+  }, [delayMs, isLoading]);
 
-  return showSpinner
+  return showSpinner;
 }
 
 function normalizeHexColor(value: string, fallback = DEFAULT_TEXT_COLOR) {
-  const trimmed = value.trim()
-  const threeDigit = /^#?([0-9a-f]{3})$/i.exec(trimmed)
+  const trimmed = value.trim();
+  const threeDigit = /^#?([0-9a-f]{3})$/i.exec(trimmed);
   if (threeDigit?.[1]) {
-    const [red, green, blue] = threeDigit[1].split("")
-    return `#${red}${red}${green}${green}${blue}${blue}`.toLowerCase()
+    const [red, green, blue] = threeDigit[1].split("");
+    return `#${red}${red}${green}${green}${blue}${blue}`.toLowerCase();
   }
 
-  const sixDigit = /^#?([0-9a-f]{6})$/i.exec(trimmed)
+  const sixDigit = /^#?([0-9a-f]{6})$/i.exec(trimmed);
   if (sixDigit?.[1]) {
-    return `#${sixDigit[1].toLowerCase()}`
+    return `#${sixDigit[1].toLowerCase()}`;
   }
 
-  return fallback
+  return fallback;
 }
 
 function toXlsxRgbColor(value: string) {
   return {
     colorType: "rgb" as const,
     hex: normalizeHexColor(value).slice(1).toUpperCase(),
-  }
+  };
 }
 
-function asResolvedStyleGroup(
-  value: unknown
-): XlsxResolvedStyleGroup | undefined {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as XlsxResolvedStyleGroup)
-    : undefined
+function asResolvedStyleGroup(value: unknown): XlsxResolvedStyleGroup | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as XlsxResolvedStyleGroup) : undefined;
 }
 
 function mergeResolvedCellStyle(
   base: XlsxResolvedCellStyle | null | undefined,
-  overlay: XlsxResolvedCellStyle | null | undefined
+  overlay: XlsxResolvedCellStyle | null | undefined,
 ): XlsxResolvedCellStyle | null {
-  if (!base && !overlay) return null
+  if (!base && !overlay) return null;
 
-  const nextStyle = { ...(base ?? {}), ...(overlay ?? {}) }
-  const baseFont = asResolvedStyleGroup(base?.font)
-  const overlayFont = asResolvedStyleGroup(overlay?.font)
+  const nextStyle = { ...(base ?? {}), ...(overlay ?? {}) };
+  const baseFont = asResolvedStyleGroup(base?.font);
+  const overlayFont = asResolvedStyleGroup(overlay?.font);
 
   if (baseFont || overlayFont) {
-    nextStyle.font = overlayFont ?? baseFont
+    nextStyle.font = overlayFont ?? baseFont;
   }
 
-  return nextStyle
+  return nextStyle;
 }
 
 function resolveInheritedCellStyle(
   sheet: XlsxSheetData | null,
   row: number,
-  col: number
+  col: number,
 ): XlsxResolvedCellStyle | null {
-  if (!sheet) return null
+  if (!sheet) return null;
 
-  const colStyleId = sheet.colStyleIds[col]
-  const rowStyleId = sheet.rowStyleIds[row]
-  const colStyle =
-    colStyleId !== undefined ? sheet.styleById[colStyleId] : undefined
-  const rowStyle =
-    rowStyleId !== undefined ? sheet.styleById[rowStyleId] : undefined
+  const colStyleId = sheet.colStyleIds[col];
+  const rowStyleId = sheet.rowStyleIds[row];
+  const colStyle = colStyleId !== undefined ? sheet.styleById[colStyleId] : undefined;
+  const rowStyle = rowStyleId !== undefined ? sheet.styleById[rowStyleId] : undefined;
 
-  return mergeResolvedCellStyle(colStyle, rowStyle)
+  return mergeResolvedCellStyle(colStyle, rowStyle);
 }
 
-function getFontToggleValuesFromStyle(
-  style: XlsxResolvedCellStyle | null
-): XlsxFontToggleValue[] {
-  const font = asResolvedStyleGroup(style?.font)
-  const values: XlsxFontToggleValue[] = []
+function getFontToggleValuesFromStyle(style: XlsxResolvedCellStyle | null): XlsxFontToggleValue[] {
+  const font = asResolvedStyleGroup(style?.font);
+  const values: XlsxFontToggleValue[] = [];
 
-  if (font?.bold === true) values.push("bold")
-  if (font?.italic === true) values.push("italic")
-  if (font?.underline && font.underline !== "none") values.push("underline")
-  if (font?.strikethrough === true) values.push("strikethrough")
+  if (font?.bold === true) values.push("bold");
+  if (font?.italic === true) values.push("italic");
+  if (font?.underline && font.underline !== "none") values.push("underline");
+  if (font?.strikethrough === true) values.push("strikethrough");
 
-  return values
+  return values;
 }
 
 function getFontFamilyValue(style: XlsxResolvedCellStyle | null) {
-  const font = asResolvedStyleGroup(style?.font)
-  const fontName = font?.name
+  const font = asResolvedStyleGroup(style?.font);
+  const fontName = font?.name;
 
-  return typeof fontName === "string" && fontName.trim()
-    ? fontName.trim()
-    : undefined
+  return typeof fontName === "string" && fontName.trim() ? fontName.trim() : undefined;
 }
 
-function getHorizontalAlignmentValue(
-  style: XlsxResolvedCellStyle | null
-): HorizontalAlignmentToggleValue[] {
-  const alignment = asResolvedStyleGroup(style?.alignment)
-  const horizontal = alignment?.horizontal
+function getHorizontalAlignmentValue(style: XlsxResolvedCellStyle | null): HorizontalAlignmentToggleValue[] {
+  const alignment = asResolvedStyleGroup(style?.alignment);
+  const horizontal = alignment?.horizontal;
 
-  return horizontal === "left" ||
-    horizontal === "center" ||
-    horizontal === "right"
-    ? [horizontal]
-    : []
+  return horizontal === "left" || horizontal === "center" || horizontal === "right" ? [horizontal] : [];
 }
 
-function getVerticalAlignmentValue(
-  style: XlsxResolvedCellStyle | null
-): VerticalAlignmentToggleValue[] {
-  const alignment = asResolvedStyleGroup(style?.alignment)
-  const vertical = alignment?.vertical
+function getVerticalAlignmentValue(style: XlsxResolvedCellStyle | null): VerticalAlignmentToggleValue[] {
+  const alignment = asResolvedStyleGroup(style?.alignment);
+  const vertical = alignment?.vertical;
 
-  if (vertical === undefined || vertical === null) return ["bottom"]
+  if (vertical === undefined || vertical === null) return ["bottom"];
 
-  return vertical === "top" || vertical === "center" || vertical === "bottom"
-    ? [vertical]
-    : []
+  return vertical === "top" || vertical === "center" || vertical === "bottom" ? [vertical] : [];
 }
 
 function getNumberFormatValue(style: XlsxResolvedCellStyle | null) {
-  const numberFormat = asResolvedStyleGroup(style?.numberFormat)
+  const numberFormat = asResolvedStyleGroup(style?.numberFormat);
 
-  if (!numberFormat) return GENERAL_NUMBER_FORMAT_VALUE
+  if (!numberFormat) return GENERAL_NUMBER_FORMAT_VALUE;
 
-  const formatType = numberFormat.formatType
-  const formatString =
-    typeof numberFormat.formatString === "string"
-      ? numberFormat.formatString.trim()
-      : ""
-  const id = getNumericValue(numberFormat.id)
+  const formatType = numberFormat.formatType;
+  const formatString = typeof numberFormat.formatString === "string" ? numberFormat.formatString.trim() : "";
+  const id = getNumericValue(numberFormat.id);
 
   if (formatString) {
-    const matchingOption = NUMBER_FORMAT_OPTIONS.find(
-      (option) => option.formatString === formatString
-    )
+    const matchingOption = NUMBER_FORMAT_OPTIONS.find((option) => option.formatString === formatString);
 
-    return matchingOption?.value ?? formatString
+    return matchingOption?.value ?? formatString;
   }
   if (formatType === "builtin" && id !== undefined) {
-    const matchingOption = NUMBER_FORMAT_OPTIONS.find(
-      (option) => option.id === id
-    )
+    const matchingOption = NUMBER_FORMAT_OPTIONS.find((option) => option.id === id);
 
-    if (matchingOption) return matchingOption.value
+    if (matchingOption) return matchingOption.value;
 
-    return `${BUILTIN_NUMBER_FORMAT_VALUE_PREFIX}${id}`
+    return `${BUILTIN_NUMBER_FORMAT_VALUE_PREFIX}${id}`;
   }
-  if (formatType === "general") return GENERAL_NUMBER_FORMAT_VALUE
+  if (formatType === "general") return GENERAL_NUMBER_FORMAT_VALUE;
 
-  return GENERAL_NUMBER_FORMAT_VALUE
+  return GENERAL_NUMBER_FORMAT_VALUE;
 }
 
 function getNumberFormatLabel(value: string) {
-  if (value === GENERAL_NUMBER_FORMAT_VALUE) return "General"
+  if (value === GENERAL_NUMBER_FORMAT_VALUE) return "General";
 
-  const matchingOption = NUMBER_FORMAT_OPTIONS.find(
-    (option) => option.value === value
-  )
-  if (matchingOption) return matchingOption.label
+  const matchingOption = NUMBER_FORMAT_OPTIONS.find((option) => option.value === value);
+  if (matchingOption) return matchingOption.label;
 
   if (value.startsWith(BUILTIN_NUMBER_FORMAT_VALUE_PREFIX)) {
-    return `Builtin ${value.slice(BUILTIN_NUMBER_FORMAT_VALUE_PREFIX.length)}`
+    return `Builtin ${value.slice(BUILTIN_NUMBER_FORMAT_VALUE_PREFIX.length)}`;
   }
 
-  return value
+  return value;
 }
 
 function getNumberFormatIcon(value: string) {
-  return (
-    NUMBER_FORMAT_OPTIONS.find((option) => option.value === value)?.icon ??
-    TextNumberSignIcon
-  )
+  return NUMBER_FORMAT_OPTIONS.find((option) => option.value === value)?.icon ?? TextNumberSignIcon;
 }
 
 function createNumberFormatStyle(value: string): XlsxCellStyleInput {
-  const matchingOption = NUMBER_FORMAT_OPTIONS.find(
-    (option) => option.value === value
-  )
+  const matchingOption = NUMBER_FORMAT_OPTIONS.find((option) => option.value === value);
 
   if (matchingOption) {
     return {
@@ -425,11 +362,11 @@ function createNumberFormatStyle(value: string): XlsxCellStyleInput {
         formatType: matchingOption.formatType,
         id: matchingOption.id,
       },
-    }
+    };
   }
 
   if (value.startsWith(BUILTIN_NUMBER_FORMAT_VALUE_PREFIX)) {
-    const id = Number(value.slice(BUILTIN_NUMBER_FORMAT_VALUE_PREFIX.length))
+    const id = Number(value.slice(BUILTIN_NUMBER_FORMAT_VALUE_PREFIX.length));
 
     if (Number.isFinite(id)) {
       return {
@@ -437,7 +374,7 @@ function createNumberFormatStyle(value: string): XlsxCellStyleInput {
           formatType: "builtin",
           id: Math.max(0, Math.trunc(id)),
         },
-      }
+      };
     }
   }
 
@@ -446,7 +383,7 @@ function createNumberFormatStyle(value: string): XlsxCellStyleInput {
       formatString: value,
       formatType: "custom",
     },
-  }
+  };
 }
 
 function normalizeCellRange(range: XlsxCellRange): XlsxCellRange {
@@ -459,38 +396,29 @@ function normalizeCellRange(range: XlsxCellRange): XlsxCellRange {
       row: Math.max(range.start.row, range.end.row),
       col: Math.max(range.start.col, range.end.col),
     },
-  }
+  };
 }
 
 function getNumericValue(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value)
-    ? Math.max(0, Math.trunc(value))
-    : undefined
+  return typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : undefined;
 }
 
-function getWorksheetMergeRegions(
-  worksheet: XlsxWorksheetWithMergeRegions | null
-): XlsxMergeRegion[] {
-  if (!Array.isArray(worksheet?.mergedRegions)) return []
+function getWorksheetMergeRegions(worksheet: XlsxWorksheetWithMergeRegions | null): XlsxMergeRegion[] {
+  if (!Array.isArray(worksheet?.mergedRegions)) return [];
 
   return worksheet.mergedRegions.flatMap((entry) => {
-    if (!entry || typeof entry !== "object") return []
+    if (!entry || typeof entry !== "object") return [];
 
-    const region = entry as Record<string, unknown>
-    const start = asResolvedStyleGroup(region.start)
-    const end = asResolvedStyleGroup(region.end)
-    const startRow = getNumericValue(region.startRow ?? start?.row)
-    const startCol = getNumericValue(region.startCol ?? start?.col)
-    const endRow = getNumericValue(region.endRow ?? end?.row)
-    const endCol = getNumericValue(region.endCol ?? end?.col)
+    const region = entry as Record<string, unknown>;
+    const start = asResolvedStyleGroup(region.start);
+    const end = asResolvedStyleGroup(region.end);
+    const startRow = getNumericValue(region.startRow ?? start?.row);
+    const startCol = getNumericValue(region.startCol ?? start?.col);
+    const endRow = getNumericValue(region.endRow ?? end?.row);
+    const endCol = getNumericValue(region.endCol ?? end?.col);
 
-    if (
-      startRow === undefined ||
-      startCol === undefined ||
-      endRow === undefined ||
-      endCol === undefined
-    ) {
-      return []
+    if (startRow === undefined || startCol === undefined || endRow === undefined || endCol === undefined) {
+      return [];
     }
 
     return [
@@ -498,79 +426,67 @@ function getWorksheetMergeRegions(
         start: { row: startRow, col: startCol },
         end: { row: endRow, col: endCol },
       }),
-    ]
-  })
+    ];
+  });
 }
 
-function rangesIntersect(
-  firstRange: XlsxCellRange,
-  secondRange: XlsxCellRange
-) {
-  const first = normalizeCellRange(firstRange)
-  const second = normalizeCellRange(secondRange)
+function rangesIntersect(firstRange: XlsxCellRange, secondRange: XlsxCellRange) {
+  const first = normalizeCellRange(firstRange);
+  const second = normalizeCellRange(secondRange);
 
   return (
     first.start.row <= second.end.row &&
     first.end.row >= second.start.row &&
     first.start.col <= second.end.col &&
     first.end.col >= second.start.col
-  )
+  );
 }
 
 function isSingleCellRange(range: XlsxCellRange) {
-  const normalizedRange = normalizeCellRange(range)
+  const normalizedRange = normalizeCellRange(range);
 
-  return (
-    normalizedRange.start.row === normalizedRange.end.row &&
-    normalizedRange.start.col === normalizedRange.end.col
-  )
+  return normalizedRange.start.row === normalizedRange.end.row && normalizedRange.start.col === normalizedRange.end.col;
 }
 
 function getCellColumnLabel(col: number) {
-  let label = ""
-  let value = col
+  let label = "";
+  let value = col;
 
   do {
-    label = String.fromCharCode(65 + (value % 26)) + label
-    value = Math.floor(value / 26) - 1
-  } while (value >= 0)
+    label = String.fromCharCode(65 + (value % 26)) + label;
+    value = Math.floor(value / 26) - 1;
+  } while (value >= 0);
 
-  return label
+  return label;
 }
 
 function cellAddressToA1(cell: XlsxCellRange["start"]) {
-  return `${getCellColumnLabel(cell.col)}${cell.row + 1}`
+  return `${getCellColumnLabel(cell.col)}${cell.row + 1}`;
 }
 
 function rangeToA1(range: XlsxCellRange) {
-  const normalizedRange = normalizeCellRange(range)
+  const normalizedRange = normalizeCellRange(range);
 
-  return `${cellAddressToA1(normalizedRange.start)}:${cellAddressToA1(
-    normalizedRange.end
-  )}`
+  return `${cellAddressToA1(normalizedRange.start)}:${cellAddressToA1(normalizedRange.end)}`;
 }
 
 function getRangeKey(range: XlsxCellRange) {
-  const normalizedRange = normalizeCellRange(range)
+  const normalizedRange = normalizeCellRange(range);
 
-  return `${normalizedRange.start.row}:${normalizedRange.start.col}:${normalizedRange.end.row}:${normalizedRange.end.col}`
+  return `${normalizedRange.start.row}:${normalizedRange.start.col}:${normalizedRange.end.row}:${normalizedRange.end.col}`;
 }
 
-function createBorderEdge(
-  color = DEFAULT_BORDER_COLOR
-): XlsxCellBorderEdgeInput {
+function createBorderEdge(color = DEFAULT_BORDER_COLOR): XlsxCellBorderEdgeInput {
   return {
     color: toXlsxRgbColor(color),
     style: "thin",
-  }
+  };
 }
 
-function createBorderPatch(
-  entries: Partial<Record<XlsxBorderEdgeKey, XlsxCellBorderEdgeInput>>
-): XlsxCellStyleInput {
+function createBorderPatch(entries: Partial<Record<XlsxBorderEdgeKey, XlsxCellBorderEdgeInput>>): XlsxCellStyleInput {
   return {
     border: entries,
-  }
+  };
 }
 
 function createNoBorderPatch(): XlsxCellStyleInput {
@@ -581,7 +497,7 @@ function createNoBorderPatch(): XlsxCellStyleInput {
       right: { style: "none" },
       top: { style: "none" },
     },
-  }
+  };
 }
 
 function createBorderOptions(): BorderOption[] {
@@ -621,49 +537,40 @@ function createBorderOptions(): BorderOption[] {
       icon: BorderNone01Icon,
       label: "No border",
     },
-  ]
+  ];
 }
 
-function getBorderEdgeRange(
-  range: XlsxCellRange,
-  edgeKey: XlsxBorderEdgeKey
-): XlsxCellRange {
-  const normalizedRange = normalizeCellRange(range)
+function getBorderEdgeRange(range: XlsxCellRange, edgeKey: XlsxBorderEdgeKey): XlsxCellRange {
+  const normalizedRange = normalizeCellRange(range);
 
   if (edgeKey === "top") {
     return {
       start: normalizedRange.start,
       end: { row: normalizedRange.start.row, col: normalizedRange.end.col },
-    }
+    };
   }
 
   if (edgeKey === "bottom") {
     return {
       start: { row: normalizedRange.end.row, col: normalizedRange.start.col },
       end: normalizedRange.end,
-    }
+    };
   }
 
   if (edgeKey === "left") {
     return {
       start: normalizedRange.start,
       end: { row: normalizedRange.end.row, col: normalizedRange.start.col },
-    }
+    };
   }
 
   return {
     start: { row: normalizedRange.start.row, col: normalizedRange.end.col },
     end: normalizedRange.end,
-  }
+  };
 }
 
-function ToolbarTooltip({
-  label,
-  children,
-}: {
-  label: string
-  children: React.ReactNode
-}) {
+function ToolbarTooltip({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -671,19 +578,15 @@ function ToolbarTooltip({
       </TooltipTrigger>
       <TooltipContent side="bottom">{label}</TooltipContent>
     </Tooltip>
-  )
+  );
 }
 
-function EditorLoadingSurface({
-  showSpinner = true,
-}: {
-  showSpinner?: boolean
-}) {
+function EditorLoadingSurface({ showSpinner = true }: { showSpinner?: boolean }) {
   return (
     <div className="grid h-full min-h-52 w-full min-w-full place-items-center bg-transparent">
       {showSpinner ? <Spinner className="size-4" /> : null}
     </div>
-  )
+  );
 }
 
 function ToolbarIconButton({
@@ -692,8 +595,8 @@ function ToolbarIconButton({
   label,
   ...props
 }: React.ComponentProps<typeof Button> & {
-  active?: boolean
-  label: string
+  active?: boolean;
+  label: string;
 }) {
   return (
     <ToolbarTooltip label={label}>
@@ -708,11 +611,11 @@ function ToolbarIconButton({
         {children}
       </Button>
     </ToolbarTooltip>
-  )
+  );
 }
 
 function ToolbarSeparator() {
-  return <Separator orientation="vertical" className="mx-1 h-4 self-center" />
+  return <Separator orientation="vertical" className="mx-1 h-4 self-center" />;
 }
 
 function StyleDropdownItem({
@@ -720,16 +623,16 @@ function StyleDropdownItem({
   icon,
   onClick,
 }: {
-  children: React.ReactNode
-  icon: React.ComponentProps<typeof HugeiconsIcon>["icon"]
-  onClick: () => void
+  children: React.ReactNode;
+  icon: React.ComponentProps<typeof HugeiconsIcon>["icon"];
+  onClick: () => void;
 }) {
   return (
     <DropdownMenuItem onClick={onClick}>
       <HugeiconsIcon icon={icon} className="size-4" />
       {children}
     </DropdownMenuItem>
-  )
+  );
 }
 
 function MergeCellsMenu({
@@ -743,26 +646,20 @@ function MergeCellsMenu({
   onMergeCells,
   onUnmergeCells,
 }: {
-  canMerge: boolean
-  canMergeAcross: boolean
-  canUnmerge: boolean
-  disabled: boolean
-  isMerged: boolean
-  onMergeAcross: () => void
-  onMergeAndCenter: () => void
-  onMergeCells: () => void
-  onUnmergeCells: () => void
+  canMerge: boolean;
+  canMergeAcross: boolean;
+  canUnmerge: boolean;
+  disabled: boolean;
+  isMerged: boolean;
+  onMergeAcross: () => void;
+  onMergeAndCenter: () => void;
+  onMergeCells: () => void;
+  onUnmergeCells: () => void;
 }) {
   return (
     <DropdownMenu>
-      <div
-        className={cn(
-          "inline-flex shrink-0 overflow-hidden rounded-lg border border-transparent"
-        )}
-      >
-        <ToolbarTooltip
-          label={isMerged ? "Unmerge cells from the menu" : "Merge & Center"}
-        >
+      <div className={cn("inline-flex shrink-0 overflow-hidden rounded-lg border border-transparent")}>
+        <ToolbarTooltip label={isMerged ? "Unmerge cells from the menu" : "Merge & Center"}>
           <Button
             type="button"
             variant={isMerged ? "secondary" : "ghost"}
@@ -774,9 +671,7 @@ function MergeCellsMenu({
             onClick={onMergeAndCenter}
           >
             <HugeiconsIcon icon={PathfinderMergeIcon} className="size-4" />
-            <span className="hidden text-xs font-medium lg:inline">
-              Merge & Center
-            </span>
+            <span className="hidden text-xs font-medium lg:inline">Merge & Center</span>
           </Button>
         </ToolbarTooltip>
         <DropdownMenuTrigger asChild>
@@ -789,17 +684,11 @@ function MergeCellsMenu({
             data-pressed={isMerged ? "" : undefined}
             disabled={disabled}
           >
-            <HugeiconsIcon
-              icon={ChevronDownIcon}
-              className="size-3.5 opacity-100"
-            />
+            <HugeiconsIcon icon={ChevronDownIcon} className="size-3.5 opacity-100" />
           </Button>
         </DropdownMenuTrigger>
       </div>
-      <DropdownMenuContent
-        align="start"
-        className={cn("w-56", XLSX_DROPDOWN_Z_INDEX_CLASS)}
-      >
+      <DropdownMenuContent align="start" className={cn("w-56", XLSX_DROPDOWN_Z_INDEX_CLASS)}>
         <DropdownMenuItem disabled={!canMerge} onClick={onMergeAndCenter}>
           <HugeiconsIcon icon={PathfinderMergeIcon} className="size-4" />
           Merge & Center
@@ -819,7 +708,7 @@ function MergeCellsMenu({
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  )
+  );
 }
 
 function NumberFormatSelect({
@@ -827,41 +716,32 @@ function NumberFormatSelect({
   onApplyStyle,
   value,
 }: {
-  disabled: boolean
-  onApplyStyle: (style: XlsxCellStyleInput) => void
-  value: string
+  disabled: boolean;
+  onApplyStyle: (style: XlsxCellStyleInput) => void;
+  value: string;
 }) {
-  const hasMatchingOption = NUMBER_FORMAT_OPTIONS.some(
-    (option) => option.value === value
-  )
-  const currentLabel = getNumberFormatLabel(value)
-  const CurrentIcon = getNumberFormatIcon(value)
+  const hasMatchingOption = NUMBER_FORMAT_OPTIONS.some((option) => option.value === value);
+  const currentLabel = getNumberFormatLabel(value);
+  const CurrentIcon = getNumberFormatIcon(value);
 
   return (
     <Select
       value={value}
       onValueChange={(nextValue) => {
-        if (!nextValue) return
-        onApplyStyle(createNumberFormatStyle(nextValue))
+        if (!nextValue) return;
+        onApplyStyle(createNumberFormatStyle(nextValue));
       }}
       disabled={disabled}
     >
       <SelectTrigger
         size="sm"
-        className={cn(
-          "w-[132px] min-w-[132px]",
-          XLSX_EDITOR_SELECT_CHROME_CLASS
-        )}
+        className={cn("w-[132px] min-w-[132px]", XLSX_EDITOR_SELECT_CHROME_CLASS)}
         aria-label="Number format"
       >
         <HugeiconsIcon icon={CurrentIcon} className="size-4" />
         <SelectValue placeholder="General" />
       </SelectTrigger>
-      <SelectContent
-        align="start"
-        alignItemWithTrigger={false}
-        className={XLSX_DROPDOWN_Z_INDEX_CLASS}
-      >
+      <SelectContent align="start" alignItemWithTrigger={false} className={XLSX_DROPDOWN_Z_INDEX_CLASS}>
         {NUMBER_FORMAT_OPTIONS.map((option) => (
           <SelectItem key={option.value} value={option.value}>
             <span className="flex min-w-0 items-center gap-2">
@@ -880,7 +760,7 @@ function NumberFormatSelect({
         ) : null}
       </SelectContent>
     </Select>
-  )
+  );
 }
 
 function BorderMenu({
@@ -889,25 +769,19 @@ function BorderMenu({
   onApplyBorder,
   onBorderColorChange,
 }: {
-  borderColor: string
-  disabled: boolean
-  onApplyBorder: (action: XlsxBorderAction) => void
-  onBorderColorChange: (color: string) => void
+  borderColor: string;
+  disabled: boolean;
+  onApplyBorder: (action: XlsxBorderAction) => void;
+  onBorderColorChange: (color: string) => void;
 }) {
-  const borderOptions = React.useMemo(() => createBorderOptions(), [])
+  const borderOptions = React.useMemo(() => createBorderOptions(), []);
   const edgeBorderOptions = borderOptions.filter(
     (option) =>
-      option.action === "bottom" ||
-      option.action === "left" ||
-      option.action === "top" ||
-      option.action === "right"
-  )
+      option.action === "bottom" || option.action === "left" || option.action === "top" || option.action === "right",
+  );
   const groupedBorderOptions = borderOptions.filter(
-    (option) =>
-      option.action === "all" ||
-      option.action === "outside" ||
-      option.action === "none"
-  )
+    (option) => option.action === "all" || option.action === "outside" || option.action === "none",
+  );
 
   return (
     <DropdownMenu>
@@ -927,27 +801,16 @@ function BorderMenu({
           />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="start"
-        className={cn("w-48", XLSX_DROPDOWN_Z_INDEX_CLASS)}
-      >
+      <DropdownMenuContent align="start" className={cn("w-48", XLSX_DROPDOWN_Z_INDEX_CLASS)}>
         {edgeBorderOptions.map((option) => (
-          <StyleDropdownItem
-            key={option.label}
-            icon={option.icon}
-            onClick={() => onApplyBorder(option.action)}
-          >
+          <StyleDropdownItem key={option.label} icon={option.icon} onClick={() => onApplyBorder(option.action)}>
             {option.label}
           </StyleDropdownItem>
         ))}
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           {groupedBorderOptions.map((option) => (
-            <StyleDropdownItem
-              key={option.label}
-              icon={option.icon}
-              onClick={() => onApplyBorder(option.action)}
-            >
+            <StyleDropdownItem key={option.label} icon={option.icon} onClick={() => onApplyBorder(option.action)}>
               {option.label}
             </StyleDropdownItem>
           ))}
@@ -955,78 +818,50 @@ function BorderMenu({
         <DropdownMenuSeparator />
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
-            <HugeiconsIcon
-              icon={TextColorIcon}
-              className="size-4 text-muted-foreground"
-            />
+            <HugeiconsIcon icon={TextColorIcon} className="size-4 text-muted-foreground" />
             Border color
-            <span
-              className="h-3 w-5 rounded-full border border-border"
-              style={{ backgroundColor: borderColor }}
-            />
+            <span className="h-3 w-5 rounded-full border border-border" style={{ backgroundColor: borderColor }} />
           </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent
-            className={cn("w-64 p-2", XLSX_DROPDOWN_Z_INDEX_CLASS)}
-          >
+          <DropdownMenuSubContent className={cn("w-64 p-2", XLSX_DROPDOWN_Z_INDEX_CLASS)}>
             <ColorPickerPanel
               label="Border color"
               color={borderColor}
-              onChange={(color) =>
-                onBorderColorChange(normalizeHexColor(color))
-              }
+              onChange={(color) => onBorderColorChange(normalizeHexColor(color))}
             />
           </DropdownMenuSubContent>
         </DropdownMenuSub>
       </DropdownMenuContent>
     </DropdownMenu>
-  )
+  );
 }
 
 function AlignmentMoreMenu({
   disabled,
   onApplyStyle,
 }: {
-  disabled: boolean
-  onApplyStyle: (style: XlsxCellStyleInput) => void
+  disabled: boolean;
+  onApplyStyle: (style: XlsxCellStyleInput) => void;
 }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          disabled={disabled}
-          aria-label="More alignment"
-        >
+        <Button type="button" variant="ghost" size="icon-sm" disabled={disabled} aria-label="More alignment">
           <HugeiconsIcon icon={MoreHorizontalIcon} className="size-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="start"
-        className={cn("w-48", XLSX_DROPDOWN_Z_INDEX_CLASS)}
-      >
-        <StyleDropdownItem
-          icon={TextWrapIcon}
-          onClick={() => onApplyStyle({ alignment: { wrapText: false } })}
-        >
+      <DropdownMenuContent align="start" className={cn("w-48", XLSX_DROPDOWN_Z_INDEX_CLASS)}>
+        <StyleDropdownItem icon={TextWrapIcon} onClick={() => onApplyStyle({ alignment: { wrapText: false } })}>
           Do not wrap
         </StyleDropdownItem>
-        <StyleDropdownItem
-          icon={TextWrapIcon}
-          onClick={() => onApplyStyle({ alignment: { shrinkToFit: true } })}
-        >
+        <StyleDropdownItem icon={TextWrapIcon} onClick={() => onApplyStyle({ alignment: { shrinkToFit: true } })}>
           Shrink to fit
         </StyleDropdownItem>
-        <StyleDropdownItem
-          icon={TextWrapIcon}
-          onClick={() => onApplyStyle({ alignment: { shrinkToFit: false } })}
-        >
+        <StyleDropdownItem icon={TextWrapIcon} onClick={() => onApplyStyle({ alignment: { shrinkToFit: false } })}>
           Do not shrink
         </StyleDropdownItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  )
+  );
 }
 
 function EditorFileActionsMenu({
@@ -1034,26 +869,18 @@ function EditorFileActionsMenu({
   exportXlsx,
   onUploadClick,
 }: {
-  canExport: boolean
-  exportXlsx: () => void
-  onUploadClick: () => void
+  canExport: boolean;
+  exportXlsx: () => void;
+  onUploadClick: () => void;
 }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Open workbook actions"
-        >
+        <Button type="button" variant="ghost" size="icon-sm" aria-label="Open workbook actions">
           <HugeiconsIcon icon={MoreHorizontalIcon} className="size-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="end"
-        className={cn("w-40", XLSX_DROPDOWN_Z_INDEX_CLASS)}
-      >
+      <DropdownMenuContent align="end" className={cn("w-40", XLSX_DROPDOWN_Z_INDEX_CLASS)}>
         <DropdownMenuItem disabled={!canExport} onClick={exportXlsx}>
           <HugeiconsIcon icon={Download01Icon} className="size-4" />
           Download
@@ -1064,7 +891,7 @@ function EditorFileActionsMenu({
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  )
+  );
 }
 
 function EditorToolbar({
@@ -1074,11 +901,11 @@ function EditorToolbar({
   showNightRenderToggle,
   workbookIdentity,
 }: {
-  isDark: boolean
-  onIsDarkChange: (checked: boolean) => void
-  onUploadClick: () => void
-  showNightRenderToggle: boolean
-  workbookIdentity: string
+  isDark: boolean;
+  onIsDarkChange: (checked: boolean) => void;
+  onUploadClick: () => void;
+  showNightRenderToggle: boolean;
+  workbookIdentity: string;
 }) {
   const {
     activeSheet,
@@ -1089,9 +916,8 @@ function EditorToolbar({
     revision,
     setActiveSheetIndex,
     sheets,
-  } = useXlsxViewer()
-  const { activeCell, activeCellAddress, selectRange, selection } =
-    useXlsxViewerSelection()
+  } = useXlsxViewer();
+  const { activeCell, activeCellAddress, selectRange, selection } = useXlsxViewerSelection();
   const {
     addSheet,
     canRedo,
@@ -1110,230 +936,179 @@ function EditorToolbar({
     setSelectedCellStyle,
     undo,
     unmergeSelection,
-  } = useXlsxViewerEditing()
-  const { canZoomIn, canZoomOut, setZoomScale, zoomIn, zoomOut, zoomScale } =
-    useXlsxViewerZoom()
-  const [formulaDraft, setFormulaDraft] = React.useState("")
-  const [formulaFocused, setFormulaFocused] = React.useState(false)
-  const [fontFamily, setFontFamily] = React.useState(DEFAULT_FONT_FAMILY)
-  const [fontSize, setFontSize] = React.useState(11)
-  const [textColor, setTextColor] = React.useState(DEFAULT_TEXT_COLOR)
-  const [fillColor, setFillColor] = React.useState(DEFAULT_FILL_COLOR)
-  const [borderColor, setBorderColor] = React.useState(DEFAULT_BORDER_COLOR)
-  const [appliedMergeRegions, setAppliedMergeRegions] = React.useState<
-    XlsxMergeRegion[]
-  >([])
+  } = useXlsxViewerEditing();
+  const { canZoomIn, canZoomOut, setZoomScale, zoomIn, zoomOut, zoomScale } = useXlsxViewerZoom();
+  const [formulaDraft, setFormulaDraft] = React.useState("");
+  const [formulaFocused, setFormulaFocused] = React.useState(false);
+  const [fontFamily, setFontFamily] = React.useState(DEFAULT_FONT_FAMILY);
+  const [fontSize, setFontSize] = React.useState(11);
+  const [textColor, setTextColor] = React.useState(DEFAULT_TEXT_COLOR);
+  const [fillColor, setFillColor] = React.useState(DEFAULT_FILL_COLOR);
+  const [borderColor, setBorderColor] = React.useState(DEFAULT_BORDER_COLOR);
+  const [appliedMergeRegions, setAppliedMergeRegions] = React.useState<XlsxMergeRegion[]>([]);
   const lastStyleTargetRef = React.useRef<{
-    range: XlsxCellRange
-    sheetIndex: number
-    workbookIdentity: string
-  } | null>(null)
-  const formulaEditCellRef = React.useRef<typeof activeCell>(null)
-  const formulaInitialValueRef = React.useRef("")
-  const hasWorkbook = sheets.length > 0
-  const hasSelection = Boolean(selection)
-  const hasActiveCell = Boolean(activeCell)
-  const canStyleSelection = (hasSelection || hasActiveCell) && !readOnly
+    range: XlsxCellRange;
+    sheetIndex: number;
+    workbookIdentity: string;
+  } | null>(null);
+  const formulaEditCellRef = React.useRef<typeof activeCell>(null);
+  const formulaInitialValueRef = React.useRef("");
+  const hasWorkbook = sheets.length > 0;
+  const hasSelection = Boolean(selection);
+  const hasActiveCell = Boolean(activeCell);
+  const canStyleSelection = (hasSelection || hasActiveCell) && !readOnly;
   const activeRange = React.useMemo<XlsxCellRange | null>(() => {
-    if (selection) return normalizeCellRange(selection)
-    if (!activeCell) return null
+    if (selection) return normalizeCellRange(selection);
+    if (!activeCell) return null;
 
     return {
       start: activeCell,
       end: activeCell,
-    }
-  }, [activeCell, selection])
+    };
+  }, [activeCell, selection]);
 
   React.useEffect(() => {
-    if (!activeRange) return
+    if (!activeRange) return;
 
     lastStyleTargetRef.current = {
       range: activeRange,
       sheetIndex: activeSheetIndex,
       workbookIdentity,
-    }
-  }, [activeRange, activeSheetIndex, workbookIdentity])
+    };
+  }, [activeRange, activeSheetIndex, workbookIdentity]);
   const worksheetMergeRegions = React.useMemo(() => {
-    void revision
+    void revision;
 
-    return getWorksheetMergeRegions(
-      getActiveWorksheet() as XlsxWorksheetWithMergeRegions | null
-    )
-  }, [getActiveWorksheet, revision])
+    return getWorksheetMergeRegions(getActiveWorksheet() as XlsxWorksheetWithMergeRegions | null);
+  }, [getActiveWorksheet, revision]);
   const mergeRegions = React.useMemo(
     () => [...worksheetMergeRegions, ...appliedMergeRegions],
-    [appliedMergeRegions, worksheetMergeRegions]
-  )
+    [appliedMergeRegions, worksheetMergeRegions],
+  );
   const selectionIntersectsMerge = Boolean(
-    activeRange &&
-      mergeRegions.some((mergeRegion) =>
-        rangesIntersect(activeRange, mergeRegion)
-      )
-  )
+    activeRange && mergeRegions.some((mergeRegion) => rangesIntersect(activeRange, mergeRegion)),
+  );
 
   React.useEffect(() => {
-    if (
-      appliedMergeRegions.length === 0 ||
-      worksheetMergeRegions.length === 0
-    ) {
-      return
+    if (appliedMergeRegions.length === 0 || worksheetMergeRegions.length === 0) {
+      return;
     }
 
     setAppliedMergeRegions((currentRegions) =>
       currentRegions.filter(
         (currentRegion) =>
-          !worksheetMergeRegions.some((worksheetRegion) =>
-            rangesIntersect(currentRegion, worksheetRegion)
-          )
-      )
-    )
-  }, [appliedMergeRegions.length, worksheetMergeRegions])
+          !worksheetMergeRegions.some((worksheetRegion) => rangesIntersect(currentRegion, worksheetRegion)),
+      ),
+    );
+  }, [appliedMergeRegions.length, worksheetMergeRegions]);
 
   React.useEffect(() => {
-    setAppliedMergeRegions([])
-  }, [activeSheetIndex])
-  const selectionIsSingleCell = activeRange
-    ? isSingleCellRange(activeRange)
-    : true
-  const selectionSpansMultipleColumns = activeRange
-    ? activeRange.start.col !== activeRange.end.col
-    : false
-  const canMergeSelectedCells = Boolean(
-    selection &&
-      !readOnly &&
-      !selectionIntersectsMerge &&
-      !selectionIsSingleCell
-  )
-  const canMergeAcross = Boolean(
-    selection &&
-      !readOnly &&
-      !selectionIntersectsMerge &&
-      selectionSpansMultipleColumns
-  )
-  const canUnmergeSelectedCells = Boolean(
-    selection && !readOnly && selectionIntersectsMerge
-  )
-  const currentZoom = Math.round(zoomScale)
-  const selectedCellInputValue = selectedFormula || selectedValue
+    setAppliedMergeRegions([]);
+  }, [activeSheetIndex]);
+  const selectionIsSingleCell = activeRange ? isSingleCellRange(activeRange) : true;
+  const selectionSpansMultipleColumns = activeRange ? activeRange.start.col !== activeRange.end.col : false;
+  const canMergeSelectedCells = Boolean(selection && !readOnly && !selectionIntersectsMerge && !selectionIsSingleCell);
+  const canMergeAcross = Boolean(selection && !readOnly && !selectionIntersectsMerge && selectionSpansMultipleColumns);
+  const canUnmergeSelectedCells = Boolean(selection && !readOnly && selectionIntersectsMerge);
+  const currentZoom = Math.round(zoomScale);
+  const selectedCellInputValue = selectedFormula || selectedValue;
 
   React.useEffect(() => {
-    if (formulaFocused) return
-    setFormulaDraft(selectedCellInputValue)
-  }, [formulaFocused, selectedCellInputValue, activeCellAddress])
+    if (formulaFocused) return;
+    setFormulaDraft(selectedCellInputValue);
+  }, [formulaFocused, selectedCellInputValue, activeCellAddress]);
 
   const activeCellStyle = React.useMemo(() => {
     // Worksheet style objects are mutable; revision invalidates this read after edits.
-    void revision
+    void revision;
 
-    if (!activeCell) return null
+    if (!activeCell) return null;
 
-    const worksheet = getActiveWorksheet()
-    const inheritedStyle = resolveInheritedCellStyle(
-      activeSheet,
-      activeCell.row,
-      activeCell.col
-    )
-    const cellStyle = worksheet?.getCellStyleAt(
-      activeCell.row,
-      activeCell.col
-    ) as XlsxResolvedCellStyle | null | undefined
+    const worksheet = getActiveWorksheet();
+    const inheritedStyle = resolveInheritedCellStyle(activeSheet, activeCell.row, activeCell.col);
+    const cellStyle = worksheet?.getCellStyleAt(activeCell.row, activeCell.col) as
+      | XlsxResolvedCellStyle
+      | null
+      | undefined;
 
-    return mergeResolvedCellStyle(inheritedStyle, cellStyle)
-  }, [activeCell, activeSheet, getActiveWorksheet, revision])
-  const fontToggleValues = React.useMemo(
-    () => getFontToggleValuesFromStyle(activeCellStyle),
-    [activeCellStyle]
-  )
-  const fontFamilyValue = getFontFamilyValue(activeCellStyle) ?? fontFamily
-  const horizontalAlignmentValue = React.useMemo(
-    () => getHorizontalAlignmentValue(activeCellStyle),
-    [activeCellStyle]
-  )
-  const verticalAlignmentValue = React.useMemo(
-    () => getVerticalAlignmentValue(activeCellStyle),
-    [activeCellStyle]
-  )
-  const numberFormatValue = React.useMemo(
-    () => getNumberFormatValue(activeCellStyle),
-    [activeCellStyle]
-  )
+    return mergeResolvedCellStyle(inheritedStyle, cellStyle);
+  }, [activeCell, activeSheet, getActiveWorksheet, revision]);
+  const fontToggleValues = React.useMemo(() => getFontToggleValuesFromStyle(activeCellStyle), [activeCellStyle]);
+  const fontFamilyValue = getFontFamilyValue(activeCellStyle) ?? fontFamily;
+  const horizontalAlignmentValue = React.useMemo(() => getHorizontalAlignmentValue(activeCellStyle), [activeCellStyle]);
+  const verticalAlignmentValue = React.useMemo(() => getVerticalAlignmentValue(activeCellStyle), [activeCellStyle]);
+  const numberFormatValue = React.useMemo(() => getNumberFormatValue(activeCellStyle), [activeCellStyle]);
 
   const commitFormula = React.useCallback(() => {
-    const targetCell = formulaEditCellRef.current ?? activeCell
-    if (!targetCell) return
-    if (formulaDraft === formulaInitialValueRef.current) return
+    const targetCell = formulaEditCellRef.current ?? activeCell;
+    if (!targetCell) return;
+    if (formulaDraft === formulaInitialValueRef.current) return;
 
     if (formulaDraft.trim().startsWith("=")) {
-      setCellFormula(targetCell, formulaDraft)
+      setCellFormula(targetCell, formulaDraft);
     } else {
-      setCellValue(targetCell, formulaDraft)
+      setCellValue(targetCell, formulaDraft);
     }
-    formulaInitialValueRef.current = formulaDraft
-  }, [activeCell, formulaDraft, setCellFormula, setCellValue])
+    formulaInitialValueRef.current = formulaDraft;
+  }, [activeCell, formulaDraft, setCellFormula, setCellValue]);
 
   const applyStyle = React.useCallback(
     (style: XlsxCellStyleInput) => {
       const applyRangeStyle = (range: XlsxCellRange) => {
-        const normalizedRange = normalizeCellRange(range)
+        const normalizedRange = normalizeCellRange(range);
         const targetRanges = [
           normalizedRange,
-          ...mergeRegions.filter((mergeRegion) =>
-            rangesIntersect(normalizedRange, mergeRegion)
-          ),
-        ]
-        const uniqueTargetRanges = new Map<string, XlsxCellRange>()
+          ...mergeRegions.filter((mergeRegion) => rangesIntersect(normalizedRange, mergeRegion)),
+        ];
+        const uniqueTargetRanges = new Map<string, XlsxCellRange>();
 
         targetRanges.forEach((targetRange) => {
-          const normalizedTargetRange = normalizeCellRange(targetRange)
-          uniqueTargetRanges.set(
-            getRangeKey(normalizedTargetRange),
-            normalizedTargetRange
-          )
-        })
+          const normalizedTargetRange = normalizeCellRange(targetRange);
+          uniqueTargetRanges.set(getRangeKey(normalizedTargetRange), normalizedTargetRange);
+        });
 
         uniqueTargetRanges.forEach((targetRange) => {
-          setRangeStyle(targetRange, style)
-        })
-      }
+          setRangeStyle(targetRange, style);
+        });
+      };
 
       if (selection) {
-        const normalizedSelection = normalizeCellRange(selection)
+        const normalizedSelection = normalizeCellRange(selection);
 
         if (!isSingleCellRange(normalizedSelection)) {
-          applyRangeStyle(normalizedSelection)
-          return true
+          applyRangeStyle(normalizedSelection);
+          return true;
         }
 
         if (activeCell) {
-          setSelectedCellStyle(style)
-          return true
+          setSelectedCellStyle(style);
+          return true;
         }
 
-        setCellStyle(normalizedSelection.start, style)
-        return true
+        setCellStyle(normalizedSelection.start, style);
+        return true;
       }
 
       if (activeCell) {
-        setSelectedCellStyle(style)
-        return true
+        setSelectedCellStyle(style);
+        return true;
       }
 
-      const fallbackTarget = lastStyleTargetRef.current
+      const fallbackTarget = lastStyleTargetRef.current;
       const targetRange =
-        fallbackTarget?.sheetIndex === activeSheetIndex &&
-        fallbackTarget.workbookIdentity === workbookIdentity
+        fallbackTarget?.sheetIndex === activeSheetIndex && fallbackTarget.workbookIdentity === workbookIdentity
           ? fallbackTarget.range
-          : null
+          : null;
 
-      if (!targetRange) return false
+      if (!targetRange) return false;
 
       if (isSingleCellRange(targetRange)) {
-        setCellStyle(normalizeCellRange(targetRange).start, style)
-        return true
+        setCellStyle(normalizeCellRange(targetRange).start, style);
+        return true;
       }
 
-      applyRangeStyle(targetRange)
-      return true
+      applyRangeStyle(targetRange);
+      return true;
     },
     [
       activeCell,
@@ -1344,104 +1119,93 @@ function EditorToolbar({
       setRangeStyle,
       setSelectedCellStyle,
       workbookIdentity,
-    ]
-  )
+    ],
+  );
 
   const applyBorderAction = React.useCallback(
     (action: XlsxBorderAction) => {
-      if (!activeRange) return
+      if (!activeRange) return;
 
-      const normalizedRange = normalizeCellRange(activeRange)
-      const edge = createBorderEdge(borderColor)
+      const normalizedRange = normalizeCellRange(activeRange);
+      const edge = createBorderEdge(borderColor);
       const allBorderPatch = createBorderPatch({
         bottom: edge,
         left: edge,
         right: edge,
         top: edge,
-      })
+      });
 
       if (action === "all") {
-        setRangeStyle(normalizedRange, allBorderPatch)
-        return
+        setRangeStyle(normalizedRange, allBorderPatch);
+        return;
       }
 
       if (action === "none") {
-        setRangeStyle(normalizedRange, createNoBorderPatch())
-        return
+        setRangeStyle(normalizedRange, createNoBorderPatch());
+        return;
       }
 
       if (action === "outside") {
         if (isSingleCellRange(normalizedRange)) {
-          setCellStyle(normalizedRange.start, allBorderPatch)
-          return
+          setCellStyle(normalizedRange.start, allBorderPatch);
+          return;
         }
 
-        const outsideEdgeKeys: XlsxBorderEdgeKey[] = [
-          "top",
-          "bottom",
-          "left",
-          "right",
-        ]
+        const outsideEdgeKeys: XlsxBorderEdgeKey[] = ["top", "bottom", "left", "right"];
 
         outsideEdgeKeys.forEach((edgeKey) => {
-          setRangeStyle(
-            getBorderEdgeRange(normalizedRange, edgeKey),
-            createBorderPatch({ [edgeKey]: edge })
-          )
-        })
-        return
+          setRangeStyle(getBorderEdgeRange(normalizedRange, edgeKey), createBorderPatch({ [edgeKey]: edge }));
+        });
+        return;
       }
 
-      setRangeStyle(
-        getBorderEdgeRange(normalizedRange, action),
-        createBorderPatch({ [action]: edge })
-      )
+      setRangeStyle(getBorderEdgeRange(normalizedRange, action), createBorderPatch({ [action]: edge }));
     },
-    [activeRange, borderColor, setCellStyle, setRangeStyle]
-  )
+    [activeRange, borderColor, setCellStyle, setRangeStyle],
+  );
 
   const applyHorizontalAlignment = React.useCallback(
     (horizontal: HorizontalAlignmentToggleValue | undefined) => {
-      if (!horizontal) return
+      if (!horizontal) return;
 
-      applyStyle({ alignment: { horizontal } })
+      applyStyle({ alignment: { horizontal } });
     },
-    [applyStyle]
-  )
+    [applyStyle],
+  );
 
   const applyVerticalAlignment = React.useCallback(
     (vertical: VerticalAlignmentToggleValue | undefined) => {
-      if (!vertical) return
+      if (!vertical) return;
 
-      applyStyle({ alignment: { vertical } })
+      applyStyle({ alignment: { vertical } });
     },
-    [applyStyle]
-  )
+    [applyStyle],
+  );
 
   const mergeSelectedCells = React.useCallback(() => {
-    if (!canMergeSelectedCells || !selection) return
+    if (!canMergeSelectedCells || !selection) return;
 
-    setAppliedMergeRegions([normalizeCellRange(selection)])
-    mergeSelection()
-  }, [canMergeSelectedCells, mergeSelection, selection])
+    setAppliedMergeRegions([normalizeCellRange(selection)]);
+    mergeSelection();
+  }, [canMergeSelectedCells, mergeSelection, selection]);
 
   const mergeAcrossSelectedCells = React.useCallback(() => {
-    if (!activeCell || !canMergeAcross || !selection) return
+    if (!activeCell || !canMergeAcross || !selection) return;
 
-    const normalizedRange = normalizeCellRange(selection)
-    const worksheet = getActiveWorksheet()
-    if (!worksheet) return
+    const normalizedRange = normalizeCellRange(selection);
+    const worksheet = getActiveWorksheet();
+    if (!worksheet) return;
 
-    const formula = worksheet.getFormulaAt(activeCell.row, activeCell.col)
-    const rawValue = worksheet.getCellAt(activeCell.row, activeCell.col).toJs()
-    const colSpan = normalizedRange.end.col - normalizedRange.start.col + 1
-    const rowSpan = normalizedRange.end.row - normalizedRange.start.row + 1
+    const formula = worksheet.getFormulaAt(activeCell.row, activeCell.col);
+    const rawValue = worksheet.getCellAt(activeCell.row, activeCell.col).toJs();
+    const colSpan = normalizedRange.end.col - normalizedRange.start.col + 1;
+    const rowSpan = normalizedRange.end.row - normalizedRange.start.row + 1;
     const merges = Array.from({ length: rowSpan }, (_, rowOffset) => ({
       colOffset: normalizedRange.start.col - activeCell.col,
       colSpan,
       rowOffset: normalizedRange.start.row + rowOffset - activeCell.row,
       rowSpan: 1,
-    }))
+    }));
     const mergeRegionsByRow = Array.from({ length: rowSpan }, (_, rowOffset) =>
       normalizeCellRange({
         start: {
@@ -1452,76 +1216,63 @@ function EditorToolbar({
           col: normalizedRange.end.col,
           row: normalizedRange.start.row + rowOffset,
         },
-      })
-    )
+      }),
+    );
 
     const didPaste = pasteStructuredClipboardData(
       JSON.stringify({
         cells: [
-          formula
-            ? { colOffset: 0, formula, rowOffset: 0 }
-            : { colOffset: 0, rowOffset: 0, value: rawValue ?? "" },
+          formula ? { colOffset: 0, formula, rowOffset: 0 } : { colOffset: 0, rowOffset: 0, value: rawValue ?? "" },
         ],
         cols: colSpan,
         merges,
         rows: rowSpan,
-      })
-    )
+      }),
+    );
 
-    if (!didPaste) return
+    if (!didPaste) return;
 
-    setAppliedMergeRegions(mergeRegionsByRow)
-    selectRange(normalizedRange)
-  }, [
-    activeCell,
-    canMergeAcross,
-    getActiveWorksheet,
-    pasteStructuredClipboardData,
-    selectRange,
-    selection,
-  ])
+    setAppliedMergeRegions(mergeRegionsByRow);
+    selectRange(normalizedRange);
+  }, [activeCell, canMergeAcross, getActiveWorksheet, pasteStructuredClipboardData, selectRange, selection]);
 
   const mergeAndCenterSelectedCells = React.useCallback(() => {
-    if (!canMergeSelectedCells || !selection) return
+    if (!canMergeSelectedCells || !selection) return;
 
-    setAppliedMergeRegions([normalizeCellRange(selection)])
-    setRangeStyle(selection, { alignment: { horizontal: "center" } })
-    mergeSelection()
-  }, [canMergeSelectedCells, mergeSelection, selection, setRangeStyle])
+    setAppliedMergeRegions([normalizeCellRange(selection)]);
+    setRangeStyle(selection, { alignment: { horizontal: "center" } });
+    mergeSelection();
+  }, [canMergeSelectedCells, mergeSelection, selection, setRangeStyle]);
 
   const unmergeSelectedCells = React.useCallback(() => {
-    if (!canUnmergeSelectedCells || !activeRange) return
+    if (!canUnmergeSelectedCells || !activeRange) return;
 
-    const worksheet =
-      getActiveWorksheet() as XlsxWorksheetWithMergeRegions | null
-    if (!worksheet?.unmergeCells) return
+    const worksheet = getActiveWorksheet() as XlsxWorksheetWithMergeRegions | null;
+    if (!worksheet?.unmergeCells) return;
 
-    const normalizedRange = normalizeCellRange(activeRange)
-    const uniqueMergeRegions = new Map<string, XlsxMergeRegion>()
+    const normalizedRange = normalizeCellRange(activeRange);
+    const uniqueMergeRegions = new Map<string, XlsxMergeRegion>();
 
-    ;[...worksheetMergeRegions, ...appliedMergeRegions].forEach(
-      (mergeRegion) => {
-        if (!rangesIntersect(normalizedRange, mergeRegion)) return
+    [...worksheetMergeRegions, ...appliedMergeRegions].forEach((mergeRegion) => {
+      if (!rangesIntersect(normalizedRange, mergeRegion)) return;
 
-        uniqueMergeRegions.set(getRangeKey(mergeRegion), mergeRegion)
-      }
-    )
+      uniqueMergeRegions.set(getRangeKey(mergeRegion), mergeRegion);
+    });
 
-    let didUnmerge = false
+    let didUnmerge = false;
 
     uniqueMergeRegions.forEach((mergeRegion) => {
-      didUnmerge =
-        worksheet.unmergeCells?.(rangeToA1(mergeRegion)) || didUnmerge
-    })
+      didUnmerge = worksheet.unmergeCells?.(rangeToA1(mergeRegion)) || didUnmerge;
+    });
 
     if (!didUnmerge) {
-      unmergeSelection()
-      return
+      unmergeSelection();
+      return;
     }
 
-    setAppliedMergeRegions([])
-    setRangeStyle(normalizedRange, {})
-    selectRange(normalizedRange)
+    setAppliedMergeRegions([]);
+    setRangeStyle(normalizedRange, {});
+    selectRange(normalizedRange);
   }, [
     activeRange,
     appliedMergeRegions,
@@ -1531,31 +1282,31 @@ function EditorToolbar({
     setRangeStyle,
     unmergeSelection,
     worksheetMergeRegions,
-  ])
+  ]);
 
   const applyFontToggleValues = React.useCallback(
     (nextValues: XlsxFontToggleValue[]) => {
-      const previousValues = fontToggleValues
+      const previousValues = fontToggleValues;
       const changedValue =
         nextValues.find((value) => !previousValues.includes(value)) ??
-        previousValues.find((value) => !nextValues.includes(value))
+        previousValues.find((value) => !nextValues.includes(value));
 
-      if (!changedValue) return
+      if (!changedValue) return;
 
-      const isPressed = nextValues.includes(changedValue)
+      const isPressed = nextValues.includes(changedValue);
 
       if (changedValue === "bold") {
-        applyStyle({ font: { bold: isPressed } })
+        applyStyle({ font: { bold: isPressed } });
       } else if (changedValue === "italic") {
-        applyStyle({ font: { italic: isPressed } })
+        applyStyle({ font: { italic: isPressed } });
       } else if (changedValue === "underline") {
-        applyStyle({ font: { underline: isPressed ? "single" : "none" } })
+        applyStyle({ font: { underline: isPressed ? "single" : "none" } });
       } else if (changedValue === "strikethrough") {
-        applyStyle({ font: { strikethrough: isPressed } })
+        applyStyle({ font: { strikethrough: isPressed } });
       }
     },
-    [applyStyle, fontToggleValues]
-  )
+    [applyStyle, fontToggleValues],
+  );
 
   return (
     <div className="border-b bg-background">
@@ -1565,35 +1316,21 @@ function EditorToolbar({
           <div className="flex shrink-0 items-center gap-1">
             {showNightRenderToggle ? (
               <>
-                <ToolbarTooltip
-                  label={isDark ? "Use light workbook" : "Use dark workbook"}
-                >
+                <ToolbarTooltip label={isDark ? "Use light workbook" : "Use dark workbook"}>
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    aria-label={
-                      isDark ? "Use light workbook" : "Use dark workbook"
-                    }
+                    aria-label={isDark ? "Use light workbook" : "Use dark workbook"}
                     onClick={() => onIsDarkChange(!isDark)}
                   >
-                    <HugeiconsIcon
-                      icon={isDark ? Sun03Icon : Moon02Icon}
-                      className="size-4"
-                    />
+                    <HugeiconsIcon icon={isDark ? Sun03Icon : Moon02Icon} className="size-4" />
                   </Button>
                 </ToolbarTooltip>
-                <Separator
-                  orientation="vertical"
-                  className="mx-1 h-4 self-center"
-                />
+                <Separator orientation="vertical" className="mx-1 h-4 self-center" />
               </>
             ) : null}
-            <EditorFileActionsMenu
-              canExport={canExport}
-              exportXlsx={exportXlsx}
-              onUploadClick={onUploadClick}
-            />
+            <EditorFileActionsMenu canExport={canExport} exportXlsx={exportXlsx} onUploadClick={onUploadClick} />
           </div>
         </TooltipProvider>
       </div>
@@ -1630,10 +1367,10 @@ function EditorToolbar({
             <Select
               value={fontFamilyValue}
               onValueChange={(value) => {
-                if (!value) return
+                if (!value) return;
 
                 if (applyStyle({ font: { name: value } })) {
-                  setFontFamily(value)
+                  setFontFamily(value);
                 }
               }}
               disabled={!canStyleSelection}
@@ -1641,19 +1378,12 @@ function EditorToolbar({
             >
               <SelectTrigger
                 size="sm"
-                className={cn(
-                  "w-[132px] min-w-[132px]",
-                  XLSX_EDITOR_SELECT_CHROME_CLASS
-                )}
+                className={cn("w-[132px] min-w-[132px]", XLSX_EDITOR_SELECT_CHROME_CLASS)}
                 aria-label="Font family"
               >
                 <SelectValue placeholder="Font">{fontFamilyValue}</SelectValue>
               </SelectTrigger>
-              <SelectContent
-                align="start"
-                alignItemWithTrigger={false}
-                className={XLSX_DROPDOWN_Z_INDEX_CLASS}
-              >
+              <SelectContent align="start" alignItemWithTrigger={false} className={XLSX_DROPDOWN_Z_INDEX_CLASS}>
                 {FONT_FAMILIES.map((option) => (
                   <SelectItem key={option} value={option}>
                     <span style={{ fontFamily: option }}>{option}</span>
@@ -1664,30 +1394,23 @@ function EditorToolbar({
             <Select
               value={String(fontSize)}
               onValueChange={(value) => {
-                const nextFontSize = Number(value)
-                if (!Number.isFinite(nextFontSize)) return
+                const nextFontSize = Number(value);
+                if (!Number.isFinite(nextFontSize)) return;
 
-                setFontSize(nextFontSize)
-                applyStyle({ font: { size: nextFontSize } })
+                setFontSize(nextFontSize);
+                applyStyle({ font: { size: nextFontSize } });
               }}
               disabled={!canStyleSelection}
               modal={false}
             >
               <SelectTrigger
                 size="sm"
-                className={cn(
-                  "w-[78px] min-w-[78px]",
-                  XLSX_EDITOR_SELECT_CHROME_CLASS
-                )}
+                className={cn("w-[78px] min-w-[78px]", XLSX_EDITOR_SELECT_CHROME_CLASS)}
                 aria-label="Font size"
               >
                 <SelectValue placeholder="Size" />
               </SelectTrigger>
-              <SelectContent
-                align="start"
-                alignItemWithTrigger={false}
-                className={XLSX_DROPDOWN_Z_INDEX_CLASS}
-              >
+              <SelectContent align="start" alignItemWithTrigger={false} className={XLSX_DROPDOWN_Z_INDEX_CLASS}>
                 {FONT_SIZE_OPTIONS.map((size) => (
                   <SelectItem key={size} value={String(size)}>
                     {size} pt
@@ -1703,9 +1426,7 @@ function EditorToolbar({
             multiple
             spacing="default"
             value={fontToggleValues}
-            onValueChange={(value) =>
-              applyFontToggleValues(value as XlsxFontToggleValue[])
-            }
+            onValueChange={(value) => applyFontToggleValues(value as XlsxFontToggleValue[])}
           >
             <ToolbarTooltip label="Bold">
               <ToggleGroupItem aria-label="Bold" size="sm" value="bold">
@@ -1718,24 +1439,13 @@ function EditorToolbar({
               </ToggleGroupItem>
             </ToolbarTooltip>
             <ToolbarTooltip label="Underline">
-              <ToggleGroupItem
-                aria-label="Underline"
-                size="sm"
-                value="underline"
-              >
+              <ToggleGroupItem aria-label="Underline" size="sm" value="underline">
                 <HugeiconsIcon icon={TextUnderlineIcon} className="size-4" />
               </ToggleGroupItem>
             </ToolbarTooltip>
             <ToolbarTooltip label="Strikethrough">
-              <ToggleGroupItem
-                aria-label="Strikethrough"
-                size="sm"
-                value="strikethrough"
-              >
-                <HugeiconsIcon
-                  icon={TextStrikethroughIcon}
-                  className="size-4"
-                />
+              <ToggleGroupItem aria-label="Strikethrough" size="sm" value="strikethrough">
+                <HugeiconsIcon icon={TextStrikethroughIcon} className="size-4" />
               </ToggleGroupItem>
             </ToolbarTooltip>
           </ToggleGroup>
@@ -1747,9 +1457,9 @@ function EditorToolbar({
               color={textColor}
               disabled={!canStyleSelection}
               onChange={(color) => {
-                const nextColor = normalizeHexColor(color)
-                setTextColor(nextColor)
-                applyStyle({ font: { color: toXlsxRgbColor(nextColor) } })
+                const nextColor = normalizeHexColor(color);
+                setTextColor(nextColor);
+                applyStyle({ font: { color: toXlsxRgbColor(nextColor) } });
               }}
             />
             <ColorPicker
@@ -1758,14 +1468,14 @@ function EditorToolbar({
               color={fillColor}
               disabled={!canStyleSelection}
               onChange={(color) => {
-                const nextColor = normalizeHexColor(color, DEFAULT_FILL_COLOR)
-                setFillColor(nextColor)
+                const nextColor = normalizeHexColor(color, DEFAULT_FILL_COLOR);
+                setFillColor(nextColor);
                 applyStyle({
                   fill: {
                     color: toXlsxRgbColor(nextColor),
                     fillType: "solid",
                   },
-                })
+                });
               }}
             />
             <ToolbarIconButton
@@ -1791,10 +1501,7 @@ function EditorToolbar({
                   value="left"
                   onClick={() => applyHorizontalAlignment("left")}
                 >
-                  <HugeiconsIcon
-                    icon={TextAlignLeft01Icon}
-                    className="size-4"
-                  />
+                  <HugeiconsIcon icon={TextAlignLeft01Icon} className="size-4" />
                 </ToggleGroupItem>
               </ToolbarTooltip>
               <ToolbarTooltip label="Align center">
@@ -1804,10 +1511,7 @@ function EditorToolbar({
                   value="center"
                   onClick={() => applyHorizontalAlignment("center")}
                 >
-                  <HugeiconsIcon
-                    icon={TextAlignCenterIcon}
-                    className="size-4"
-                  />
+                  <HugeiconsIcon icon={TextAlignCenterIcon} className="size-4" />
                 </ToggleGroupItem>
               </ToolbarTooltip>
               <ToolbarTooltip label="Align right">
@@ -1817,10 +1521,7 @@ function EditorToolbar({
                   value="right"
                   onClick={() => applyHorizontalAlignment("right")}
                 >
-                  <HugeiconsIcon
-                    icon={TextAlignRight01Icon}
-                    className="size-4"
-                  />
+                  <HugeiconsIcon icon={TextAlignRight01Icon} className="size-4" />
                 </ToggleGroupItem>
               </ToolbarTooltip>
             </ToggleGroup>
@@ -1837,10 +1538,7 @@ function EditorToolbar({
                   value="top"
                   onClick={() => applyVerticalAlignment("top")}
                 >
-                  <HugeiconsIcon
-                    icon={AlignBoxTopCenterIcon}
-                    className="size-4"
-                  />
+                  <HugeiconsIcon icon={AlignBoxTopCenterIcon} className="size-4" />
                 </ToggleGroupItem>
               </ToolbarTooltip>
               <ToolbarTooltip label="Align middle">
@@ -1850,10 +1548,7 @@ function EditorToolbar({
                   value="center"
                   onClick={() => applyVerticalAlignment("center")}
                 >
-                  <HugeiconsIcon
-                    icon={AlignBoxMiddleCenterIcon}
-                    className="size-4"
-                  />
+                  <HugeiconsIcon icon={AlignBoxMiddleCenterIcon} className="size-4" />
                 </ToggleGroupItem>
               </ToolbarTooltip>
               <ToolbarTooltip label="Align bottom">
@@ -1863,10 +1558,7 @@ function EditorToolbar({
                   value="bottom"
                   onClick={() => applyVerticalAlignment("bottom")}
                 >
-                  <HugeiconsIcon
-                    icon={AlignBoxBottomCenterIcon}
-                    className="size-4"
-                  />
+                  <HugeiconsIcon icon={AlignBoxBottomCenterIcon} className="size-4" />
                 </ToggleGroupItem>
               </ToolbarTooltip>
             </ToggleGroup>
@@ -1877,18 +1569,11 @@ function EditorToolbar({
             >
               <HugeiconsIcon icon={TextWrapIcon} className="size-4" />
             </ToolbarIconButton>
-            <AlignmentMoreMenu
-              disabled={!canStyleSelection}
-              onApplyStyle={applyStyle}
-            />
+            <AlignmentMoreMenu disabled={!canStyleSelection} onApplyStyle={applyStyle} />
           </div>
           <ToolbarSeparator />
           <div className="flex shrink-0 items-center gap-1">
-            <NumberFormatSelect
-              disabled={!canStyleSelection}
-              onApplyStyle={applyStyle}
-              value={numberFormatValue}
-            />
+            <NumberFormatSelect disabled={!canStyleSelection} onApplyStyle={applyStyle} value={numberFormatValue} />
             <BorderMenu
               borderColor={borderColor}
               disabled={!canStyleSelection}
@@ -1943,23 +1628,14 @@ function EditorToolbar({
             >
               <SelectTrigger
                 size="sm"
-                className={cn(
-                  "w-[150px] min-w-[150px]",
-                  XLSX_EDITOR_SELECT_CHROME_CLASS
-                )}
+                className={cn("w-[150px] min-w-[150px]", XLSX_EDITOR_SELECT_CHROME_CLASS)}
                 aria-label="Active sheet"
               >
                 <SelectValue>{activeSheet?.name ?? "Sheet"}</SelectValue>
               </SelectTrigger>
-              <SelectContent
-                align="start"
-                className={XLSX_DROPDOWN_Z_INDEX_CLASS}
-              >
+              <SelectContent align="start" className={XLSX_DROPDOWN_Z_INDEX_CLASS}>
                 {sheets.map((sheet, index) => (
-                  <SelectItem
-                    key={`${sheet.name}-${index}`}
-                    value={String(index)}
-                  >
+                  <SelectItem key={`${sheet.name}-${index}`} value={String(index)}>
                     {sheet.name}
                   </SelectItem>
                 ))}
@@ -1988,19 +1664,12 @@ function EditorToolbar({
             >
               <SelectTrigger
                 size="sm"
-                className={cn(
-                  "w-[84px] min-w-[84px]",
-                  XLSX_EDITOR_SELECT_CHROME_CLASS
-                )}
+                className={cn("w-[84px] min-w-[84px]", XLSX_EDITOR_SELECT_CHROME_CLASS)}
                 aria-label="Zoom level"
               >
                 <SelectValue>{currentZoom}%</SelectValue>
               </SelectTrigger>
-              <SelectContent
-                align="end"
-                alignItemWithTrigger={false}
-                className={XLSX_DROPDOWN_Z_INDEX_CLASS}
-              >
+              <SelectContent align="end" alignItemWithTrigger={false} className={XLSX_DROPDOWN_Z_INDEX_CLASS}>
                 {ZOOM_OPTIONS.map((value) => (
                   <SelectItem key={value} value={value.toString()}>
                     {value}%
@@ -2025,40 +1694,32 @@ function EditorToolbar({
         <div className="border-t bg-background px-2 py-1">
           <Group className="w-full">
             <Input
-              className={cn(
-                "h-8 w-[92px] shrink-0 font-mono text-xs",
-                XLSX_EDITOR_FORMULA_INPUT_CHROME_CLASS
-              )}
+              className={cn("h-8 w-[92px] shrink-0 font-mono text-xs", XLSX_EDITOR_FORMULA_INPUT_CHROME_CLASS)}
               readOnly
               value={activeCellAddress ?? ""}
             />
             <GroupSeparator />
-            <GroupText className="h-8 w-9 shrink-0 justify-center px-0 text-[11px] font-semibold italic">
-              fx
-            </GroupText>
+            <GroupText className="h-8 w-9 shrink-0 justify-center px-0 text-[11px] font-semibold italic">fx</GroupText>
             <GroupSeparator />
             <Input
-              className={cn(
-                "h-8 flex-1",
-                XLSX_EDITOR_FORMULA_INPUT_CHROME_CLASS
-              )}
+              className={cn("h-8 flex-1", XLSX_EDITOR_FORMULA_INPUT_CHROME_CLASS)}
               disabled={!hasActiveCell || readOnly}
               value={formulaDraft}
               onBlur={() => {
-                commitFormula()
-                setFormulaFocused(false)
+                commitFormula();
+                setFormulaFocused(false);
               }}
               onChange={(event) => setFormulaDraft(event.target.value)}
               onFocus={() => {
-                formulaEditCellRef.current = activeCell
-                formulaInitialValueRef.current = formulaDraft
-                setFormulaFocused(true)
+                formulaEditCellRef.current = activeCell;
+                formulaInitialValueRef.current = formulaDraft;
+                setFormulaFocused(true);
               }}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
-                  event.preventDefault()
-                  commitFormula()
-                  setFormulaFocused(false)
+                  event.preventDefault();
+                  commitFormula();
+                  setFormulaFocused(false);
                 }
               }}
               placeholder="Select a cell, then enter a value or formula"
@@ -2067,7 +1728,7 @@ function EditorToolbar({
         </div>
       </TooltipProvider>
     </div>
-  )
+  );
 }
 
 export function XlsxEditorSurface({
@@ -2079,25 +1740,18 @@ export function XlsxEditorSurface({
   showNightRenderToggle,
   workbookIdentity,
 }: {
-  className?: string
-  isDark: boolean
-  onIsDarkChange: (checked: boolean) => void
-  onUploadClick: () => void
-  renderTableHeaderMenu: (
-    props: XlsxTableHeaderMenuRenderProps
-  ) => React.ReactNode
-  showNightRenderToggle: boolean
-  workbookIdentity: string
+  className?: string;
+  isDark: boolean;
+  onIsDarkChange: (checked: boolean) => void;
+  onUploadClick: () => void;
+  renderTableHeaderMenu: (props: XlsxTableHeaderMenuRenderProps) => React.ReactNode;
+  showNightRenderToggle: boolean;
+  workbookIdentity: string;
 }) {
-  const { error } = useXlsxViewer()
+  const { error } = useXlsxViewer();
 
   return (
-    <div
-      className={cn(
-        "flex h-[640px] min-h-0 flex-col overflow-hidden bg-background",
-        className
-      )}
-    >
+    <div className={cn("flex h-[640px] min-h-0 flex-col overflow-hidden bg-background", className)}>
       <EditorToolbar
         isDark={isDark}
         onIsDarkChange={onIsDarkChange}
@@ -2121,8 +1775,7 @@ export function XlsxEditorSurface({
                 <div className="max-w-sm rounded-lg border bg-background p-4 text-sm">
                   <p className="font-medium">File too large for editing</p>
                   <p className="mt-1 text-muted-foreground">
-                    This workbook exceeds the editor limit. Download it or open
-                    a smaller file to make changes.
+                    This workbook exceeds the editor limit. Download it or open a smaller file to make changes.
                   </p>
                 </div>
               </div>
@@ -2140,7 +1793,7 @@ export function XlsxEditorSurface({
         <WorkbookSheetTabs workbookIdentity={workbookIdentity} />
       </div>
     </div>
-  )
+  );
 }
 
 export function XlsxEditorPreview({
@@ -2150,11 +1803,11 @@ export function XlsxEditorPreview({
   onIsDarkChange,
   src,
 }: {
-  className?: string
-  fileName?: string
-  isDark: boolean
-  onIsDarkChange: (isDark: boolean) => void
-  src?: string
+  className?: string;
+  fileName?: string;
+  isDark: boolean;
+  onIsDarkChange: (isDark: boolean) => void;
+  src?: string;
 }) {
   return (
     <XlsxEditorContent
@@ -2165,7 +1818,7 @@ export function XlsxEditorPreview({
       shouldRenderNightMode
       url={src}
     />
-  )
+  );
 }
 
 function XlsxEditorContent({
@@ -2176,101 +1829,90 @@ function XlsxEditorContent({
   shouldRenderNightMode,
   url,
 }: {
-  className?: string
-  effectiveIsDark: boolean
-  fileName?: string
-  setNightRenderEnabled: (checked: boolean) => void
-  shouldRenderNightMode: boolean
-  url?: string
+  className?: string;
+  effectiveIsDark: boolean;
+  fileName?: string;
+  setNightRenderEnabled: (checked: boolean) => void;
+  shouldRenderNightMode: boolean;
+  url?: string;
 }) {
-  const fileInputRef = React.useRef<HTMLInputElement>(null)
-  const [uploadedWorkbook, setUploadedWorkbook] =
-    React.useState<UploadedWorkbook | null>(null)
-  const [workbookBuffer, setWorkbookBuffer] =
-    React.useState<ArrayBuffer | null>(null)
-  const [loadError, setLoadError] = React.useState<string>()
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [uploadedWorkbook, setUploadedWorkbook] = React.useState<UploadedWorkbook | null>(null);
+  const [workbookBuffer, setWorkbookBuffer] = React.useState<ArrayBuffer | null>(null);
+  const [loadError, setLoadError] = React.useState<string>();
   const sourceFileName = React.useMemo(
-    () =>
-      url ? formatWorkbookName(fileName, url) : (fileName ?? "workbook.xlsx"),
-    [fileName, url]
-  )
-  const displayFileName = uploadedWorkbook?.fileName ?? sourceFileName
-  const workbookIdentity =
-    uploadedWorkbook?.identity ?? `${url ?? "empty"}::${displayFileName}`
+    () => (url ? formatWorkbookName(fileName, url) : (fileName ?? "workbook.xlsx")),
+    [fileName, url],
+  );
+  const displayFileName = uploadedWorkbook?.fileName ?? sourceFileName;
+  const workbookIdentity = uploadedWorkbook?.identity ?? `${url ?? "empty"}::${displayFileName}`;
   const shouldShowLoadingSpinner = useDelayedLoadingIndicator(
     !workbookBuffer && !loadError && !uploadedWorkbook,
-    XLSX_LOADING_INDICATOR_DELAY_MS
-  )
+    XLSX_LOADING_INDICATOR_DELAY_MS,
+  );
 
   React.useEffect(() => {
-    let isCurrent = true
+    let isCurrent = true;
 
     if (url) {
-      setUploadedWorkbook(null)
+      setUploadedWorkbook(null);
     }
 
     async function loadWorkbook(): Promise<void> {
       if (!url) {
-        setWorkbookBuffer(null)
-        setLoadError(undefined)
-        return
+        setWorkbookBuffer(null);
+        setLoadError(undefined);
+        return;
       }
 
-      setWorkbookBuffer(null)
-      setLoadError(undefined)
+      setWorkbookBuffer(null);
+      setLoadError(undefined);
 
       try {
-        const response = await fetch(url)
+        const response = await fetch(url);
         if (!response.ok) {
-          throw new Error(`Failed to fetch XLSX (${response.status})`)
+          throw new Error(`Failed to fetch XLSX (${response.status})`);
         }
 
-        const nextWorkbookBuffer = await response.arrayBuffer()
-        if (!isCurrent) return
+        const nextWorkbookBuffer = await response.arrayBuffer();
+        if (!isCurrent) return;
 
-        setWorkbookBuffer(nextWorkbookBuffer)
+        setWorkbookBuffer(nextWorkbookBuffer);
       } catch (error) {
-        if (!isCurrent) return
+        if (!isCurrent) return;
 
-        setLoadError(
-          error instanceof Error ? error.message : "Unknown XLSX load error"
-        )
+        setLoadError(error instanceof Error ? error.message : "Unknown XLSX load error");
       }
     }
 
-    void loadWorkbook()
+    void loadWorkbook();
 
     return () => {
-      isCurrent = false
-    }
-  }, [url])
+      isCurrent = false;
+    };
+  }, [url]);
 
   async function handleUpload(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]
-    event.target.value = ""
+    const file = event.target.files?.[0];
+    event.target.value = "";
 
-    if (!file) return
+    if (!file) return;
 
-    const buffer = await file.arrayBuffer()
-    setWorkbookBuffer(null)
-    setLoadError(undefined)
+    const buffer = await file.arrayBuffer();
+    setWorkbookBuffer(null);
+    setLoadError(undefined);
     setUploadedWorkbook({
       buffer,
       fileName: file.name,
       identity: `${file.name}-${file.size}-${file.lastModified}`,
-    })
+    });
   }
 
-  const activeBuffer = uploadedWorkbook?.buffer ?? workbookBuffer
+  const activeBuffer = uploadedWorkbook?.buffer ?? workbookBuffer;
 
   if (!url && !uploadedWorkbook) {
     return (
-      <div
-        className={cn(
-          "flex h-[640px] min-h-0 flex-col overflow-hidden bg-background",
-          className
-        )}
-      >
+      <div className={cn("flex h-[640px] min-h-0 flex-col overflow-hidden bg-background", className)}>
         <input
           ref={fileInputRef}
           type="file"
@@ -2282,8 +1924,7 @@ function XlsxEditorContent({
           <div className="max-w-md rounded-lg border bg-background p-4 text-center text-sm shadow-xs">
             <p className="font-medium">Upload a workbook to edit</p>
             <p className="mt-1 text-muted-foreground">
-              Pass an XLSX URL with the <code>src</code> prop or upload a local
-              file.
+              Pass an XLSX URL with the <code>src</code> prop or upload a local file.
             </p>
             <Button
               type="button"
@@ -2298,17 +1939,12 @@ function XlsxEditorContent({
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   if (loadError && !activeBuffer) {
     return (
-      <div
-        className={cn(
-          "flex h-[640px] min-h-0 flex-col overflow-hidden bg-background",
-          className
-        )}
-      >
+      <div className={cn("flex h-[640px] min-h-0 flex-col overflow-hidden bg-background", className)}>
         <input
           ref={fileInputRef}
           type="file"
@@ -2333,17 +1969,12 @@ function XlsxEditorContent({
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   if (!activeBuffer) {
     return (
-      <div
-        className={cn(
-          "flex h-[640px] min-h-0 flex-col overflow-hidden bg-background",
-          className
-        )}
-      >
+      <div className={cn("flex h-[640px] min-h-0 flex-col overflow-hidden bg-background", className)}>
         <input
           ref={fileInputRef}
           type="file"
@@ -2353,7 +1984,7 @@ function XlsxEditorContent({
         />
         <EditorLoadingSurface showSpinner={shouldShowLoadingSpinner} />
       </div>
-    )
+    );
   }
 
   return (
@@ -2370,15 +2001,13 @@ function XlsxEditorContent({
         isDark={effectiveIsDark}
         onIsDarkChange={setNightRenderEnabled}
         onUploadClick={() => fileInputRef.current?.click()}
-        renderTableHeaderMenu={(props) => (
-          <WorkbookTableHeaderMenu {...props} />
-        )}
+        renderTableHeaderMenu={(props) => <WorkbookTableHeaderMenu {...props} />}
         showNightRenderToggle={shouldRenderNightMode}
         workbookBuffer={activeBuffer}
         workbookIdentity={workbookIdentity}
       />
     </div>
-  )
+  );
 }
 
 function XlsxWorkbookLoadedEditor({
@@ -2391,16 +2020,14 @@ function XlsxWorkbookLoadedEditor({
   workbookBuffer,
   workbookIdentity,
 }: {
-  fileName: string
-  isDark: boolean
-  onIsDarkChange: (checked: boolean) => void
-  onUploadClick: () => void
-  renderTableHeaderMenu: (
-    props: XlsxTableHeaderMenuRenderProps
-  ) => React.ReactNode
-  showNightRenderToggle: boolean
-  workbookBuffer: ArrayBuffer
-  workbookIdentity: string
+  fileName: string;
+  isDark: boolean;
+  onIsDarkChange: (checked: boolean) => void;
+  onUploadClick: () => void;
+  renderTableHeaderMenu: (props: XlsxTableHeaderMenuRenderProps) => React.ReactNode;
+  showNightRenderToggle: boolean;
+  workbookBuffer: ArrayBuffer;
+  workbookIdentity: string;
 }) {
   const controller = useXlsxViewerController(
     React.useMemo(
@@ -2412,9 +2039,9 @@ function XlsxWorkbookLoadedEditor({
         readOnlyAboveBytes: XLSX_EDITOR_READ_ONLY_THRESHOLD_BYTES,
         useWorker: true,
       }),
-      [fileName, workbookBuffer]
-    )
-  )
+      [fileName, workbookBuffer],
+    ),
+  );
 
   return (
     <XlsxViewerProvider controller={controller} isDark={isDark}>
@@ -2427,6 +2054,5 @@ function XlsxWorkbookLoadedEditor({
         workbookIdentity={workbookIdentity}
       />
     </XlsxViewerProvider>
-  )
+  );
 }
-

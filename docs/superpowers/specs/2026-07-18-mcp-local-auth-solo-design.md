@@ -99,6 +99,7 @@ Les fonctions d'outils et les handlers passent de `(ctx, args)` à `(ctx, princi
 ### 4.2 Émission du credential au démarrage
 
 `main()` :
+
 1. Résout `session.token` dans `dataDir`. S'il n'existe pas → génère 32 octets
    (`crypto.randomBytes(32)`, hex), écrit le fichier en **mode 0600**.
 2. Calcule les `scopes` du lancement depuis la config (défaut : `["read","ingest","redact","admin"]` ;

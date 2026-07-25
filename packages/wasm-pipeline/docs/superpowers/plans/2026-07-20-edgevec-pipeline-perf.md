@@ -60,6 +60,7 @@
 This is the **hard precondition** (spec Section 5): confirm EdgeVec's hybrid/sparse/BQ run in the browser and that our binary persistence eliminates per-query rebuild. Turso is NOT a precondition (proven impossible in wasm).
 
 - [ ] **Step 1: Write the spike (runs in Playwright Chromium, loads `edgevec.js`)** asserting each required capability + the persistence fix. **Note the exact return semantics: `hybridSearch`/`searchBQ` return values that must be parsed/inspected correctly — `hybridSearch` returns a JSON string.**
+
   ```ts
   // executed in a browser context via page.evaluate
   import init, { EdgeVec as EV, EdgeVecConfig } from "edgevec";
@@ -82,9 +83,11 @@ This is the **hard precondition** (spec Section 5): confirm EdgeVec's hybrid/spa
   try { await EV.load("spike-roundtrip"); } catch (e) { loadBroken = /PostCard|Deserialization/.test(String(e)); }
   return { hasHybrid: Array.isArray(r), hasBq: Array.isArray(bq), loadBroken, denseId };
   ```
+
 - [ ] **Step 2: Run the spike in the browser/wasm test environment** using the Playwright harness pattern (COOP/COEP headers, serve `node_modules/edgevec/edgevec.js`). Expected: `hasHybrid === true`, `hasBq === true`, `loadBroken === true`. If `hasHybrid` is false, **stop** — fall back to dense-only `db.search` (still no Turso). If `loadBroken` is false (a future EdgeVec fixes load), we can adopt native `save`/`load` and simplify `persist.ts`. **Do not** infer brokenness from loading a name that was never saved — the round-trip above saves first, so a throw genuinely indicates the load bug.
 - [ ] **Step 3: Record bundle-size measurement** EdgeVec is ~217 KB gzip (documented; verify locally with `gzip -c node_modules/edgevec/edgevec_bg.wasm | wc -c`). Confirm < 50 MB jsDelivr limit (trivially met).
 - [ ] **Step 4: Commit the spike** (non-cutover probe; old `rag.ts` untouched):
+
   ```bash
   git add packages/wasm-pipeline/src/search/spike.test.ts
   git commit -m "test(spike): verify edgevec hybrid/sparse/bq in browser + confirm load broken via round-trip"
@@ -97,6 +100,7 @@ This is the **hard precondition** (spec Section 5): confirm EdgeVec's hybrid/spa
 **Files:** Create `packages/wasm-pipeline/src/search/store.ts`, `packages/wasm-pipeline/src/search/persist.ts`, `packages/wasm-pipeline/src/search/edgevec.test.ts` (schema/interface portion)
 
 - [ ] **Step 1: Define `store.ts`** (move `IndexedChunk` here from `rag.ts:6-14`; `RetrievedChunk` from `@xberg-io/core`). **KEEP the existing `bbox` field** — the current `retrieve()` propagates `bbox` into `RetrievedChunk`; dropping it is a regression:
+
   ```ts
   import type { RetrievedChunk, BoundingBox } from "@xberg-io/core";
   export interface IndexedChunk {
@@ -116,10 +120,12 @@ This is the **hard precondition** (spec Section 5): confirm EdgeVec's hybrid/spa
     close(): Promise<void>;
   }
   ```
+
 - [ ] **Step 2: Implement `persist.ts`** per spec Section 2 — `pack(matterId, denseVecs, sparseVecs, idMap): Uint8Array` + `unpack(blob)` + `writeBlob(matterId, blob)`/`readBlob(matterId)` against `indexedDB`. No JSON, no `localStorage`. Binary layout documented in spec Section 2. The blob rebuilds the EdgeVec index once per `load()` via `insert*` replay **at session start only** (never per query).
 - [ ] **Step 3: Write failing test** (round-trip: pack → write → read → unpack equals input vectors; `load()` rebuilds index with zero `insert()` replay for subsequent `query()` calls).
 - [ ] **Step 4: Run** `pnpm vitest run src/search/edgevec.test.ts` → PASS.
 - [ ] **Step 5: Commit**:
+
   ```bash
   git add packages/wasm-pipeline/src/search/store.ts packages/wasm-pipeline/src/search/persist.ts packages/wasm-pipeline/src/search/edgevec.test.ts
   git commit -m "feat(search): SearchStore interface + binary IndexedDB persistence"
@@ -132,6 +138,7 @@ This is the **hard precondition** (spec Section 5): confirm EdgeVec's hybrid/spa
 **Files:** Create `packages/wasm-pipeline/src/search/edgevec.ts`, Modify `packages/wasm-pipeline/src/search/edgevec.test.ts`
 
 - [ ] **Step 1: Write failing test** (ingest dense+sparse → `query` returns hybrid-fused top-K with metadata; `lowRam` uses BQ):
+
   ```ts
   import { EdgeVecSearchStore } from "./edgevec";
   it("ingest dense+sparse then hybrid query returns fused top-K", async () => {
@@ -149,19 +156,23 @@ This is the **hard precondition** (spec Section 5): confirm EdgeVec's hybrid/spa
     await s.close();
   });
   ```
+
 - [ ] **Step 2: Implement `edgevec.ts`** per spec Sections 1/4:
   - `new EdgeVecClass(config)` (cosine, dim from `EMBED_DIM`).
   - `ingest` → for each item, `insertWithMetadata(vector, meta)` (record returned id), then `insertSparse(sparseIndices, sparseValues, dim)` with the **same id alignment**; keep an `IndexedChunkMap` from id → metadata (incl. `bbox` JSON as today).
   - `query` → build the sparse leg via `hybrid.ts`, then:
+
     ```ts
     const optionsJson = JSON.stringify({ dense_k: topK, sparse_k: topK, fusion: "rrf", rrf_k: 60 });
     const hits = JSON.parse(db.hybridSearch(dense, sparse.indices, sparse.values, sparse.dim, optionsJson));
     ```
+
     **`hybridSearch` returns a JSON string — always `JSON.parse`.** If `keyword` is empty, skip the sparse leg and use `db.search(dense, topK)` (dense-only).
   - `lowRam` → `db.searchBQRescored(dense, topK, 5)` (BQ path; `searchBQ`/`searchBQRescored` return array-like, no JSON.parse).
   - `probe()` on `open`: feature-detect `typeof db.hybridSearch === "function" && typeof db.insertSparse === "function"`; fall back to dense-only if absent.
   - Attach metadata from the id map (reuse the `EdgeVecMetadata` mapping already in `rag.ts:16-23`, including `bbox` parse).
 - [ ] **Step 3: Run test → PASS. Commit.**
+
   ```bash
   git add packages/wasm-pipeline/src/search/edgevec.ts packages/wasm-pipeline/src/search/edgevec.test.ts
   git commit -m "feat(search): EdgeVec-backed SearchStore with native hybrid RRF + BQ"
@@ -178,6 +189,7 @@ This is the **hard precondition** (spec Section 5): confirm EdgeVec's hybrid/spa
 - [ ] **Step 1: Write failing test** (`buildSparse("Acme Corp", vocab)` returns aligned `indices`/`values`/`dim` against a built vocabulary; empty query → empty sparse leg → dense-only).
 - [ ] **Step 2: Implement** `buildSparse(keyword, vocab)` — tokenize (lowercase, split on non-word), map terms → ids via a per-matter vocabulary (built at ingest from chunk terms), weights = tf-idf/BM25. Returns `{ indices: Uint32Array, values: Float32Array, dim: number }`. EdgeVec fuses via `hybridSearch`. Export a `buildVocabulary(chunks)` helper used by `edgevec.ts` `ingest` so query-time term ids align with insert-time ids.
 - [ ] **Step 3: Run test → PASS. Commit.**
+
   ```bash
   git add packages/wasm-pipeline/src/search/hybrid.ts packages/wasm-pipeline/src/search/edgevec.test.ts
   git commit -m "feat(search): BM25/sparse query builder for EdgeVec hybrid"
@@ -192,6 +204,7 @@ This is the **hard precondition** (spec Section 5): confirm EdgeVec's hybrid/spa
 > _(Corrected: the previous plan referenced `ner.ts:81-141` and a `configureOrtEnv()` call at `ner.ts:128` — neither exists. The file is 106 lines and contains no `configureOrtEnv`. It **already** selects the EP via `scenario.executionProviders[0]` (ner.ts:66); do NOT hard-code `"wasm"` — that would regress the current scenario-driven behavior.)_
 
 - [ ] **Step 1: Write failing test** (batched inference returns one result array per input text):
+
   ```ts
   import { detectPiiBatched } from "./ner";
   it("batches N texts into one inference call", async () => {
@@ -199,7 +212,9 @@ This is the **hard precondition** (spec Section 5): confirm EdgeVec's hybrid/spa
     expect(out.length).toBe(2);
   });
   ```
+
 - [ ] **Step 2: Add `detectPiiBatched`** reusing the existing `getModel(scenario)` (which already caches by `{quant, ep}` and reuses `modelPromise`). Pass the whole `texts` array to a single `model.inference({ texts, ... })` call instead of N calls. Keep the current EP selection (`scenario.executionProviders[0]`) — GLiNER’s EP fallback is already handled by passing the ordered `executionProviders`; only revisit if a browser spike shows WebGPU inference fails for this model. Skip texts <20 chars and re-align output indices to the original array.
+
   ```ts
   export async function detectPiiBatched(
     texts: string[], types: readonly string[] = PII_TYPES, scenario: ModelScenario = DEFAULT_SCENARIO,
@@ -209,8 +224,10 @@ This is the **hard precondition** (spec Section 5): confirm EdgeVec's hybrid/spa
     return result.map((ents) => ents.map((e) => ({ kind: e.label, start: e.start, end: e.end, text: e.spanText })));
   }
   ```
+
   Keep `detectPii` (single-text) as a thin wrapper over `detectPiiBatched` for callers that still pass one text.
 - [ ] **Step 3: Run test → PASS. Commit.**
+
   ```bash
   git add packages/wasm-pipeline/src/ner.ts packages/wasm-pipeline/src/ner.test.ts
   git commit -m "perf(ner): batch GLiNER inference into one call, keep scenario-driven EP"
@@ -225,6 +242,7 @@ This is the **hard precondition** (spec Section 5): confirm EdgeVec's hybrid/spa
 > _(Corrected: session caching + `ort.env.wasm.numThreads = scenario.numThreads` are **already** in `getSession` (embed.ts:52-66); `graphOptimizationLevel:"all"` is already set. The remaining win is the redundant `await import("onnxruntime-web")` inside `embedOne` at **embed.ts:118**, re-imported on every chunk.)_
 
 - [ ] **Step 1: Write failing test** asserting one session reused across chunks:
+
   ```ts
   import { embedChunks } from "./embed";
   it("reuses one session across chunks", async () => {
@@ -232,8 +250,10 @@ This is the **hard precondition** (spec Section 5): confirm EdgeVec's hybrid/spa
     expect(v.length).toBe(2);
   });
   ```
+
 - [ ] **Step 2: Hoist the ORT import** — add a module-scope `let ortModPromise: Promise<typeof import("onnxruntime-web")> | null` with an `getOrt()` helper; use it in both `getSession` (line 55) and `embedOne` (replace the per-call `await import("onnxruntime-web")` at line 118). Keep `numThreads`/`graphOptimizationLevel` as-is. Optionally set `ort.env.wasm.wasmPaths` to the locally-served ORT wasm dir if one is exposed by constants; skip if not present.
 - [ ] **Step 3: Run test → PASS. Commit.**
+
   ```bash
   git add packages/wasm-pipeline/src/embed.ts packages/wasm-pipeline/src/embed.test.ts
   git commit -m "perf(embed): hoist onnxruntime-web import out of the per-chunk path"
@@ -250,6 +270,7 @@ This is the **hard precondition** (spec Section 5): confirm EdgeVec's hybrid/spa
 > _(Corrected: `WasmExtractionConfig` exposes **camelCase field accessors**, NOT `snake_case` setters. There is no `set_enable_quality_processing()`, `set_use_cache()`, `set_cache_namespace()`, `set_cache_ttl_secs()`, `set_max_concurrent_extractions()`, or `set_token_reduction()`. `cacheTtlSecs` is a **`bigint`**. `acceleration` and `tokenReduction` take **`WasmAccelerationConfig` / `WasmTokenReductionOptions` instances**, not plain objects — verify their constructors in `xberg_wasm.d.ts` before use. Current `defaultExtractionConfig()` returns `new m.WasmExtractionConfig()` with all-optional args.)_
 
 - [ ] **Step 1: Write failing test** (quality kept ON, accel + cache enabled) using the real field API:
+
   ```ts
   import { defaultExtractionConfig } from "./ocr";
   it("extraction keeps quality on and enables acceleration + cache", async () => {
@@ -259,6 +280,7 @@ This is the **hard precondition** (spec Section 5): confirm EdgeVec's hybrid/spa
     expect(cfg.acceleration).toBeDefined();            // hw accel when available
   });
   ```
+
 - [ ] **Step 2: Apply tuning** in `ocr.ts` `defaultExtractionConfig()` (assign fields, don’t call absent setters):
   - `cfg.enableQualityProcessing = true` — keep best quality (default; never disable).
   - `cfg.useCache = true`; `cfg.cacheNamespace = "wasm-pipeline"`; `cfg.cacheTtlSecs = 3600n` (**bigint literal**) — use the Rust cache across reloads.
@@ -270,6 +292,7 @@ This is the **hard precondition** (spec Section 5): confirm EdgeVec's hybrid/spa
   - `ingest.ts:51-54`: `chunkerType` from `scenario` (`markdown` normally, `text` on `lowRam||isMobile`) — currently hard-coded `"markdown"`.
   - `runtime.ts`: `Map<contentHash, WasmExtractionResult>` cache keyed on `hash(bytes)` (wasm `extract_bytes` may bypass the Rust cache).
 - [ ] **Step 3: Run test → PASS. Commit.**
+
   ```bash
   git add packages/wasm-pipeline/src/ocr.ts packages/wasm-pipeline/src/ingest.ts packages/wasm-pipeline/src/runtime.ts packages/wasm-pipeline/src/ocr.test.ts
   git commit -m "perf(extract): keep quality ON + accel, Rust+JS cache, OCR via strategy, token reduction"
@@ -284,6 +307,7 @@ This is the **hard precondition** (spec Section 5): confirm EdgeVec's hybrid/spa
 > _(Corrected signatures — current `ingestFolder(matter, folder, file, options)` where `options: { passphrase, scopeToken, maxCharacters?, language? }`, and `queryRag(matter, query, topK = 8)`. Threading a `SearchStore` through means **extending these signatures**, e.g. adding an optional `store` to `IngestOptions` and a `store?` param to `queryRag`. Default to a shared `EdgeVecSearchStore` singleton when not provided so existing callers keep working.)_
 
 - [ ] **Step 1: Write integration test** (end-to-end on a fixture, matching the real+extended signatures):
+
   ```ts
   import { ingestFolder } from "./ingest";
   import { queryRag } from "./query";
@@ -296,11 +320,13 @@ This is the **hard precondition** (spec Section 5): confirm EdgeVec's hybrid/spa
     expect(hits.some(h => h.text.includes("Acme"))).toBe(true);
   });
   ```
+
 - [ ] **Step 2: Repoint** —
   - `rag.ts`: rewrite `buildIndex`/`loadIndex`/`retrieve` to delegate to `EdgeVecSearchStore` + `persist.ts` (keep signatures used by `ingest.ts`/`query.ts`; **keep `serializeIndex` → `save_stream` for `/api/rag/mirror`** — that path is unaffected by the load bug).
   - `ingest.ts`: after the redaction loop (currently `buildIndex` at line 104), call `store.ingest(items)` then `store.persist(matter.id)` (one IndexedDB blob write at folder completion). Keep the mirror push (`serializeIndex` → `serializeMirrorToBytes` → `pushMirror`).
   - `query.ts`: replace `retrieve(matter.id, vec, topK)` (line 10) with `store.query(matter.id, { vector: vec, keyword: query, topK })`.
 - [ ] **Step 3: Run test → PASS. Commit.**
+
   ```bash
   git add packages/wasm-pipeline/src/rag.ts packages/wasm-pipeline/src/ingest.ts packages/wasm-pipeline/src/query.ts packages/wasm-pipeline/src/ingest.test.ts
   git commit -m "feat(pipeline): wire ingest+query to EdgeVec SearchStore hybrid"
@@ -314,6 +340,7 @@ This is the **hard precondition** (spec Section 5): confirm EdgeVec's hybrid/spa
 
 - [ ] **Step 1: Add `services/mcp-server/tests/mirror.test.ts`** asserting the existing mirror contract still works after the browser change (browser ships `save_stream` bytes; Node reopens). Run `pnpm test` in `services/mcp-server`.
 - [ ] **Step 2: Commit** (tests only):
+
   ```bash
   git add services/mcp-server/tests/mirror.test.ts
   git commit -m "test(mcp): assert mirror contract unchanged after EdgeVec persistence fix"
@@ -329,6 +356,7 @@ This is the **hard precondition** (spec Section 5): confirm EdgeVec's hybrid/spa
 - [ ] **Step 2: Soak test** — ingest N=20 folders (~50 chunks each), query M=100 times; assert query p95 stays <100ms and does **not degrade vs the first query** (proves persistence rebuilds once per session, not per query — the failure mode of the old broken-load path).
 - [ ] **Step 3: Run harness + soak** `pnpm vitest run src/search/bench.ts` → all budgets met; soak shows flat query latency.
 - [ ] **Step 4: Commit.**
+
   ```bash
   git add packages/wasm-pipeline/src/search/bench.ts
   git commit -m "test(perf): stage benchmark harness + soak test against latency budgets"

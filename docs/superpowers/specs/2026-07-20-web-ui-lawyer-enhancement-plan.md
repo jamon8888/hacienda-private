@@ -9,6 +9,7 @@
 ## Codebase Review Summary (Key Findings)
 
 **Existing features we leverage:**
+
 | Module | Key Features | Relevance |
 |---|---|---|
 | `packages/wasm-pipeline/src/redact.ts` | `buildRedaction()` → tokens `{{KIND_N}}` (e.g., `{{PERSON_1}}`, `{{EMAIL_1}}`); `redactDocument()` returns `{redacted, entries, sealed}` | **Exact format Claude Desktop receives** — tokens replace PII |
@@ -24,6 +25,7 @@
 | `apps/web/components/RetrievedChunkCard.tsx` | Shows chunk text + citation | Search result view |
 
 **Trust Mechanism (Claude Desktop):**
+
 - Redacted document = `{{KIND_N}}` tokens replacing PII (no plaintext ever leaves browser)
 - `BrowserVault` sealed with user passphrase (PBKDF2 200k + AES-GCM)
 - Mirror bundle stored locally; only redacted text + tokens shared with Claude
@@ -50,6 +52,7 @@
 ## STEP 1 — Fix PII Privacy (Critical, Build First)
 
 **Files:** `components/PiiPanel.tsx` (M), `lib/engine/adapter.ts` (M — **new export `rehydrateSpanForUi`**)
+
 - [ ] In `PiiPanel`, stop rendering `e.text`. Render **masked token spans** only:
   - Use `e.token` (format `{{KIND_N}}`) or derive stable mask from `start`/`end`.
   - Group entries by `e.kind`; filter chips per kind with counts.
@@ -66,6 +69,7 @@
 ## STEP 2 — Upload & Ingestion (Folder/Ingest Screen)
 
 **Files:** `app/folders/[id]/FolderView.tsx`, `components/ui/file-dropzone.tsx`, `lib/engine/adapter.ts` (`IngestContext`, `ingestFolder`, `IngestProgress`)
+
 - [ ] Replace fake "Create folder" input with `file-dropzone` → `ingestFolder(matter, folder, file, options)`.
 - [ ] Render per-file staged progress: `progress` bar driven by `IngestProgress.stage` (extract→ocr→chunk→embed→pii→index→done/error) + status `badge`.
 - [ ] Virtualized queue (`@tanstack/react-virtual`) showing pages + PII count + retry on failure (structured error + suggestion).
@@ -77,6 +81,7 @@
 ## STEP 3 — Document View: MIME Routing + All Original Formats Viewable
 
 **Files:** `app/documents/[id]/DocumentView.tsx`, `app/documents/[id]/page.tsx`, new `components/document-router.tsx`
+
 - [ ] **Document Router** (`document-router.tsx`): route by MIME/ext to correct viewer:
   - `application/pdf` → `pdf-viewer` (full EmbedPDF: search, select, zoom, rotate, scroll, thumbnails)
   - `application/vnd.openxmlformats-officedocument.wordprocessingml.document` → `docx-viewer`
@@ -85,7 +90,7 @@
   - `text/csv` / `text/tab-separated-values` → `csv-viewer`
   - `image/*` → **NET-NEW inline** preview (`<img>`) + OCR overlay (no dedicated `image-viewer` component exists — render inline)
   - `text/*`, `application/json`, `text/markdown` → **NET-NEW inline** render (`<pre>` / markdown) with chunk boundaries (no dedicated `text-viewer` component exists)
-  - _Available viewer components (confirmed present): `pdf-viewer`, `docx-viewer`, `xlsx-viewer`, `pptx-viewer`, `csv-viewer`. Only image/text branches are net-new._
+  - *Available viewer components (confirmed present): `pdf-viewer`, `docx-viewer`, `xlsx-viewer`, `pptx-viewer`, `csv-viewer`. Only image/text branches are net-new.*
 - [ ] **3-pane layout:** `[Viewer] ‖ [document-viewer-sidebar thumbnails] ‖ [PII/Context pane]`
 - [ ] Viewer text-layer selection forwards selected span → opens PII panel / review for that span.
 - [ ] Add `#portal` div in `app/layout.tsx` (Glide Data Grid requirement for bounding-box-citations).
@@ -97,6 +102,7 @@
 ## STEP 4 — Dual-Pane View: Original + Redacted (Claude Desktop Trust)
 
 **Files:** new `components/DocumentDualView.tsx`, `app/documents/[id]/DocumentView.tsx` (refactor)
+
 - [ ] **Top pane: Original Document Viewer** (from Step 3) — shows the actual document with all features (search, select, zoom).
 - [ ] **Bottom pane: Redacted Version Viewer** — shows the exact same document with **PII replaced by tokens** (`{{PERSON_1}}`, `{{EMAIL_1}}`, etc.):
   - Source: `mirror.ts` bundle's `chunks` with `text` field (already redacted) + `pii` spans.
@@ -115,6 +121,7 @@
 ## STEP 5 — Human Review (Bounding-Box Citations)
 
 **Files:** new `components/PiiReviewPanel.tsx`, reuse `bounding-box-citations` `HumanReviewPanel`, `app/documents/[id]/DocumentView.tsx`
+
 - [ ] `PiiReviewPanel` builds `ReviewField[]` from doc's PII + extracted values:
   - `key` (stable id), `schema` (infer from `kind`), `actual` (masked token), `expected` (editable),
   - `location: { page, area }` from `chunk.page` + `chunk.bbox`.
@@ -130,6 +137,7 @@
 ## STEP 6 — Search / RAG with Citation Deep-Links
 
 **Files:** `app/search/page.tsx`, `components/RetrievedChunkCard.tsx`
+
 - [ ] Add facet controls: folder `select`, PII-type `badge` toggle row, confidence `toggle` (Base UI `tabs`/`badge`/`select`).
 - [ ] Persistent **zero-egress badge** while `queryRagForUi` runs (wrap in `assertLocalFirst` guard; show "100% on-device").
 - [ ] `RetrievedChunkCard`: citation link → `/documents/:id?page=:n&bbox=...` (from `chunk.doc_id` + `chunk.page` + `chunk.bbox`); click deep-links into viewer at exact source location (Step 3 reads query params).
@@ -142,6 +150,7 @@
 ## STEP 7 — Document Splits (Large Filings)
 
 **Files:** `app/documents/[id]/splits` (new route or modal), `document-splits`
+
 - [ ] Add "Split document" action on Document view → opens `document-splits` with doc's pages.
 - [ ] User defines segment boundaries → produces labeled segments (store metadata client-side; mirror alongside doc).
 - [ ] Segments become selectable review units in `matter-nav` / review panel.
@@ -152,6 +161,7 @@
 ## STEP 8 — Schema Builder (Matter Templates)
 
 **Files:** `app/matters/[id]/templates` (new) or modal, `schema-builder`
+
 - [ ] Add "Extraction template" to Matter view → opens `schema-builder`.
 - [ ] User picks PII types the matter cares about (from `listPiiTypes()`); selection saved to matter metadata.
 - [ ] Selected types **filter + highlight** the PII panel (Step 1) and human-review panel (Step 5): non-selected kinds dimmed/collapsed.
@@ -162,6 +172,7 @@
 ## STEP 9 — Layout Blocks (Review Workspace)
 
 **Files:** `layout-blocks`, `app/(workspace)/layout.tsx` or composed `DocumentWorkspace` component
+
 - [ ] Use `layout-blocks` to compose the 3-pane review workspace: `matter-nav` (or `file-system`) ‖ viewer+`document-viewer-sidebar` ‖ PII/review pane.
 - [ ] Make panes resizable (`resizable`) and collapsible on `<md`.
 - [ ] `pnpm --filter @xberg-io/web typecheck`.
@@ -171,6 +182,7 @@
 ## STEP 10 — Browse Route (Extend File-System)
 
 **Files:** `app/browse/page.tsx` (new)
+
 - [ ] Mount extend `file-system` Finder reading same matter/folder/doc data as `matter-nav` (via `lib/api.ts`); double-click doc → `/documents/:id`.
 - [ ] Keep `matter-nav` as primary workspace sidebar; `file-system` is alternate browse surface reachable from top bar.
 - [ ] `pnpm --filter @xberg-io/web typecheck`.
@@ -180,6 +192,7 @@
 ## STEP 11 — Forget / GDPR Closure
 
 **Files:** `app/matters/[id]/MatterView.tsx`, `lib/api.ts` (`DELETE /matters/:id`)
+
 - [ ] Add "Forget matter" action (destructive, confirm `dialog`) → calls `DELETE /matters/:id`.
 - [ ] After success, clear local session state for that matter; re-query search returns nothing (proven by e2e `forget.spec.ts`).
 - [ ] `pnpm --filter @xberg-io/web typecheck`.

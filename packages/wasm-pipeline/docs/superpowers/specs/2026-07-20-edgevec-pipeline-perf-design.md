@@ -28,7 +28,7 @@ A browser-wasm capability spike (`docs/superpowers/spike-turso-browser-2026-07-2
 
 `packages/wasm-pipeline/src/rag.ts` already documents (and we re-confirmed live in Chromium) that `db.save()`/`EdgeVec.load()` **throw on every reload**:
 
-```
+```text
 "corrupted data: Deserialization failed: This is a feature that PostCard will never implement"
 ```
 
@@ -67,7 +67,7 @@ A browser-wasm capability spike (`docs/superpowers/spike-turso-browser-2026-07-2
 
 Each pipeline stage is an isolated, independently-testable unit behind a single `SearchStore` abstraction. The browser implementation is **EdgeVec-backed**; the Node implementation stays `better-sqlite3` (metadata) + EdgeVec bytes mirror as today.
 
-```
+```text
 ingestFolder (orchestrator)
   ├─ ExtractStage  ── xberg-wasm  (quality ON: quality_processing=true, WebGPU accel, Rust+JS cache, OCR via strategy)
   ├─ EmbedStage    ── e5 ORT session (multithreaded wasm / WebGPU, cached import)
@@ -98,7 +98,7 @@ EdgeVec's `save`/`load` is broken (PostCard `WontImplement`). We persist **ourse
 
 **Binary layout (single `Uint8Array` in IndexedDB, keyed by `matterId`):**
 
-```
+```text
 [ magic 4B ][ version u32 ][ dim u32 ][ nVectors u32 ]
 [ dense: nVectors × dim × f32 ]            // packed Float32
 [ nSparse u32 ]

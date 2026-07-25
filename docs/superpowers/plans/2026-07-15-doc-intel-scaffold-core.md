@@ -5,6 +5,7 @@
 **Goal:** Stand up the lightweight **Node.js TypeScript** service `services/mcp-server` — the single local process that serves the browser UI, the model cache (pinned downloads from `the pinned model repos`), the light metadata store (matters/folders/consent), an AES-GCM key vault, and the MCP host wiring. Also ship `packages/core` shared TS types. This is the backbone every later plan depends on.
 
 **Architecture (per SHARED ARCHITECTURE BRIEF — authoritative):** A fully-local, single-machine app for lawyers. No cloud, no engine API keys, no egress. ONE local service `services/mcp-server` (Node.js + `@modelcontextprotocol/sdk`) that:
+
 - (a) serves built `apps/web` output + `@xberg-io/xberg-wasm` assets as static files at localhost,
 - (b) hosts a tiny HTTP API: model serving (`/models/*`), metadata (`/matters`, `/folders`, `/consent`), and the EdgeVec mirror endpoint (`/rag/mirror`),
 - (c) hosts an MCP server (`mcp-server mcp` stdio, or localhost HTTP/SSE) exposing lawyer tools (stubbed here, implemented in Plan 4),
@@ -14,7 +15,8 @@
 **CORE PRINCIPLE (NON-NEGOTIABLE):** The **browser** runs the full engine — extraction/OCR/chunking via `@xberg-io/xberg-wasm`, e5 embeddings via `onnxruntime-web`, GLiNER PII via `gliner` (GLiNER.js), RAG via `edgevec`, and in-house reversible redaction (pattern from `curtain-privacy`) — all on-device, persisted to IndexedDB/OPFS. The Node service is **thin**: it serves models, holds light metadata + a key vault, and mirrors the browser's edgevec index so MCP `rag_query` works even with the browser closed. The Node service runs **no engine** — no xberg crate, no ORT, no RAG of its own.
 
 **Intro monorepo layout (relevant slice):**
-```
+
+```text
 <repo>/
 ├─ services/
 │  └─ mcp-server/                # Node.js TS service (this plan)
@@ -50,6 +52,7 @@
 - **MCP:** `@modelcontextprotocol/sdk` (npm, TypeScript) — we build our own MCP server (NOT rmcp, NOT xberg-mcp). Five lawyer tools delegate to the mirrored EdgeVec index + light metadata (Plan 4).
 
 **Pinned deps (`services/mcp-server/package.json`):**
+
 ```json
 {
   "name": "@xberg-io/mcp-server",
@@ -71,13 +74,14 @@
   }
 }
 ```
+
 WASM CI build (Plan 6) consumes the prebuilt `@xberg-io/xberg-wasm` npm package — no wasm compile in this service.
 
 ---
 
 ## File Structure (this plan)
 
-```
+```text
 services/mcp-server/
 ├─ package.json                  # deps above; bin xberg-mcp
 ├─ tsconfig.json                 # strict + noUncheckedIndexedAccess; extends root base
