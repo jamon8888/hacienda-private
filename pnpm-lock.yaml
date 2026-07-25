@@ -345,8 +345,8 @@ importers:
         specifier: workspace:*
         version: link:../core
       '@xberg-io/xberg-wasm':
-        specifier: 1.0.0-rc.29
-        version: 1.0.0-rc.29
+        specifier: workspace:*
+        version: link:../../crates/xberg-wasm
       '@xenova/transformers':
         specifier: ^2.17.2
         version: 2.17.2
@@ -394,8 +394,8 @@ importers:
         specifier: workspace:*
         version: link:../../crates/xberg-node
       '@xberg-io/xberg-wasm':
-        specifier: 1.0.0-rc.26
-        version: 1.0.0-rc.26
+        specifier: workspace:*
+        version: link:../../crates/xberg-wasm
       better-sqlite3:
         specifier: ^11.0.0
         version: 11.10.0
@@ -3195,10 +3195,6 @@ packages:
 
   '@xberg-io/xberg-wasm@1.0.0-rc.26':
     resolution: {integrity: sha512-nrhIwbuANe6M1NigGkxfi6E4VTJ+1Xj/b3TtfMkZ6VIu46sfv4pjE85JoEYQcKQm7EDdZfrYe6KyoTJDd9dg6A==}
-    engines: {node: '>= 22'}
-
-  '@xberg-io/xberg-wasm@1.0.0-rc.29':
-    resolution: {integrity: sha512-Iuaa82hTJukeM8QCPVG0No+wbMT22bBTVAeaXE4AVAMWUezmd2MzSV3Cmyiiv/FMrOKaYGYPS0Xsn8oCGNXhLg==}
     engines: {node: '>= 22'}
 
   '@xberg-io/xberg-win32-arm64-msvc@0.0.1':
@@ -8282,8 +8278,6 @@ snapshots:
     optional: true
 
   '@xberg-io/xberg-wasm@1.0.0-rc.26': {}
-
-  '@xberg-io/xberg-wasm@1.0.0-rc.29': {}
 
   '@xberg-io/xberg-win32-arm64-msvc@0.0.1':
     optional: true

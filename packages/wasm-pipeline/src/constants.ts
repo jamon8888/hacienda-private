@@ -18,29 +18,29 @@ function resolveApiBase(): string {
 }
 
 export const API_BASE = resolveApiBase();
+export const MODEL_MANIFEST_URL = `${API_BASE}/models/manifest.json`;
 
 export const E5_TOKENIZER_URL = `${API_BASE}/models/e5.tokenizer.json`;
 export const E5_TOKENIZER_CONFIG_URL = `${API_BASE}/models/e5.tokenizer_config.json`;
 
-// Shared Rust-owned dense embedder (IBM Granite ModernBERT, 384 dimensions).
-// The three files are served by the MCP model manifest and are verified before
-// entering the WASM worker. Keep the revision in the URL-independent identity
-// so a cache generation cannot silently mix model files.
-export const GRANITE_EMBEDDING_MODEL_URL =
-	`${API_BASE}/models/granite/granite-embedding-97m-multilingual-r2/model.safetensors`;
-export const GRANITE_EMBEDDING_TOKENIZER_URL =
-	`${API_BASE}/models/granite/granite-embedding-97m-multilingual-r2/tokenizer.json`;
-export const GRANITE_EMBEDDING_CONFIG_URL =
-	`${API_BASE}/models/granite/granite-embedding-97m-multilingual-r2/config.json`;
-export const GRANITE_EMBEDDING_MODEL_SHA256 =
-	"f3ea88b230492811046145513710e76b4cc8c2ad49e8708da0e7247e548903be";
-export const GRANITE_EMBEDDING_TOKENIZER_SHA256 =
-	"4f2842d568e2724370aec203652a42ac783c7937f8347a1a2cc7506d71f1582f";
-export const GRANITE_EMBEDDING_CONFIG_SHA256 =
-	"de948b0bdc6f356afad7a84b276d8dd7e7fe10fb9add1bb5e610621c28e41ebc";
 export const GRANITE_EMBED_DIM = 384;
 export const GRANITE_EMBEDDING_IDENTITY =
 	"ibm-granite/granite-embedding-97m-multilingual-r2@835ad14087e140460703cf0fae09f97d469d65c2;bf16->f32;modernbert-384;cls;normalize=true";
+export const GRANITE_EMBEDDING_MANIFEST_NAMES = {
+	model: "granite-embedding-97m-multilingual-r2.weights",
+	tokenizer: "granite-embedding-97m-multilingual-r2.tokenizer",
+	config: "granite-embedding-97m-multilingual-r2.config",
+} as const;
+export const GRANITE_EMBEDDING_FALLBACK_FILES = {
+	model: "granite/granite-embedding-97m-multilingual-r2/model.safetensors",
+	tokenizer: "granite/granite-embedding-97m-multilingual-r2/tokenizer.json",
+	config: "granite/granite-embedding-97m-multilingual-r2/config.json",
+} as const;
+export const GRANITE_EMBEDDING_FALLBACK_SHA256 = {
+	model: "f3ea88b230492811046145513710e76b4cc8c2ad49e8708da0e7247e548903be",
+	tokenizer: "4f2842d568e2724370aec203652a42ac783c7937f8347a1a2cc7506d71f1582f",
+	config: "de948b0bdc6f356afad7a84b276d8dd7e7fe10fb9add1bb5e610621c28e41ebc",
+} as const;
 
 // Bare repo-id (not a full URL): `@xenova/transformers`' `AutoTokenizer.from_pretrained()` always
 // appends "/tokenizer.json" itself, so this is joined with `env.localModelPath` (see ner.ts) to

@@ -291,6 +291,11 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
 		return;
 	}
 
+	if (pathname === "/models/manifest.json" && method === "GET") {
+		sendJson(res, 200, ctx.models.getManifest());
+		return;
+	}
+
 	if (pathname.startsWith("/models/") && method === "GET") {
 		await handleModels(ctx, res, pathname.slice("/models/".length));
 		return;
@@ -326,15 +331,20 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: AppContext
 		const uiDir = resolveUiDir();
 		if (uiDir) {
 			const segments = pathname.split("/").filter(Boolean);
-			const candidate =
+			const candidates =
 				segments.length === 2
-					? join(uiDir, segments[0]!, "_.html")
+					? [
+							join(uiDir, ...segments) + ".html",
+							join(uiDir, segments[0]!, "_.html"),
+						]
 					: segments.length === 1
-						? join(uiDir, `${segments[0]}.html`)
-						: null;
-			if (candidate && existsSync(candidate)) {
-				serveHtmlWithToken(res, candidate, auth.token);
-				return;
+						? [join(uiDir, `${segments[0]}.html`)]
+						: [];
+			for (const candidate of candidates) {
+				if (existsSync(candidate)) {
+					serveHtmlWithToken(res, candidate, auth.token);
+					return;
+				}
 			}
 			const notFoundPage = join(uiDir, "404.html");
 			if (existsSync(notFoundPage)) {

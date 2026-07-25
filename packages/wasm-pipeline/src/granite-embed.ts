@@ -1,14 +1,9 @@
 import {
-	GRANITE_EMBEDDING_CONFIG_SHA256,
-	GRANITE_EMBEDDING_CONFIG_URL,
-	GRANITE_EMBEDDING_MODEL_SHA256,
-	GRANITE_EMBEDDING_MODEL_URL,
-	GRANITE_EMBEDDING_TOKENIZER_SHA256,
-	GRANITE_EMBEDDING_TOKENIZER_URL,
 	GRANITE_EMBEDDING_IDENTITY,
 	GRANITE_EMBED_DIM,
 } from "./constants";
 import { cachedFetchVerifiedBuffer, type FetchProgress } from "./model-cache";
+import { resolveGraniteArtifacts } from "./model-manifest";
 
 interface GraniteWasmModule {
 	default: (input?: unknown) => Promise<unknown>;
@@ -72,10 +67,11 @@ async function loadDirect(weights: ArrayBuffer, tokenizer: ArrayBuffer, config: 
 export async function ensureGraniteEmbedder(onProgress?: (progress: FetchProgress) => void): Promise<void> {
 	if (!loadPromise) {
 		loadPromise = (async () => {
+			const artifacts = await resolveGraniteArtifacts();
 			const [weights, tokenizer, config] = await Promise.all([
-				cachedFetchVerifiedBuffer(GRANITE_EMBEDDING_MODEL_URL, GRANITE_EMBEDDING_MODEL_SHA256, onProgress),
-				cachedFetchVerifiedBuffer(GRANITE_EMBEDDING_TOKENIZER_URL, GRANITE_EMBEDDING_TOKENIZER_SHA256),
-				cachedFetchVerifiedBuffer(GRANITE_EMBEDDING_CONFIG_URL, GRANITE_EMBEDDING_CONFIG_SHA256),
+				cachedFetchVerifiedBuffer(artifacts.model.url, artifacts.model.sha256, onProgress),
+				cachedFetchVerifiedBuffer(artifacts.tokenizer.url, artifacts.tokenizer.sha256),
+				cachedFetchVerifiedBuffer(artifacts.config.url, artifacts.config.sha256),
 			]);
 			const instance = workerFor();
 			if (instance) {

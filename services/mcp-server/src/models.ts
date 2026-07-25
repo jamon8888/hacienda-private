@@ -7,6 +7,47 @@ import { loadGliner2ManifestEntries, loadGlinerManifestEntries, type Gliner2Arti
 import { PLACEHOLDER_SHA } from "./config.js";
 import { AppError } from "./error.js";
 
+export const GRANITE_EMBEDDING_MANIFEST_NAMES = {
+  weights: "granite-embedding-97m-multilingual-r2.weights",
+  tokenizer: "granite-embedding-97m-multilingual-r2.tokenizer",
+  config: "granite-embedding-97m-multilingual-r2.config",
+} as const;
+
+export interface GraniteEmbeddingArtifactPaths {
+  modelDir: string;
+  weightsPath: string;
+  tokenizerPath: string;
+  configPath: string;
+}
+
+const MODEL_FETCH_TIMEOUT_MS = Number.parseInt(process.env["XBERG_MODEL_FETCH_TIMEOUT_MS"] ?? "300000", 10);
+const MODEL_FETCH_RETRIES = Number.parseInt(process.env["XBERG_MODEL_FETCH_RETRIES"] ?? "4", 10);
+const MODEL_FETCH_RETRY_BASE_DELAY_MS = Number.parseInt(
+  process.env["XBERG_MODEL_FETCH_RETRY_BASE_DELAY_MS"] ?? "1500",
+  10,
+);
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableFetchError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const message = error.message.toLowerCase();
+  const causeCode =
+    typeof error.cause === "object" && error.cause !== null && "code" in error.cause
+      ? String(error.cause.code)
+      : "";
+  return (
+    message.includes("timed out") ||
+    message.includes("timeout") ||
+    message.includes("terminated") ||
+    message.includes("socket") ||
+    causeCode === "ETIMEDOUT" ||
+    causeCode === "UND_ERR_CONNECT_TIMEOUT"
+  );
+}
+
 function sha256File(path: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const hash = createHash("sha256");
@@ -90,6 +131,21 @@ export class ModelCache {
     return { modelDir, weightsPath, tokenizerPath, encoderConfigPath };
   }
 
+  async ensureGraniteEmbeddingArtifacts(
+    names: typeof GRANITE_EMBEDDING_MANIFEST_NAMES = GRANITE_EMBEDDING_MANIFEST_NAMES,
+  ): Promise<GraniteEmbeddingArtifactPaths> {
+    const [weightsPath, tokenizerPath, configPath] = await Promise.all([
+      this.ensureModel(names.weights),
+      this.ensureModel(names.tokenizer),
+      this.ensureModel(names.config),
+    ]);
+    const modelDir = dirname(weightsPath);
+    if (dirname(tokenizerPath) !== modelDir || dirname(configPath) !== modelDir) {
+      throw new AppError("model", "Granite embedding artifacts must resolve beneath one model directory");
+    }
+    return { modelDir, weightsPath, tokenizerPath, configPath };
+  }
+
   async ensureModel(name: string): Promise<string> {
     const entry = this.manifest.models.find((m) => m.name === name);
     if (!entry) {
@@ -130,35 +186,47 @@ export class ModelCache {
   }
 
   private async download(entry: ModelManifestEntry, cachePath: string): Promise<string> {
-    let res: Response;
-    try {
-      res = await fetch(entry.url);
-    } catch {
-      throw new AppError("model", `failed to download model '${entry.name}'`);
-    }
-    if (!res.ok || !res.body) {
-      throw new AppError("model", `model '${entry.name}' download returned ${res.status}`);
-    }
+    let lastError: unknown = null;
+    for (let attempt = 1; attempt <= MODEL_FETCH_RETRIES; attempt++) {
+      try {
+        const res = await fetch(entry.url, {
+          signal: AbortSignal.timeout(MODEL_FETCH_TIMEOUT_MS),
+        });
+        if (!res.ok || !res.body) {
+          throw new AppError("model", `model '${entry.name}' download returned ${res.status}`);
+        }
 
-    mkdirSync(dirname(cachePath), { recursive: true });
-    const tmp = `${cachePath}.part`;
-    const file = await import("node:fs/promises").then((m) => m.open(tmp, "w"));
-    try {
-      const reader = res.body.getReader();
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (value) await file.write(Buffer.from(value));
+        mkdirSync(dirname(cachePath), { recursive: true });
+        const tmp = `${cachePath}.part`;
+        const file = await import("node:fs/promises").then((m) => m.open(tmp, "w"));
+        try {
+          const reader = res.body.getReader();
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (value) await file.write(Buffer.from(value));
+          }
+        } finally {
+          await file.close();
+        }
+        writeFileSync(cachePath, readFileSync(tmp));
+        try {
+          chmodSync(cachePath, 0o600);
+        } catch {
+          // best-effort
+        }
+        return cachePath;
+      } catch (error) {
+        lastError = error;
+        if (error instanceof AppError) throw error;
+        if (attempt === MODEL_FETCH_RETRIES || !isRetryableFetchError(error)) break;
+        await sleep(MODEL_FETCH_RETRY_BASE_DELAY_MS * attempt);
       }
-    } finally {
-      await file.close();
     }
-    writeFileSync(cachePath, readFileSync(tmp));
-    try {
-      chmodSync(cachePath, 0o600);
-    } catch {
-      // best-effort
-    }
-    return cachePath;
+    throw new AppError(
+      "model",
+      `failed to download model '${entry.name}' after ${MODEL_FETCH_RETRIES} attempts` +
+        (lastError instanceof Error ? `: ${lastError.message}` : ""),
+    );
   }
 }

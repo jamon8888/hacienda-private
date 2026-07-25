@@ -35,3 +35,30 @@ the dedicated vector-store adapter exists.
   vector retrieval path until that adapter lands.
 - [x] Add browser snapshot re-open/query tests using the v2 identity guard and
   update all mirror fixtures.
+
+## Release command
+
+Run the remaining Granite release verification from a normal shell, not the
+restricted Codex sandbox. Ensure `node`, `pnpm`, and `cargo` are on `PATH`, or
+set `NODE_BIN`, `PNPM_BIN`, and `CARGO_BIN` explicitly:
+
+```bash
+cd /home/jamin/Documents/hacienda-private/.worktrees/gliner2-shared
+scripts/verify-granite-release.sh
+```
+
+That command downloads the three pinned Granite artifacts from the manifest,
+via `services/mcp-server`'s `ModelCache`, and the WASM client resolves the same
+artifact URLs + SHA256 pins from `/models/manifest.json`. It then generates the
+native Rust embedding report with
+`crates/xberg-candle-embed/examples/granite_release_dump.rs`, and runs
+`apps/web/e2e/granite-release.spec.ts` in Chromium against the real
+`/models/granite/...` server paths. It enforces:
+
+- exact identity equality
+- native/browser vector delta `<= 1e-4`
+- first-load `<= 480000 ms`
+- batch embedding `<= 20000 ms`
+- peak JS heap `<= 1250000000 bytes`
+- local `/models/granite/...` delivery only, with no `huggingface.co` or CDN
+  URLs in the browser resource list

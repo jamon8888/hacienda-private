@@ -82,6 +82,35 @@ fn digest(bytes: &[u8]) -> String {
     format!("sha256:{hex}")
 }
 
+fn load_modernbert(weights: &[u8], config: &ModernBertConfig, device: &Device) -> Result<ModernBert> {
+    let direct = VarBuilder::from_buffered_safetensors(weights.to_vec(), DType::F32, device)
+        .map_err(|e| EmbedError::Tensor(e.to_string()))
+        .and_then(|vb| ModernBert::load(vb, config).map_err(|e| EmbedError::Tensor(e.to_string())));
+    if direct.is_ok() {
+        return direct;
+    }
+
+    let strip_model_prefix = VarBuilder::from_buffered_safetensors(weights.to_vec(), DType::F32, device)
+        .map_err(|e| EmbedError::Tensor(e.to_string()))
+        .and_then(|vb| {
+            ModernBert::load(
+                vb.rename_f(|name| name.strip_prefix("model.").unwrap_or(name).to_string()),
+                config,
+            )
+            .map_err(|e| EmbedError::Tensor(e.to_string()))
+        });
+    if strip_model_prefix.is_ok() {
+        return strip_model_prefix;
+    }
+
+    VarBuilder::from_buffered_safetensors(weights.to_vec(), DType::F32, device)
+        .map_err(|e| EmbedError::Tensor(e.to_string()))
+        .and_then(|vb| {
+            ModernBert::load(vb.rename_f(|name| format!("model.{name}")), config)
+                .map_err(|e| EmbedError::Tensor(e.to_string()))
+        })
+}
+
 /// Loaded Granite embedding model. The model is immutable and safe to share
 /// between host adapters; inference itself is deterministic and side-effect free.
 pub struct GraniteEmbedder {
@@ -108,13 +137,11 @@ impl GraniteEmbedder {
         }
         let tokenizer = Tokenizer::from_bytes(tokenizer_json).map_err(|e| EmbedError::Tokenizer(e.to_string()))?;
         let device = Device::Cpu;
-        // Granite publishes ModernBERT weights without the `model.` prefix used
-        // by Candle's generic ModernBert loader. The renamer keeps the upstream
-        // implementation reusable without mutating the artifact on disk.
-        let vb = VarBuilder::from_buffered_safetensors(weights.to_vec(), DType::F32, &device)
-            .map_err(|e| EmbedError::Tensor(e.to_string()))?
-            .rename_f(|name| format!("model.{name}"));
-        let model = ModernBert::load(vb, &config).map_err(|e| EmbedError::Tensor(e.to_string()))?;
+        // Granite exports have shipped with multiple tensor-key layouts across
+        // hubs/conversions. Accept the canonical Candle names first, then fall
+        // back to the two observed prefix variants so release verification does
+        // not depend on one exact safetensors naming convention.
+        let model = load_modernbert(weights, &config, &device)?;
         Ok(Self {
             model,
             tokenizer: Arc::new(tokenizer),

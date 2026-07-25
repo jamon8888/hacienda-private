@@ -76,9 +76,10 @@ serde-wasm-bindgen = "0.6"
 serde_json = "1"
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
-xberg = { path = "../xberg", default-features = false, features = ["wasm-target", "url-ingestion"] }
+xberg = { path = "../xberg", default-features = false, features = ["no-ort-target", "excel-wasm", "url-ingestion"] }
 xberg-candle-embed = { default-features = false, features = ["candle"], path = "../xberg-candle-embed", version = "1.0.0-rc.29" }
 xberg-gliner = { default-features = false, features = ["candle"], path = "../xberg-gliner", version = "1.0.0-rc.29" }
+xberg-rag = { path = "../xberg-rag", version = "1.0.0-rc.29" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.4", features = ["wasm_js"] }

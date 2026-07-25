@@ -1,0 +1,45 @@
+{
+  "query": "material breach termination after written notice and cure period",
+  "documents": [
+    {
+      "id": "en-termination",
+      "language": "en",
+      "text": "Either party may terminate this agreement for material breach if the breach remains uncured for thirty days after written notice."
+    },
+    {
+      "id": "fr-resiliation",
+      "language": "fr",
+      "text": "Chaque partie peut resilier le contrat pour manquement grave si ce manquement n'est pas remedie dans les trente jours suivant une notification ecrite."
+    },
+    {
+      "id": "de-kuendigung",
+      "language": "de",
+      "text": "Jede Partei kann diesen Vertrag wegen einer wesentlichen Pflichtverletzung kuendigen, wenn diese trotz schriftlicher Mitteilung nicht innerhalb von dreissig Tagen behoben wird."
+    },
+    {
+      "id": "es-resolucion",
+      "language": "es",
+      "text": "Cualquiera de las partes podra resolver este contrato por incumplimiento material si dicho incumplimiento no se subsana dentro de los treinta dias siguientes a la notificacion por escrito."
+    },
+    {
+      "id": "it-recesso",
+      "language": "it",
+      "text": "Ciascuna parte puo recedere dal contratto per grave inadempimento qualora tale inadempimento non venga sanato entro trenta giorni dalla comunicazione scritta."
+    },
+    {
+      "id": "nl-beeindiging",
+      "language": "nl",
+      "text": "Elke partij mag deze overeenkomst beeindigen wegens een wezenlijke tekortkoming indien die tekortkoming niet binnen dertig dagen na schriftelijke kennisgeving is hersteld."
+    },
+    {
+      "id": "pl-wypowiedzenie",
+      "language": "pl",
+      "text": "Kazda ze stron moze rozwiazac umowe z powodu istotnego naruszenia, jezeli naruszenie nie zostanie usuniete w ciagu trzydziestu dni od pisemnego zawiadomienia."
+    },
+    {
+      "id": "sv-uppsagning",
+      "language": "sv",
+      "text": "Vardera parten far saga upp avtalet vid vasentligt avtalsbrott om brottet inte har avhjalpts inom trettio dagar efter skriftligt meddelande."
+    }
+  ]
+}

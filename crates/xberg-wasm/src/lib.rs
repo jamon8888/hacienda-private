@@ -29,6 +29,7 @@ use std::sync::Mutex;
 use wasm_bindgen::prelude::*;
 use xberg::Validator;
 use xberg::engine::seams::PresetResolver;
+use xberg_rag::Embedder;
 
 pub mod gliner2;
 

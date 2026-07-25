@@ -11847,6 +11847,7 @@ dependencies = [
  "xberg",
  "xberg-candle-embed",
  "xberg-gliner",
+ "xberg-rag",
 ]
 
 [[package]]
