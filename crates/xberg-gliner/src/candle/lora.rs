@@ -346,14 +346,16 @@ mod tests {
     #[test]
     fn apply_lora_delta_shape_fan_in_fan_out() {
         let device = Device::Cpu;
-        // fan_in_fan_out = true means base is [in, out], lora_A is [r, out], lora_B is [in, r]
-        // The merged result should be [in, out] = [3, 4] and the transpose is handled internally
+        // fan_in_fan_out = true means base weight is [in, out]
+        // Standard LoRA: lora_A=[r, in], lora_B=[out, r]
+        // Implementation computes delta = lora_B @ lora_A = [out, in], then transposes to [in, out]
         let base = Tensor::zeros((3, 4), DType::F32, &device).unwrap(); // [in=3, out=4]
-        let lora_a = Tensor::ones((2, 4), DType::F32, &device).unwrap(); // [r=2, out=4]
-        let lora_b = Tensor::ones((3, 2), DType::F32, &device).unwrap(); // [in=3, r=2]
+        let lora_a = Tensor::ones((2, 3), DType::F32, &device).unwrap(); // [r=2, in=3]
+        let lora_b = Tensor::ones((4, 2), DType::F32, &device).unwrap(); // [out=4, r=2]
         let merged = apply_lora_delta(&base, &lora_a, &lora_b, 0.5, true).unwrap();
         assert_eq!(merged.shape().dims(), &[3, 4]);
-        // Each entry of (lora_b @ lora_a^T) is r=2 ones, so delta = 2 * 0.5 = 1.0 everywhere.
+        // delta = lora_B @ lora_A = [4,2] @ [2,3] = [4,3], then transpose to [3,4]
+        // Each entry of (lora_B @ lora_A) is r=2 ones, so delta = 2 * 0.5 = 1.0 everywhere.
         let v = merged.flatten_all().unwrap().to_vec1::<f32>().unwrap();
         for x in v {
             assert!((x - 1.0).abs() < 1e-6);

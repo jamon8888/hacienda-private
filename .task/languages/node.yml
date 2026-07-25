@@ -10,7 +10,7 @@ tasks:
   web:build:fast:
     desc: "Incremental local static export build for apps/web"
     cmds:
-      - bash scripts/task/web-artifact-cache.sh all
+      - bash scripts/task/web-artifact-cache.sh web
 
   web:typecheck:
     desc: "Type-check apps/web"
