@@ -3,7 +3,7 @@
   "version": "1.0.0-rc.27",
   "type": "module",
   "private": true,
-  "description": "Node-side document-intelligence pipeline for MCP-triggered ingest: xberg-wasm extraction, on-device e5 embedding and GLiNER PII via onnxruntime-web's WASM backend run under Node.",
+  "description": "Node-side document-intelligence pipeline for MCP-triggered ingest: xberg-wasm extraction and legacy ONNX GLiNER PII via onnxruntime-web's WASM backend run under Node, alongside the Candle GLiNER2/Granite backends served through @xberg-io/xberg-wasm.",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
