@@ -20,7 +20,7 @@ import {
   configureGliner2NativeFacade,
   detectGliner2,
   detectPii,
-  embedText,
+  gliner2ArtifactPaths,
   type Gliner2ArtifactPaths,
 } from "@xberg-io/node-pipeline";
 import { loadOrCreateSessionToken, resolveLaunchScopes, authenticateHttp, ownerPrincipal } from "./auth.js";
@@ -45,10 +45,10 @@ export interface AppContext {
 
 /**
  * Verify and resolve a native GLiNER2 artifact set through the same pinned
- * ModelCache used by the legacy ONNX pipeline. The generated xberg-node
- * façade should consume the returned `modelDir`; keeping this seam explicit
- * avoids accidentally falling back to an unverified download or inventing a
- * JS implementation of Candle inference.
+ * ModelCache used by the legacy ONNX pipeline. The returned `modelDir` feeds
+ * the Candle GLiNER2 backend (loadGliner2Model, via `@xberg-io/xberg-wasm`);
+ * keeping this seam explicit avoids accidentally falling back to an
+ * unverified download or inventing a JS implementation of Candle inference.
  */
 export function ensureGliner2ModelArtifacts(
   ctx: AppContext,
@@ -61,37 +61,54 @@ export function ensureGliner2ModelArtifacts(
   return ctx.models.ensureGliner2Artifacts(names);
 }
 
+// Candle GLiNER2 model instances, cached by resolved modelDir so multiple AppContexts (each with
+// its own ModelCache/manifest, as in tests) never share a stale closure over another context's
+// artifacts — every call re-derives file paths from the modelDir it's actually given.
+const gliner2ModelCache = new Map<string, Promise<Gliner2ModelInstance>>();
+
+async function loadGliner2Model(modelDir: string): Promise<Gliner2ModelInstance> {
+  let cached = gliner2ModelCache.get(modelDir);
+  if (!cached) {
+    cached = (async () => {
+      const wasm = await getXbergWasm();
+      const paths = gliner2ArtifactPaths(modelDir);
+      const [weights, tokenizer, encoderConfig] = await Promise.all([
+        readFile(paths.weightsPath),
+        readFile(paths.tokenizerPath),
+        readFile(paths.encoderConfigPath),
+      ]);
+      const model = new wasm.Gliner2Model();
+      model.loadBytes(new Uint8Array(weights), new Uint8Array(tokenizer), new Uint8Array(encoderConfig));
+      return model;
+    })().catch((error) => {
+      gliner2ModelCache.delete(modelDir);
+      throw error;
+    });
+    gliner2ModelCache.set(modelDir, cached);
+  }
+  return cached;
+}
+
 let nativeGliner2Ready: Promise<boolean> | undefined;
 
-type NativeGliner2Module = typeof import("@xberg-io/xberg") & {
-  detectCandleEntities(
-    text: string,
-    modelDir: string,
-    adapterDir: string | undefined,
-    categories: unknown[],
-    customLabels: string[],
-  ): Promise<
-    ReadonlyArray<{
-      category: unknown;
-      start: number;
-      end: number;
-      text: string;
-    }>
-  >;
-};
-
+// Routes Candle GLiNER2 NER through the same `@xberg-io/xberg-wasm` binary the browser uses,
+// instead of the generated `@xberg-io/xberg` NAPI façade — which never actually exposed a
+// `detectCandleEntities` export (verified against the full generated source), so this backend
+// always threw and silently fell back to legacy ONNX NER. Actual load failures now surface from
+// loadGliner2Model() inside detectGliner2() itself, where pipeline.detectPii's existing
+// auto/legacy/candle fallback already handles them.
 async function configureNativeGliner2(): Promise<boolean> {
   nativeGliner2Ready ??= (async () => {
     try {
-      const native = (await import("@xberg-io/xberg")) as unknown as NativeGliner2Module;
       configureGliner2NativeFacade({
-        detectGliner2: async (text, modelDir, labels) => {
-          const entities = await native.detectCandleEntities(text, modelDir, undefined, [], [...labels]);
-          return entities.map((entity) => ({
-            kind: String(entity.category),
-            start: entity.start,
-            end: entity.end,
-            text: entity.text,
+        detectGliner2: async (text, modelDir, labels, threshold) => {
+          const model = await loadGliner2Model(modelDir);
+          const spans = model.extractNer(text, [...labels], threshold);
+          return spans.map((span) => ({
+            kind: span.label,
+            start: span.start,
+            end: span.end,
+            text: span.text,
           }));
         },
       });
@@ -166,6 +183,10 @@ async function getXbergWasm(): Promise<typeof import("@xberg-io/xberg-wasm")> {
   }
   return xbergWasmReady;
 }
+
+type XbergWasmModule = Awaited<ReturnType<typeof getXbergWasm>>;
+type GraniteEmbeddingModelInstance = InstanceType<XbergWasmModule["GraniteEmbeddingModel"]>;
+type Gliner2ModelInstance = InstanceType<XbergWasmModule["Gliner2Model"]>;
 
 function readBody(req: IncomingMessage): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -601,16 +622,24 @@ export function createAppContext(config: AppConfig): AppContext {
   // each time would make repeated hashing dominate ingestion cost far more than actual inference.
   // Memoized once per AppContext (mirrors the getXbergWasm lazy-promise pattern above), not
   // module-level, so a fresh createAppContext (e.g. in tests) doesn't reuse another context's cache.
-  let e5PathsPromise: Promise<{
-    modelPath: string;
-    tokenizerPath: string;
-  }> | null = null;
-  const e5Paths = () => {
-    e5PathsPromise ??= (async () => ({
-      modelPath: await models.ensureModel("e5-fp32"),
-      tokenizerPath: await models.ensureModel("e5-tokenizer"),
-    }))();
-    return e5PathsPromise;
+  let graniteEmbedderPromise: Promise<GraniteEmbeddingModelInstance> | null = null;
+  const getGraniteEmbedder = () => {
+    graniteEmbedderPromise ??= (async () => {
+      const wasm = await getXbergWasm();
+      const { weightsPath, tokenizerPath, configPath } = await models.ensureGraniteEmbeddingArtifacts();
+      const [weights, tokenizer, config] = await Promise.all([
+        readFile(weightsPath),
+        readFile(tokenizerPath),
+        readFile(configPath),
+      ]);
+      const model = new wasm.GraniteEmbeddingModel();
+      model.loadBytes(new Uint8Array(weights), new Uint8Array(tokenizer), new Uint8Array(config));
+      return model;
+    })().catch((error) => {
+      graniteEmbedderPromise = null;
+      throw error;
+    });
+    return graniteEmbedderPromise;
   };
   let glinerPathsPromise: Promise<{
     modelPath: string;
@@ -656,8 +685,10 @@ export function createAppContext(config: AppConfig): AppContext {
       return chunks.length > 0 ? chunks : [content];
     },
     embed: async (text: string) => {
-      const { modelPath, tokenizerPath } = await e5Paths();
-      return embedText(text, modelPath, tokenizerPath);
+      const model = await getGraniteEmbedder();
+      const [vector] = model.embedDocuments([text]);
+      if (!vector) throw new Error("Granite embedding produced no output for input text");
+      return vector;
     },
     detectPii: async (text: string) => {
       const backend = resolveNerBackendSetting();

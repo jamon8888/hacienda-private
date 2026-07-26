@@ -20,9 +20,6 @@ function resolveApiBase(): string {
 export const API_BASE = resolveApiBase();
 export const MODEL_MANIFEST_URL = `${API_BASE}/models/manifest.json`;
 
-export const E5_TOKENIZER_URL = `${API_BASE}/models/e5.tokenizer.json`;
-export const E5_TOKENIZER_CONFIG_URL = `${API_BASE}/models/e5.tokenizer_config.json`;
-
 export const GRANITE_EMBED_DIM = 384;
 export const GRANITE_EMBEDDING_IDENTITY =
   "ibm-granite/granite-embedding-97m-multilingual-r2@835ad14087e140460703cf0fae09f97d469d65c2;bf16->f32;modernbert-384;cls;normalize=true";
@@ -67,13 +64,6 @@ export const GLINER_TOKENIZER_REPO_ID = "gliner-pii";
 export const EMBED_DIM = GRANITE_EMBED_DIM;
 
 export type Quant = "int8" | "int4" | "fp32";
-export type E5Variant = "e5-base" | "e5-small";
-
-export function e5ModelUrl(variant: E5Variant, quant: Quant): string {
-  // smallVariantsServed is gated OFF in scenario.ts; default path is e5-base.
-  const name = variant === "e5-small" ? "e5-small" : "e5";
-  return `${API_BASE}/models/${name}.${quant}.onnx`;
-}
 
 export function glinerModelUrl(quant: Quant): string {
   return `${API_BASE}/models/gliner-pii.${quant}.onnx`;

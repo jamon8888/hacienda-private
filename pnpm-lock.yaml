@@ -356,6 +356,9 @@ importers:
       gliner:
         specifier: ^0.0.19
         version: 0.0.19(onnxruntime-node@1.19.2)
+      idb-keyval:
+        specifier: ^6.2.2
+        version: 6.3.0
       onnxruntime-web:
         specifier: ^1.24.2
         version: 1.27.0
@@ -390,9 +393,6 @@ importers:
       '@xberg-io/node-pipeline':
         specifier: workspace:*
         version: link:../../packages/node-pipeline
-      '@xberg-io/xberg':
-        specifier: workspace:*
-        version: link:../../crates/xberg-node
       '@xberg-io/xberg-wasm':
         specifier: workspace:*
         version: link:../../crates/xberg-wasm

@@ -237,7 +237,7 @@ export async function extractDocumentForUi(file: File): Promise<ExtractedDocumen
 
 export async function queryRagForUi(matter: Matter, query: string, topK = 8): Promise<RetrievedChunk[]> {
   const vec = await embedQuery(query);
-  return retrieve(matter.id, vec, topK);
+  return retrieve(matter.id, vec, topK, query);
 }
 
 export async function redactDocumentForUi(
