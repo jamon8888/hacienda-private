@@ -22,8 +22,11 @@ function bboxToHighlightArea(bbox: { x: number; y: number; w: number; h: number 
   return { left: bbox.x, top: bbox.y, width: bbox.w, height: bbox.h };
 }
 
+// PiiEntity.text is always the redaction token (e.g. "{{C0_PERSON_1}}"), which is chunk-prefixed
+// and therefore unique across the whole document — unlike kind/start/end, which are chunk-local
+// and can collide between two different chunks' spans (start=6,end=11 in chunk 0 vs. chunk 5).
 function fieldKey(e: PiiEntity): string {
-  return `${e.kind}-${e.start}-${e.end}`;
+  return e.text;
 }
 
 export interface ReviewSaveDecision {

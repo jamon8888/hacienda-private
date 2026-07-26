@@ -88,4 +88,37 @@ describe("mergeIntoAccumulator", () => {
     );
     expect(entries.map((e) => e.original).sort()).toEqual(["Alicia", "Bob"]);
   });
+
+  it("evicts a legacy vault entry with no docId of its own, by backfilling from prior.pii", async () => {
+    // Simulates a matter ingested before RedactionEntry.docId existed: the vault entry has no
+    // docId, but prior.pii (which always carried doc_id) can still identify which doc it belongs to.
+    const legacy = await mergeIntoAccumulator(
+      undefined,
+      {
+        entries: [entry("{{PERSON_1}}", "Alice", 0)], // no docId — pre-existing shape
+        pii: [span("docA", "{{PERSON_1}}", 0)],
+        chunks: [chunk("docA", 0)],
+      },
+      PASS,
+    );
+
+    const corrected = await mergeIntoAccumulator(
+      legacy,
+      {
+        entries: [{ ...entry("{{PERSON_1}}", "Alicia", 0), docId: "docA" }],
+        pii: [span("docA", "{{PERSON_1}}", 0)],
+        chunks: [chunk("docA", 0)],
+      },
+      PASS,
+      "docA",
+    );
+
+    expect(corrected.pii).toHaveLength(1);
+    const entries = await openVault(
+      { cipher: Uint8Array.from(corrected.vaultCipher), salt: Uint8Array.from(corrected.vaultSalt) },
+      PASS,
+    );
+    // Only the corrected entry should remain — the legacy one must be evicted, not duplicated.
+    expect(entries.map((e) => e.original)).toEqual(["Alicia"]);
+  });
 });

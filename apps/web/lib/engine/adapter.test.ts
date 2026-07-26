@@ -111,11 +111,13 @@ describe("reviewAndRepush", () => {
     ]);
 
     const { reviewAndRepush } = await import("./adapter");
+    // rejectedKeys are tokens (PiiEntity.text), not "kind-start-end" — Alice is chunk 0's first
+    // PERSON span, so buildRedaction mints it as {{C0_PERSON_1}}.
     const result = await reviewAndRepush(
       DOC_ID,
       mirror,
       { matterId: "matter-1", scopeToken: "token", passphrase: PASS },
-      { rejectedKeys: ["PERSON-6-11"], newSpans: [] },
+      { rejectedKeys: ["{{C0_PERSON_1}}"], newSpans: [] },
     );
 
     const decoded = JSON.parse(new TextDecoder().decode(result.mirror)) as {
@@ -126,6 +128,52 @@ describe("reviewAndRepush", () => {
     // Only Bob's span survives the rejection — Alice is un-redacted, not just re-tokenized.
     expect(result.pii).toHaveLength(1);
     expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("does not un-redact a same-named span in a different chunk (token, not kind-start-end, disambiguates)", async () => {
+    // Two chunks each have a PERSON span at the exact same local offset (6,11) — with a
+    // "kind-start-end" key these would collide; with tokens (chunk-prefixed) they can't.
+    const { buildRedaction: buildRedactionFn, sealVault: sealVaultFn } = await import("@xberg-io/wasm-pipeline-real");
+    const textA = "Hello Alice.";
+    const textB = "Hello Bobby.";
+    const a = buildRedactionFn(textA, [{ kind: "PERSON", start: 6, end: 11, text: "Alice" }], "C0", DOC_ID);
+    const b = buildRedactionFn(textB, [{ kind: "PERSON", start: 6, end: 11, text: "Bobby" }], "C1", DOC_ID);
+    const sealed = await sealVaultFn([...a.entries, ...b.entries], PASS);
+    const mirror = new TextEncoder().encode(
+      JSON.stringify({
+        version: 1,
+        index: [],
+        vault: Array.from(sealed.cipher),
+        vaultSalt: Array.from(sealed.salt),
+        pii: [...a.entries, ...b.entries].map((e) => ({
+          doc_id: DOC_ID,
+          kind: e.kind,
+          start: e.start,
+          end: e.end,
+          token: e.token,
+        })),
+        chunks: [
+          { doc_id: DOC_ID, chunk_index: 0, text: a.redacted, page: 1, citation: `${DOC_ID}#0`, score: 1 },
+          { doc_id: DOC_ID, chunk_index: 1, text: b.redacted, page: 1, citation: `${DOC_ID}#1`, score: 1 },
+        ],
+      }),
+    );
+
+    const { reviewAndRepush } = await import("./adapter");
+    // Only reject chunk 0's span ({{C0_PERSON_1}}) — chunk 1's {{C1_PERSON_1}} should survive.
+    const result = await reviewAndRepush(
+      DOC_ID,
+      mirror,
+      { matterId: "matter-1b", scopeToken: "token", passphrase: PASS },
+      { rejectedKeys: ["{{C0_PERSON_1}}"], newSpans: [] },
+    );
+
+    const decoded = JSON.parse(new TextDecoder().decode(result.mirror)) as {
+      chunks: { text: string }[];
+    };
+    expect(decoded.chunks[0]?.text).toContain("Alice");
+    expect(decoded.chunks[1]?.text).not.toContain("Bobby");
+    expect(result.pii).toHaveLength(1);
   });
 
   it("redacts a missed span found in the reconstructed original text", async () => {

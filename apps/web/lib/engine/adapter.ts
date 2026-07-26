@@ -82,6 +82,18 @@ function emit(ctx: IngestContext, name: string, docId: string, stage: IngestProg
   ctx.onProgress?.({ doc_id: docId, name, stage, progress });
 }
 
+// Serializes read-modify-write access to a matter's accumulator + retrieval index (both mutated
+// together by ingestFolder and reviewAndRepush) so two operations racing on the same matter — two
+// documents reviewed close together, a review racing an in-flight ingest, two browser tabs — can't
+// each read the same prior state and clobber each other's write. Falls back to running the callback
+// directly where the Web Locks API is unavailable (e.g. the test environment); that's an acceptable
+// gap since there's no real concurrency to guard against there.
+async function withMatterLock<T>(matterId: string, fn: () => Promise<T>): Promise<T> {
+  const locks = typeof navigator !== "undefined" ? navigator.locks : undefined;
+  if (!locks) return fn();
+  return locks.request(`xberg-matter-mirror:${matterId}`, fn);
+}
+
 function mirrorPiiSpans(
   items: IndexedChunk[],
   allEntries: { kind: string; start: number; end: number; token: string }[],
@@ -141,16 +153,6 @@ export async function ingestFolder(file: File, ctx: IngestContext): Promise<Inge
   }
   emit(ctx, name, name, "pii", 0.8);
 
-  // Fetch the matter accumulator up-front: its presence is the authoritative signal of whether a
-  // prior ingest already persisted this matter's EdgeVec index (index + accumulator are written
-  // together per matter). appendIndex must not probe via EdgeVec.load(), which hangs instead of
-  // rejecting when no index exists yet. Reused below for mergeIntoAccumulator (no second read).
-  const prior = await get<MatterMirrorAccumulator>(accumulatorKey(ctx.matter.id));
-
-  // Additive retrieval index: augment the matter's existing EdgeVec index rather than replacing it.
-  const db = await appendIndex(ctx.matter.id, items, prior !== undefined);
-  const indexBytes = await serializeIndex(db);
-
   const thisPii = mirrorPiiSpans(items, allEntries);
   const thisChunks: MirrorChunk[] = items.map((it, i) => ({
     doc_id: it.docId,
@@ -162,27 +164,41 @@ export async function ingestFolder(file: File, ctx: IngestContext): Promise<Inge
     citation: it.citation ?? "",
   }));
 
-  // Cumulative server bundle: merge this document's tokenized pii/chunks + vault entries into the
-  // matter accumulator, then push the FULL matter state (server saveMirror replaces the whole matter
-  // dir, so every push must carry everything). Sequential upload (FolderView) makes this race-free.
-  const merged = await mergeIntoAccumulator(
-    prior,
-    { entries: allEntries, pii: thisPii, chunks: thisChunks },
-    ctx.passphrase,
-  );
-  await set(accumulatorKey(ctx.matter.id), merged);
+  // Fetch-merge-push is one read-modify-write critical section over this matter's accumulator +
+  // retrieval index; withMatterLock keeps it atomic against a concurrent ingest or review of
+  // another document in the same matter (see withMatterLock's own comment).
+  await withMatterLock(ctx.matter.id, async () => {
+    // Fetch the matter accumulator up-front: its presence is the authoritative signal of whether a
+    // prior ingest already persisted this matter's EdgeVec index (index + accumulator are written
+    // together per matter). appendIndex must not probe via EdgeVec.load(), which hangs instead of
+    // rejecting when no index exists yet. Reused below for mergeIntoAccumulator (no second read).
+    const prior = await get<MatterMirrorAccumulator>(accumulatorKey(ctx.matter.id));
 
-  // Cumulative server bundle: version 2, matching services/mcp-server/src/mirror.ts's parseBundle
-  // (server saveMirror replaces the whole matter dir, so every push must carry everything).
-  // Sequential upload (FolderView) makes this race-free.
-  const cumulativePayload = serializeMirrorToBytes(
-    indexBytes,
-    Uint8Array.from(merged.vaultCipher),
-    Uint8Array.from(merged.vaultSalt),
-    merged.pii,
-    merged.chunks,
-  );
-  await pushMirror(ctx.matter, cumulativePayload, ctx.scopeToken);
+    // Additive retrieval index: augment the matter's existing EdgeVec index rather than replacing it.
+    const db = await appendIndex(ctx.matter.id, items, prior !== undefined);
+    const indexBytes = await serializeIndex(db);
+
+    // Cumulative server bundle: merge this document's tokenized pii/chunks + vault entries into the
+    // matter accumulator, then push the FULL matter state (server saveMirror replaces the whole
+    // matter dir, so every push must carry everything).
+    const merged = await mergeIntoAccumulator(
+      prior,
+      { entries: allEntries, pii: thisPii, chunks: thisChunks },
+      ctx.passphrase,
+    );
+    await set(accumulatorKey(ctx.matter.id), merged);
+
+    // Cumulative server bundle: version 2, matching services/mcp-server/src/mirror.ts's parseBundle
+    // (server saveMirror replaces the whole matter dir, so every push must carry everything).
+    const cumulativePayload = serializeMirrorToBytes(
+      indexBytes,
+      Uint8Array.from(merged.vaultCipher),
+      Uint8Array.from(merged.vaultSalt),
+      merged.pii,
+      merged.chunks,
+    );
+    await pushMirror(ctx.matter.id, cumulativePayload, ctx.scopeToken);
+  });
   emit(ctx, name, name, "index", 1);
 
   // Per-document mirror stored locally (file-store): this document's OWN sealed vault + pii + chunks.
@@ -300,8 +316,11 @@ export function chunkIndexFromToken(token: string): number | null {
 }
 
 export interface ReviewDecision {
-  // "<kind>-<start>-<end>" keys (matching PiiReviewPanel's fieldKey) of spans the reviewer marked
-  // as false positives — these are un-redacted (dropped from the PII list) rather than kept.
+  // Redaction tokens (e.g. "{{C0_PERSON_1}}", matching PiiReviewPanel's fieldKey — PiiEntity.text
+  // is always the token) of spans the reviewer marked as false positives — these are un-redacted
+  // (dropped from the PII list) rather than kept. Tokens are chunk-prefixed so they're unique
+  // across the whole document; a plain "<kind>-<start>-<end>" key is NOT, since start/end are
+  // chunk-local and could collide between two different chunks' spans.
   rejectedKeys: string[];
   // Missed spans the reviewer found still in plain text. Matched by exact substring against each
   // chunk's reconstructed original text, in chunk order, first match wins — good enough for a
@@ -361,7 +380,7 @@ export async function reviewAndRepush(
     const originalText = rehydrate(chunk.text, chunkEntries);
 
     const survivors: PiiEntity[] = chunkEntries
-      .filter((e) => !decision.rejectedKeys.includes(`${e.kind}-${e.start}-${e.end}`))
+      .filter((e) => !decision.rejectedKeys.includes(e.token))
       .map((e) => ({ kind: e.kind, start: e.start, end: e.end, text: originalText.slice(e.start, e.end) }));
 
     for (let i = remainingNewSpans.length - 1; i >= 0; i--) {
@@ -403,42 +422,48 @@ export async function reviewAndRepush(
     }),
   );
 
-  // The corrected chunks' embedding vectors don't change (re-redaction is a small text edit, not
-  // worth re-embedding) — carry over each chunk's existing vector from the persisted index.
-  const persisted = await loadPersistedChunks(ctx.matterId);
-  const priorItems = persisted.filter((c) => c.docId === docId);
-  const updatedItems: IndexedChunk[] = newChunks.map((c) => {
-    const priorItem = priorItems.find((p) => p.chunkIndex === c.chunk_index);
-    return {
+  // Replacing this doc's rows in the retrieval index and its contribution in the matter
+  // accumulator is one read-modify-write critical section; withMatterLock keeps it atomic against
+  // a concurrent ingest or another document's review landing on the same matter (see
+  // withMatterLock's own comment).
+  await withMatterLock(ctx.matterId, async () => {
+    // The corrected chunks' embedding vectors don't change (re-redaction is a small text edit, not
+    // worth re-embedding) — carry over each chunk's existing vector from the persisted index.
+    const persisted = await loadPersistedChunks(ctx.matterId);
+    const priorItems = persisted.filter((c) => c.docId === docId);
+    const updatedItems: IndexedChunk[] = newChunks.map((c) => {
+      const priorItem = priorItems.find((p) => p.chunkIndex === c.chunk_index);
+      return {
+        docId,
+        chunkIndex: c.chunk_index,
+        text: c.text,
+        page: c.page,
+        citation: c.citation,
+        bbox: c.bbox,
+        vector: priorItem?.vector ?? new Float32Array(EMBED_DIM),
+      };
+    });
+    const db = await replaceDocChunks(ctx.matterId, docId, updatedItems);
+    const indexBytes = await serializeIndex(db);
+
+    const prior = await get<MatterMirrorAccumulator>(accumulatorKey(ctx.matterId));
+    const merged = await mergeIntoAccumulator(
+      prior,
+      { entries: freshEntries, pii: newPii, chunks: newChunks },
+      ctx.passphrase,
       docId,
-      chunkIndex: c.chunk_index,
-      text: c.text,
-      page: c.page,
-      citation: c.citation,
-      bbox: c.bbox,
-      vector: priorItem?.vector ?? new Float32Array(EMBED_DIM),
-    };
+    );
+    await set(accumulatorKey(ctx.matterId), merged);
+
+    const payload = serializeMirrorToBytes(
+      indexBytes,
+      Uint8Array.from(merged.vaultCipher),
+      Uint8Array.from(merged.vaultSalt),
+      merged.pii,
+      merged.chunks,
+    );
+    await pushMirror(ctx.matterId, payload, ctx.scopeToken);
   });
-  const db = await replaceDocChunks(ctx.matterId, docId, updatedItems);
-  const indexBytes = await serializeIndex(db);
-
-  const prior = await get<MatterMirrorAccumulator>(accumulatorKey(ctx.matterId));
-  const merged = await mergeIntoAccumulator(
-    prior,
-    { entries: freshEntries, pii: newPii, chunks: newChunks },
-    ctx.passphrase,
-    docId,
-  );
-  await set(accumulatorKey(ctx.matterId), merged);
-
-  const payload = serializeMirrorToBytes(
-    indexBytes,
-    Uint8Array.from(merged.vaultCipher),
-    Uint8Array.from(merged.vaultSalt),
-    merged.pii,
-    merged.chunks,
-  );
-  await pushMirror({ id: ctx.matterId } as Matter, payload, ctx.scopeToken);
 
   const pii: PiiEntity[] = freshEntries.map((e) => ({ kind: e.kind, start: e.start, end: e.end, text: e.token }));
 

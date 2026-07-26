@@ -49,7 +49,14 @@ export async function mergeIntoAccumulator(
         passphrase,
       )
     : [];
-  const keptEntries = replaceDocId ? priorEntries.filter((e) => e.docId !== replaceDocId) : priorEntries;
+  // Vault entries sealed before this PR shipped have no `docId` of their own (it's a new,
+  // optional field on RedactionEntry) — fall back to the doc_id already recorded on the matching
+  // `prior.pii` span (by token, which is unique per document) so a legacy entry can still be
+  // correctly evicted on replace instead of being kept alongside its corrected copy forever.
+  const priorPiiDocIdByToken = new Map((prior?.pii ?? []).map((p) => [p.token, p.doc_id]));
+  const keptEntries = replaceDocId
+    ? priorEntries.filter((e) => (e.docId ?? priorPiiDocIdByToken.get(e.token)) !== replaceDocId)
+    : priorEntries;
   const keptPii = replaceDocId ? (prior?.pii ?? []).filter((p) => p.doc_id !== replaceDocId) : (prior?.pii ?? []);
   const keptChunks = replaceDocId
     ? (prior?.chunks ?? []).filter((c) => c.doc_id !== replaceDocId)
