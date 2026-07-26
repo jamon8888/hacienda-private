@@ -7,6 +7,10 @@ export interface RedactionEntry {
   kind: string;
   start: number;
   end: number;
+  // Which document this span belongs to (start/end are chunk-local, not globally unique, so this
+  // is what lets a matter-wide vault be filtered down to one document's entries — e.g. to replace
+  // a document's contribution after a PII review correction without touching other documents').
+  docId?: string;
 }
 
 export interface RedactionSpan {
@@ -50,6 +54,7 @@ export function buildRedaction(
   text: string,
   pii: PiiEntity[],
   prefix?: string,
+  docId?: string,
 ): { redacted: string; entries: RedactionEntry[] } {
   const sorted = [...pii].sort((a, b) => a.start - b.start);
   const entries: RedactionEntry[] = [];
@@ -76,6 +81,7 @@ export function buildRedaction(
       kind: e.kind,
       start: e.start,
       end: e.end,
+      docId,
     });
   }
 

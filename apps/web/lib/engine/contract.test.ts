@@ -17,4 +17,19 @@ describe("engine adapter contract", () => {
   it("exposes warmupModels", () => {
     expect(typeof engine.warmupModels).toBe("function");
   });
+  it("exposes reviewAndRepush", () => {
+    expect(typeof engine.reviewAndRepush).toBe("function");
+  });
+  it("exposes chunkIndexFromToken", () => {
+    expect(typeof engine.chunkIndexFromToken).toBe("function");
+  });
+  it("exposes openVault", () => {
+    expect(typeof engine.openVault).toBe("function");
+  });
+  it("exposes rehydrate", () => {
+    expect(typeof engine.rehydrate).toBe("function");
+  });
+  it("exposes listPiiTypes", () => {
+    expect(typeof engine.listPiiTypes).toBe("function");
+  });
 });

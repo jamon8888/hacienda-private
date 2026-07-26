@@ -1,8 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { PiiEntity } from "@xberg-io/core";
 import { Button } from "@/components/ui/button";
+import { chunkIndexFromToken } from "@xberg-io/wasm-pipeline";
+import { PiiMarkdownEditor, type NewSpan } from "@/components/PiiMarkdownEditor";
 import {
   HumanReviewPanel,
   type ReviewField,
@@ -20,29 +22,45 @@ function bboxToHighlightArea(bbox: { x: number; y: number; w: number; h: number 
   return { left: bbox.x, top: bbox.y, width: bbox.w, height: bbox.h };
 }
 
-// Redaction tokens are minted per-chunk as `{{C<chunkIndex>_<CATEGORY>_<n>}}` (see
-// packages/wasm-pipeline/src/redact.ts buildRedaction, called with prefix `C${chunkIndex}` in
-// adapter.ts). Parsing it back out is the only way to locate which chunk (and therefore which
-// page/bbox) a given PII span belongs to — PiiEntity itself carries no location.
-function chunkIndexFromToken(token: string): number | null {
-  const match = /^\{\{C(\d+)_/.exec(token);
-  return match?.[1] ? Number.parseInt(match[1], 10) : null;
+// PiiEntity.text is always the redaction token (e.g. "{{C0_PERSON_1}}"), which is chunk-prefixed
+// and therefore unique across the whole document — unlike kind/start/end, which are chunk-local
+// and can collide between two different chunks' spans (start=6,end=11 in chunk 0 vs. chunk 5).
+function fieldKey(e: PiiEntity): string {
+  return e.text;
 }
 
-function fieldKey(e: PiiEntity): string {
-  return `${e.kind}-${e.start}-${e.end}`;
+export interface ReviewSaveDecision {
+  // Free-text corrections keyed the same way as before — purely an audit annotation, doesn't by
+  // itself change what's redacted.
+  reviewedPii: Record<string, { expected: string | null }>;
+  // Tokens of spans the reviewer marked as false positives — these get un-redacted.
+  rejectedKeys: string[];
+  // Missed PII spans the reviewer found still in plain text, to be redacted.
+  newSpans: NewSpan[];
 }
 
 interface PiiReviewPanelProps {
   pii: PiiEntity[];
   mirror?: Uint8Array;
+  // Needed to decrypt the vault for the markdown editor (PiiMarkdownEditor). Absent when the
+  // matter passphrase hasn't been set yet in this session.
+  passphrase?: string;
   reviewedPii?: Record<string, { expected: string | null }>;
-  onSave: (reviewedPii: Record<string, { expected: string | null }>) => void;
+  onSave: (decision: ReviewSaveDecision) => void | Promise<void>;
   // Matter's extraction template (Step 8) — non-empty means collapse kinds outside it.
   selectedKinds?: string[];
 }
 
-export function PiiReviewPanel({ pii, mirror, reviewedPii, onSave, selectedKinds }: PiiReviewPanelProps) {
+export function PiiReviewPanel({ pii, mirror, passphrase, reviewedPii, onSave, selectedKinds }: PiiReviewPanelProps) {
+  const [rejectedKeys, setRejectedKeys] = useState<string[]>([]);
+  const [newSpans, setNewSpans] = useState<NewSpan[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  const handleDecisionChange = useCallback((nextRejected: string[], nextNewSpans: NewSpan[]) => {
+    setRejectedKeys(nextRejected);
+    setNewSpans(nextNewSpans);
+  }, []);
+
   const fields = useMemo<ReviewField[]>(() => {
     let chunks: MirrorChunkLoc[] = [];
     if (mirror) {
@@ -79,30 +97,52 @@ export function PiiReviewPanel({ pii, mirror, reviewedPii, onSave, selectedKinds
 
   const expectedRef = useMemo(() => ({ current: {} as JsonObject }), [fields]);
 
-  function handleSave() {
+  async function handleSave() {
     const out: Record<string, { expected: string | null }> = {};
     for (const field of fields) {
       const value = expectedRef.current[field.key];
       out[field.key] = { expected: typeof value === "string" ? value : value === null ? null : String(field.actual) };
     }
-    onSave(out);
+    setSaving(true);
+    try {
+      await onSave({ reviewedPii: out, rejectedKeys, newSpans });
+      setRejectedKeys([]);
+      setNewSpans([]);
+    } catch {
+      // onSave already surfaces the failure (DocumentView's reviewError banner) and rethrows —
+      // swallow here so this doesn't become an unhandled rejection from the button's onClick, and
+      // skip clearing state so the reviewer's pending rejections/new spans survive for a retry
+      // instead of being silently discarded.
+    } finally {
+      setSaving(false);
+    }
   }
 
-  if (fields.length === 0) {
-    return <p className="p-4 text-sm text-muted-foreground">No PII to review.</p>;
+  if (!mirror) {
+    return (
+      <p className="p-4 text-sm text-muted-foreground">
+        No mirror available for review — try re-ingesting this document.
+      </p>
+    );
+  }
+  if (!passphrase) {
+    return <p className="p-4 text-sm text-muted-foreground">Set the matter passphrase to review PII.</p>;
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <HumanReviewPanel
-        fields={fields}
-        showExpected
-        onExpectedChange={(expected) => {
-          expectedRef.current = expected;
-        }}
-      />
-      <Button size="sm" onClick={handleSave}>
-        Save review
+    <div className="flex flex-col gap-3">
+      {fields.length > 0 && (
+        <HumanReviewPanel
+          fields={fields}
+          showExpected
+          onExpectedChange={(expected) => {
+            expectedRef.current = expected;
+          }}
+        />
+      )}
+      <PiiMarkdownEditor mirror={mirror} passphrase={passphrase} onDecisionChange={handleDecisionChange} />
+      <Button size="sm" onClick={handleSave} disabled={saving} className="mx-2">
+        {saving ? "Saving…" : "Save review"}
       </Button>
     </div>
   );

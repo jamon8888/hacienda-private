@@ -13,6 +13,7 @@ import {
 } from "./search/persist";
 
 export type { IndexedChunk } from "./search/persist";
+export { loadPersistedChunks } from "./search/persist";
 
 interface EdgeVecMetadata {
   doc_id?: string;
@@ -157,6 +158,24 @@ export async function appendIndex(
   liveIndexes.set(matterId, db);
   liveStats.set(matterId, stats);
   await appendPersistedChunks(matterId, items);
+  return db;
+}
+
+// Replaces one document's chunks in the matter's retrieval index — used after a PII review
+// correction, whose new redacted text/tokens must replace the stale entries rather than sitting
+// alongside them. EdgeVec has no in-place update or delete for a single chunk, so this rebuilds
+// the whole index from persisted chunks with this document's rows swapped out (same shape as
+// buildIndex, just against a filtered+merged item list instead of a fresh one).
+export async function replaceDocChunks(matterId: string, docId: string, items: IndexedChunk[]): Promise<EdgeVec> {
+  await ensureEdgeVec();
+  const persisted = await loadPersistedChunks(matterId);
+  const merged = [...persisted.filter((c) => c.docId !== docId), ...items];
+  const db = newDb();
+  const stats = buildCorpusStats(merged.map((c) => c.text));
+  for (const item of merged) insertChunk(db, item, stats);
+  await setPersistedChunks(matterId, merged);
+  liveIndexes.set(matterId, db);
+  liveStats.set(matterId, stats);
   return db;
 }
 

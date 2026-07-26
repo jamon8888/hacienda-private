@@ -42,6 +42,16 @@ describe("redaction round-trip", () => {
     expect(redacted).toBe("nothing here");
     expect(entries).toEqual([]);
   });
+
+  it("stamps entries with the given docId", () => {
+    const { entries } = buildRedaction(text, pii, "F", "doc-42");
+    expect(entries.every((e) => e.docId === "doc-42")).toBe(true);
+  });
+
+  it("leaves docId undefined when not given, for backward compatibility", () => {
+    const { entries } = buildRedaction(text, pii, "F");
+    expect(entries.every((e) => e.docId === undefined)).toBe(true);
+  });
 });
 
 describe("redactText / rehydrateText (pure reversible redaction)", () => {

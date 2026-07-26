@@ -1,4 +1,3 @@
-import type { Matter } from "@xberg-io/core";
 import { API_BASE } from "./constants";
 import { graniteEmbeddingIdentity } from "./embed";
 
@@ -72,8 +71,8 @@ export function serializeMirrorToBytes(
   return new TextEncoder().encode(JSON.stringify(bundle));
 }
 
-export async function pushMirror(matter: Matter, payload: Uint8Array, scopeToken: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/rag/mirror?matter_id=${encodeURIComponent(matter.id)}`, {
+export async function pushMirror(matterId: string, payload: Uint8Array, scopeToken: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/rag/mirror?matter_id=${encodeURIComponent(matterId)}`, {
     method: "POST",
     headers: {
       authorization: `Bearer ${scopeToken}`,
