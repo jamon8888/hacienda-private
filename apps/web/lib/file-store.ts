@@ -52,6 +52,15 @@ export async function saveReviewedPii(
   await set(keyFor(docId), { ...existing, reviewedPii });
 }
 
+// Applies a real re-redaction result (adapter.reviewAndRepush) — unlike saveReviewedPii, this
+// replaces the cached pii/mirror so the document view reflects the correction immediately, and
+// clears reviewedPii since the decisions it recorded have now been applied.
+export async function saveReviewResult(docId: string, pii: PiiEntity[], mirror: Uint8Array): Promise<void> {
+  const existing = await get<StoredDocument>(keyFor(docId));
+  if (!existing) return;
+  await set(keyFor(docId), { ...existing, pii, mirror, reviewedPii: undefined });
+}
+
 export async function saveSplits(docId: string, splits: DocumentSplit[]): Promise<void> {
   const existing = await get<StoredDocument>(keyFor(docId));
   if (!existing) return;

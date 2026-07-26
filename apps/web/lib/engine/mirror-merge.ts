@@ -38,6 +38,10 @@ export async function mergeIntoAccumulator(
   prior: MatterMirrorAccumulator | undefined,
   add: { entries: RedactionEntry[]; pii: MirrorPiiSpan[]; chunks: MirrorChunk[] },
   passphrase: string,
+  // When set, drops this document's prior pii/chunks/vault entries before merging in `add` —
+  // otherwise a re-review of an already-ingested document would duplicate it in the accumulator
+  // (stale + corrected copies both present) instead of replacing it.
+  replaceDocId?: string,
 ): Promise<MatterMirrorAccumulator> {
   const priorEntries = prior
     ? await openVault(
@@ -45,10 +49,15 @@ export async function mergeIntoAccumulator(
         passphrase,
       )
     : [];
-  const sealed = await sealVault([...priorEntries, ...add.entries], passphrase);
+  const keptEntries = replaceDocId ? priorEntries.filter((e) => e.docId !== replaceDocId) : priorEntries;
+  const keptPii = replaceDocId ? (prior?.pii ?? []).filter((p) => p.doc_id !== replaceDocId) : (prior?.pii ?? []);
+  const keptChunks = replaceDocId
+    ? (prior?.chunks ?? []).filter((c) => c.doc_id !== replaceDocId)
+    : (prior?.chunks ?? []);
+  const sealed = await sealVault([...keptEntries, ...add.entries], passphrase);
   return {
-    pii: [...(prior?.pii ?? []), ...add.pii],
-    chunks: [...(prior?.chunks ?? []), ...add.chunks],
+    pii: [...keptPii, ...add.pii],
+    chunks: [...keptChunks, ...add.chunks],
     vaultCipher: Array.from(sealed.cipher),
     vaultSalt: Array.from(sealed.salt),
   };

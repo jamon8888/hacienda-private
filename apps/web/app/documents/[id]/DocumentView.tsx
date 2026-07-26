@@ -12,7 +12,8 @@ import { DocumentDualView } from "@/components/DocumentDualView";
 import { detectViewerKind } from "@/components/document-router";
 import { useAuth } from "@/lib/auth";
 import { getDocument } from "@/lib/api";
-import { getOriginalFile, saveReviewedPii, saveSplits, type StoredDocument } from "@/lib/file-store";
+import { getOriginalFile, saveReviewedPii, saveReviewResult, saveSplits, type StoredDocument } from "@/lib/file-store";
+import { reviewAndRepush } from "@xberg-io/wasm-pipeline";
 import { createInitialSplits, type DocumentSplit } from "@/components/ui/document-splits";
 import { getMatterTemplate } from "@/lib/matter-templates";
 import { routeIdFromLocation } from "@/lib/route-id";
@@ -61,6 +62,7 @@ export default function DocumentView({ id: propId }: DocumentViewProps) {
   const [textContent, setTextContent] = useState<string>("");
   const [splits, setSplits] = useState<DocumentSplit[]>([]);
   const [selectedKinds, setSelectedKinds] = useState<string[]>([]);
+  const [reviewError, setReviewError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!auth || !id) return;
@@ -154,14 +156,44 @@ export default function DocumentView({ id: propId }: DocumentViewProps) {
               <PiiPanel pii={stored.pii} mirror={stored.mirror} selectedKinds={selectedKinds} />
             </TabsContent>
             <TabsContent value="review">
+              {reviewError && <p className="mb-2 px-2 text-xs text-destructive">{reviewError}</p>}
               <PiiReviewPanel
                 pii={stored.pii}
                 mirror={stored.mirror}
                 reviewedPii={stored.reviewedPii}
                 selectedKinds={selectedKinds}
-                onSave={async (reviewed) => {
-                  await saveReviewedPii(id, reviewed);
-                  setStored((prev) => (prev ? { ...prev, reviewedPii: reviewed } : prev));
+                onSave={async (decision) => {
+                  setReviewError(null);
+                  await saveReviewedPii(id, decision.reviewedPii);
+                  setStored((prev) => (prev ? { ...prev, reviewedPii: decision.reviewedPii } : prev));
+
+                  if (decision.rejectedKeys.length === 0 && decision.newSpans.length === 0) return;
+
+                  if (!auth?.token || !auth.passphrase) {
+                    setReviewError("Set the matter passphrase before correcting PII.");
+                    return;
+                  }
+                  if (!stored.mirror) {
+                    setReviewError("This document has no local mirror to re-redact — try re-ingesting it.");
+                    return;
+                  }
+                  try {
+                    const result = await reviewAndRepush(
+                      id,
+                      stored.mirror,
+                      { matterId: doc.matter_id, scopeToken: auth.token, passphrase: auth.passphrase },
+                      { rejectedKeys: decision.rejectedKeys, newSpans: decision.newSpans },
+                    );
+                    await saveReviewResult(id, result.pii, result.mirror);
+                    setStored((prev) =>
+                      prev ? { ...prev, pii: result.pii, mirror: result.mirror, reviewedPii: undefined } : prev,
+                    );
+                    if (result.unappliedSpans.length > 0) {
+                      setReviewError(`Could not find in this document: ${result.unappliedSpans.join(", ")}`);
+                    }
+                  } catch (err) {
+                    setReviewError(err instanceof Error ? err.message : "Failed to save PII review.");
+                  }
                 }}
               />
             </TabsContent>

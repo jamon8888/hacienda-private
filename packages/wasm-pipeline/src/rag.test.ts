@@ -211,6 +211,56 @@ describe("rag persistence + retrieval", () => {
     expect(hits[0]?.text).toBe("invoice payment terms net thirty");
   });
 
+  it("replaceDocChunks swaps one document's chunks and leaves other documents' untouched", async () => {
+    const { appendIndex, replaceDocChunks, retrieve } = await import("./rag");
+    await appendIndex(
+      "matter-5",
+      [makeChunk({ docId: "doc-a", text: "alice original text", vector: [1, 0, 0, 0] })],
+      false,
+    );
+    await appendIndex(
+      "matter-5",
+      [
+        makeChunk({
+          docId: "doc-b",
+          chunkIndex: 0,
+          text: "bob unrelated text",
+          vector: [0, 1, 0, 0],
+          citation: "doc-b#0",
+        }),
+      ],
+      true,
+    );
+
+    await replaceDocChunks("matter-5", "doc-a", [
+      makeChunk({ docId: "doc-a", text: "alice corrected text", vector: [1, 0, 0, 0] }),
+    ]);
+
+    const hitsA = await retrieve("matter-5", new Float32Array([1, 0, 0, 0]), 5, "alice corrected text");
+    expect(hitsA[0]?.text).toBe("alice corrected text");
+    expect(hitsA.some((h) => h.text === "alice original text")).toBe(false);
+
+    const hitsB = await retrieve("matter-5", new Float32Array([0, 1, 0, 0]), 5, "bob unrelated text");
+    expect(hitsB.some((h) => h.text === "bob unrelated text")).toBe(true);
+  });
+
+  it("replaceDocChunks survives a reload, rebuilding the swap from persisted chunks", async () => {
+    const ragModule = await import("./rag");
+    await ragModule.appendIndex(
+      "matter-6",
+      [makeChunk({ docId: "doc-c", text: "first version", vector: [1, 0, 0, 0] })],
+      false,
+    );
+    await ragModule.replaceDocChunks("matter-6", "doc-c", [
+      makeChunk({ docId: "doc-c", text: "second version", vector: [1, 0, 0, 0] }),
+    ]);
+
+    vi.resetModules();
+    const reloaded = await import("./rag");
+    const hits = await reloaded.retrieve("matter-6", new Float32Array([1, 0, 0, 0]), 5, "second version");
+    expect(hits[0]?.text).toBe("second version");
+  });
+
   it("evictLiveIndex drops both the in-memory cache and the persisted chunk list", async () => {
     const { appendIndex, evictLiveIndex, retrieve } = await import("./rag");
     await appendIndex("matter-4", [makeChunk({ text: "will be forgotten" })], false);

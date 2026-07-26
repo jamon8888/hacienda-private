@@ -4,6 +4,8 @@ export {
   queryRagForUi as queryRag,
   redactDocumentForUi as redactDocument,
   rehydrateSpanForUi,
+  reviewAndRepush,
+  chunkIndexFromToken,
   warmupModels,
   type ExtractedDocument,
   type IngestResult,
@@ -11,4 +13,7 @@ export {
   type IngestContext,
   type WarmupProgress,
   type WarmupResult,
+  type ReviewContext,
+  type ReviewDecision,
+  type ReviewResult,
 } from "./adapter";
