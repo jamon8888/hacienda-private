@@ -43,13 +43,21 @@ function ensureEdgeVec(): Promise<void> {
 // call EdgeVecClass.load() unconditionally, never consulting this cache even when it was warm.
 const liveIndexes = new Map<string, EdgeVec>();
 
+// Companion cache of the BM25 corpus stats each liveIndexes entry was built/rebuilt with, so
+// retrieve() can reuse them on a warm index instead of re-reading and re-tokenizing the full
+// persisted corpus on every single query.
+const liveStats = new Map<string, CorpusStats>();
+
 // Call after a matter is successfully forgotten/deleted server-side — otherwise its vectors stay
 // resident in this cache (and therefore in the tab's memory) until the page reloads, even though
 // the user asked for the matter's data to be gone. Also drops the persisted chunk list, which
 // otherwise survives a "forget" indefinitely in IndexedDB.
 export function evictLiveIndex(matterId: string): void {
   liveIndexes.delete(matterId);
-  void deletePersistedChunks(matterId);
+  liveStats.delete(matterId);
+  deletePersistedChunks(matterId).catch((error) => {
+    console.error(`Failed to delete persisted chunks for matter ${matterId}`, error);
+  });
 }
 
 function newDb(): EdgeVec {
@@ -83,12 +91,14 @@ function insertChunk(db: EdgeVec, item: IndexedChunk, stats: CorpusStats): void 
   insertSparseForChunk(db, item.text, stats);
 }
 
-async function rebuildFromPersisted(matterId: string): Promise<{ db: EdgeVec; chunks: IndexedChunk[] }> {
+async function rebuildFromPersisted(
+  matterId: string,
+): Promise<{ db: EdgeVec; chunks: IndexedChunk[]; stats: CorpusStats }> {
   const chunks = await loadPersistedChunks(matterId);
   const db = newDb();
   const stats = buildCorpusStats(chunks.map((c) => c.text));
   for (const chunk of chunks) insertChunk(db, chunk, stats);
-  return { db, chunks };
+  return { db, chunks, stats };
 }
 
 export async function buildIndex(matterId: string, items: IndexedChunk[]): Promise<EdgeVec> {
@@ -98,6 +108,7 @@ export async function buildIndex(matterId: string, items: IndexedChunk[]): Promi
   for (const item of items) insertChunk(db, item, stats);
   await setPersistedChunks(matterId, items);
   liveIndexes.set(matterId, db);
+  liveStats.set(matterId, stats);
   return db;
 }
 
@@ -105,8 +116,9 @@ export async function loadIndex(matterId: string): Promise<EdgeVec> {
   await ensureEdgeVec();
   const cached = liveIndexes.get(matterId);
   if (cached) return cached;
-  const { db } = await rebuildFromPersisted(matterId);
+  const { db, stats } = await rebuildFromPersisted(matterId);
   liveIndexes.set(matterId, db);
+  liveStats.set(matterId, stats);
   return db;
 }
 
@@ -143,6 +155,7 @@ export async function appendIndex(
   const stats = buildCorpusStats([...priorChunks, ...items].map((c) => c.text));
   for (const item of items) insertChunk(db, item, stats);
   liveIndexes.set(matterId, db);
+  liveStats.set(matterId, stats);
   await appendPersistedChunks(matterId, items);
   return db;
 }
@@ -155,8 +168,10 @@ export async function retrieve(
 ): Promise<RetrievedChunk[]> {
   const db = await loadIndex(matterId);
   const q = queryVec instanceof Float32Array ? queryVec : new Float32Array(queryVec);
-  const chunks = await loadPersistedChunks(matterId);
-  const stats = buildCorpusStats(chunks.map((c) => c.text));
+  // loadIndex() populates liveStats whenever it (re)builds a db, so by this point there's always a
+  // cached entry for matterId — reusing it avoids re-reading and re-tokenizing the full persisted
+  // corpus on every single query.
+  const stats = liveStats.get(matterId) ?? buildCorpusStats((await loadPersistedChunks(matterId)).map((c) => c.text));
   const hits = runHybridSearch(db, q, queryText, stats, topK);
   const out: RetrievedChunk[] = [];
   for (const hit of hits) {
