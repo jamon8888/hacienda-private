@@ -27,7 +27,9 @@ pub struct DocumentInput {
 /// against it. Generic over the embedding backend so the same engine runs with a
 /// real model (native host) or [`crate::MockEmbedder`] (tests).
 ///
-/// Stateless between calls: every query re-reads the matter's snapshot from disk.
+/// Stateless between calls: every query re-reads the matter's snapshot from disk (and, if the
+/// Node host/browser mirror has newer data than that snapshot, re-embeds it first — see
+/// [`Self::query`]).
 pub struct RagEngine<E: Embedder> {
     embedder: E,
     mirrors_dir: PathBuf,
@@ -161,15 +163,81 @@ impl<E: Embedder> RagEngine<E> {
     /// This is the behaviour the Node host could not provide — its
     /// `MirrorStore.retrieve()` ignored the query and re-sorted mirrored chunks
     /// by a mirror-time placeholder score.
+    ///
+    /// Before searching, re-imports the legacy bundle if it's newer than the snapshot (or no
+    /// snapshot exists yet) — see [`Self::sync_from_legacy_if_stale`] — so a caller never has to
+    /// separately run `import_legacy` after every mirror push before new documents are searchable.
+    /// A sync failure only turns into an error when there's no existing snapshot to fall back on
+    /// (e.g. a legacy bundle written by a future, not-yet-understood version, or a transient
+    /// embedder failure) — otherwise every subsequent query for the matter would break on a single
+    /// bad legacy write, even though the last-known-good snapshot is still perfectly usable.
     pub fn query(&self, matter_id: &str, text: &str, top_k: usize) -> Result<Vec<RetrievedChunk>> {
         let paths = self.paths(matter_id)?;
         let path = paths.snapshot();
+        if let Err(sync_err) = self.sync_from_legacy_if_stale(&paths, matter_id) {
+            if !path.exists() {
+                return Err(sync_err);
+            }
+        }
         if !path.exists() {
             return Err(RagError::MatterNotFound(matter_id.to_string()));
         }
         let store = self.load_or_empty(&paths)?;
         let q = self.embedder.embed_query(text)?;
         store.search(&q, top_k)
+    }
+
+    /// Re-embeds the matter's legacy bundle into a fresh snapshot when it's newer than the
+    /// existing snapshot (or there is no snapshot yet). A no-op when there's no legacy bundle at
+    /// all — a matter that was never ingested via the Node host/browser mirror path stays a clean
+    /// `MatterNotFound` for `query()`, exactly as before this existed.
+    ///
+    /// This re-embeds the matter's *entire* chunk set on every stale detection (matching
+    /// `import_legacy`'s own "full rebuild" contract) rather than incrementally — an accepted
+    /// cost at this app's realistic per-matter scale (see `import_legacy`'s doc comment); revisit
+    /// only if a matter's chunk count grows large enough for this to matter in practice.
+    fn sync_from_legacy_if_stale(&self, paths: &MatterPaths, matter_id: &str) -> Result<()> {
+        let legacy_path = paths.legacy_bundle();
+        // Cheap early exit for the common "never ingested" case, before paying for a lock
+        // acquisition (which also creates the matter directory). Re-checked authoritatively below,
+        // under the lock. Only a missing file is a legitimate no-op — a permission error or other
+        // I/O failure must propagate, not be silently treated as "nothing to import."
+        match std::fs::metadata(&legacy_path) {
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => return Err(RagError::Io(format!("stat {}: {e}", legacy_path.display()))),
+        }
+
+        // Hold the write lock for the whole stale-check-then-import sequence: `index_documents`
+        // mutates the snapshot under this same lock, and `import_legacy` fully rebuilds the
+        // snapshot from the legacy bundle alone. If the staleness decision were made outside the
+        // lock, chunks a concurrent `index_documents` appended between the check and the (by then
+        // stale) rebuild would be silently discarded when the rebuild overwrites a snapshot it
+        // never saw. Call the non-locking `import_legacy_locked` below, not `import_legacy` — the
+        // latter would try to re-acquire this same lock and deadlock.
+        let _write_lock = self.acquire_write_lock(paths)?;
+        let legacy_meta = match std::fs::metadata(&legacy_path) {
+            Ok(meta) => meta,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => return Err(RagError::Io(format!("stat {}: {e}", legacy_path.display()))),
+        };
+        let needs_import = match std::fs::metadata(paths.snapshot()) {
+            Ok(snapshot_meta) => {
+                let legacy_modified = legacy_meta
+                    .modified()
+                    .map_err(|e| RagError::Io(format!("stat {}: {e}", legacy_path.display())))?;
+                let snapshot_modified = snapshot_meta
+                    .modified()
+                    .map_err(|e| RagError::Io(format!("stat {}: {e}", paths.snapshot().display())))?;
+                legacy_modified > snapshot_modified
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => true,
+            Err(e) => return Err(RagError::Io(format!("stat {}: {e}", paths.snapshot().display()))),
+        };
+        if needs_import {
+            self.import_legacy_locked(paths, matter_id)?;
+        }
+        Ok(())
     }
 
     /// Rebuild a matter's snapshot from a legacy JSON `MirrorBundle` by
@@ -179,6 +247,14 @@ impl<E: Embedder> RagEngine<E> {
     pub fn import_legacy(&self, matter_id: &str) -> Result<usize> {
         let paths = self.paths(matter_id)?;
         let _write_lock = self.acquire_write_lock(&paths)?;
+        self.import_legacy_locked(&paths, matter_id)
+    }
+
+    /// Body of [`Self::import_legacy`], assuming the caller already holds `paths`' write lock.
+    /// Split out so [`Self::sync_from_legacy_if_stale`] can recheck freshness and perform the
+    /// rebuild under a single lock acquisition, instead of two (which would let another writer's
+    /// change slip in between the check and the rebuild).
+    fn import_legacy_locked(&self, paths: &MatterPaths, matter_id: &str) -> Result<usize> {
         let path = paths.legacy_bundle();
         if !path.exists() {
             return Err(RagError::MatterNotFound(matter_id.to_string()));
@@ -215,7 +291,7 @@ impl<E: Embedder> RagEngine<E> {
         let mut store = FlatStore::with_identity(self.embedder.identity().clone());
         store.ingest(&items)?;
         let count = store.len();
-        self.save(&paths, &store)?;
+        self.save(paths, &store)?;
         Ok(count)
     }
 }
@@ -332,6 +408,59 @@ mod tests {
 
         let hits = engine(&mirrors_dir).query("shared", "text", WRITER_COUNT).unwrap();
         assert_eq!(hits.len(), WRITER_COUNT);
+    }
+
+    #[test]
+    fn concurrent_index_documents_call_is_not_lost_to_a_racing_legacy_import() {
+        // Regression test for a race where `sync_from_legacy_if_stale`'s staleness decision was
+        // made outside the write lock: a concurrent `index_documents` call could append a chunk
+        // in the window between that check and `import_legacy`'s full rebuild, which then
+        // silently discarded it by rebuilding the snapshot from the legacy bundle alone. Fixed by
+        // holding the lock (and rechecking freshness under it) for the whole check-then-rebuild
+        // sequence — see `sync_from_legacy_if_stale`.
+        let tmp = tempfile::tempdir().unwrap();
+        let mirrors_dir = tmp.path().to_path_buf();
+        let paths = MatterPaths::new(&mirrors_dir, "m1").unwrap();
+
+        // No snapshot exists yet, so the staleness check is unconditionally "needs_import = true"
+        // (the "no snapshot" branch) no matter which thread below wins the lock race — this makes
+        // the scenario reproducible without depending on sub-second filesystem mtime resolution.
+        write_legacy_bundle(
+            &paths,
+            r#"{"doc_id":"legacy","chunk_index":0,"text":"legacy content","score":0.1,"citation":"legacy:0"}"#,
+        );
+
+        // Both threads embed (and hit the barrier) before either acquires the write lock — see
+        // `SynchronizedEmbedder` — maximizing the chance they contend for the lock in either order.
+        let barrier = Arc::new(Barrier::new(2));
+
+        let import_engine = RagEngine::new(
+            SynchronizedEmbedder {
+                inner: MockEmbedder::new(16),
+                barrier: Arc::clone(&barrier),
+            },
+            mirrors_dir.clone(),
+        );
+        let import_handle = std::thread::spawn(move || import_engine.query("m1", "legacy content", 5));
+
+        let index_engine = RagEngine::new(
+            SynchronizedEmbedder {
+                inner: MockEmbedder::new(16),
+                barrier: Arc::clone(&barrier),
+            },
+            mirrors_dir.clone(),
+        );
+        let index_handle =
+            std::thread::spawn(move || index_engine.index_documents("m1", &[doc("concurrent", &["concurrent content"])]));
+
+        import_handle.join().unwrap().unwrap();
+        index_handle.join().unwrap().unwrap();
+
+        let hits = engine(&mirrors_dir).query("m1", "content", 10).unwrap();
+        assert!(
+            hits.iter().any(|h| h.text == "concurrent content"),
+            "concurrent index_documents chunk was lost to a racing legacy import rebuild: {hits:?}"
+        );
     }
 
     #[test]
@@ -472,5 +601,114 @@ mod tests {
             incompatible.index_documents("m1", &[doc("d2", &["new"])]).unwrap_err(),
             RagError::EmbeddingIdentityMismatch { .. }
         ));
+    }
+
+    fn write_legacy_bundle(paths: &MatterPaths, chunks_json: &str) {
+        std::fs::create_dir_all(&paths.dir).unwrap();
+        std::fs::write(
+            paths.legacy_bundle(),
+            format!(r#"{{"version":1,"index":[],"vault":[],"pii":[],"chunks":[{chunks_json}]}}"#),
+        )
+        .unwrap();
+    }
+
+    fn set_mtime(path: &Path, time: std::time::SystemTime) {
+        let file = OpenOptions::new().write(true).open(path).unwrap();
+        file.set_modified(time).unwrap();
+    }
+
+    #[test]
+    fn query_imports_a_fresh_legacy_bundle_when_no_snapshot_exists() {
+        let tmp = tempfile::tempdir().unwrap();
+        let e = engine(tmp.path());
+        let paths = MatterPaths::new(tmp.path(), "m1").unwrap();
+        write_legacy_bundle(
+            &paths,
+            r#"{"doc_id":"d1","chunk_index":0,"text":"fresh from the mirror","score":0.1,"citation":"d1:0"}"#,
+        );
+
+        // No index_documents/import_legacy call first — query() alone must pick this up.
+        let hits = e.query("m1", "fresh from the mirror", 1).unwrap();
+        assert_eq!(hits[0].text, "fresh from the mirror");
+    }
+
+    #[test]
+    fn query_reimports_when_the_legacy_bundle_is_newer_than_the_snapshot() {
+        let tmp = tempfile::tempdir().unwrap();
+        let e = engine(tmp.path());
+        e.index_documents("m1", &[doc("d1", &["stale snapshot content"])])
+            .unwrap();
+
+        let paths = MatterPaths::new(tmp.path(), "m1").unwrap();
+        let snapshot_time = std::fs::metadata(paths.snapshot()).unwrap().modified().unwrap();
+        write_legacy_bundle(
+            &paths,
+            r#"{"doc_id":"d2","chunk_index":0,"text":"newer mirror content","score":0.1,"citation":"d2:0"}"#,
+        );
+        // Force a strictly-newer mtime: some filesystems have coarse enough mtime resolution
+        // that two writes microseconds apart could otherwise land on the same tick.
+        set_mtime(
+            &paths.legacy_bundle(),
+            snapshot_time + std::time::Duration::from_secs(1),
+        );
+
+        let hits = e.query("m1", "newer mirror content", 5).unwrap();
+        assert_eq!(hits[0].text, "newer mirror content");
+        // import_legacy fully replaces the snapshot, so the stale content is gone.
+        assert!(hits.iter().all(|h| h.text != "stale snapshot content"));
+    }
+
+    #[test]
+    fn query_skips_reimport_when_the_snapshot_is_already_newer() {
+        let tmp = tempfile::tempdir().unwrap();
+        let e = engine(tmp.path());
+        let paths = MatterPaths::new(tmp.path(), "m1").unwrap();
+        // Deliberately unparseable — if query() ever attempted to import this, it would error.
+        write_legacy_bundle(&paths, "");
+        std::fs::write(paths.legacy_bundle(), "not a valid MirrorBundle at all").unwrap();
+        let legacy_time = std::fs::metadata(paths.legacy_bundle()).unwrap().modified().unwrap();
+
+        e.index_documents("m1", &[doc("d1", &["indexed after the bad bundle"])])
+            .unwrap();
+        set_mtime(&paths.snapshot(), legacy_time + std::time::Duration::from_secs(1));
+
+        // Must succeed: the newer, valid snapshot is used directly, the invalid bundle is never touched.
+        let hits = e.query("m1", "indexed after the bad bundle", 1).unwrap();
+        assert_eq!(hits[0].text, "indexed after the bad bundle");
+    }
+
+    #[test]
+    fn query_falls_back_to_the_stale_snapshot_when_a_newer_legacy_bundle_fails_to_import() {
+        let tmp = tempfile::tempdir().unwrap();
+        let e = engine(tmp.path());
+        e.index_documents("m1", &[doc("d1", &["last known good"])]).unwrap();
+
+        let paths = MatterPaths::new(tmp.path(), "m1").unwrap();
+        let snapshot_time = std::fs::metadata(paths.snapshot()).unwrap().modified().unwrap();
+        // Newer than the snapshot, but not a valid MirrorBundle at all -- import_legacy would error.
+        std::fs::write(paths.legacy_bundle(), "not a valid MirrorBundle at all").unwrap();
+        set_mtime(
+            &paths.legacy_bundle(),
+            snapshot_time + std::time::Duration::from_secs(1),
+        );
+
+        // Must succeed by falling back to the stale-but-usable snapshot, not error out entirely --
+        // and repeated queries must keep succeeding the same way, not get stuck erroring forever.
+        for _ in 0..2 {
+            let hits = e.query("m1", "last known good", 1).unwrap();
+            assert_eq!(hits[0].text, "last known good");
+        }
+    }
+
+    #[test]
+    fn query_errors_when_the_only_newer_legacy_bundle_fails_to_import_and_no_snapshot_exists() {
+        let tmp = tempfile::tempdir().unwrap();
+        let e = engine(tmp.path());
+        let paths = MatterPaths::new(tmp.path(), "m1").unwrap();
+        std::fs::create_dir_all(&paths.dir).unwrap();
+        std::fs::write(paths.legacy_bundle(), "not a valid MirrorBundle at all").unwrap();
+
+        // No snapshot to fall back on, so the sync failure is the only signal available.
+        assert!(matches!(e.query("m1", "anything", 1).unwrap_err(), RagError::Legacy(_)));
     }
 }
