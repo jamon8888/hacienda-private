@@ -196,6 +196,68 @@ describe("reviewAndRepush", () => {
     expect(result.unappliedSpans).toEqual([]);
   });
 
+  it("redacts a missed span using precise chunkIndex/start/end, with no text search", async () => {
+    const text = "Hello Alice, meet Bob.";
+    const { mirror } = await buildDocMirror(text, [{ kind: "PERSON", start: 6, end: 11 }]); // only Alice detected
+
+    const { reviewAndRepush } = await import("./adapter");
+    // "Bob" is at [18, 21) in the original text — given directly, as a real selection UI would,
+    // rather than as a substring to search for.
+    const result = await reviewAndRepush(
+      DOC_ID,
+      mirror,
+      { matterId: "matter-2b", scopeToken: "token", passphrase: PASS },
+      { rejectedKeys: [], newSpans: [{ text: "Bob", kind: "PERSON", chunkIndex: 0, start: 18, end: 21 }] },
+    );
+
+    const decoded = JSON.parse(new TextDecoder().decode(result.mirror)) as {
+      chunks: { text: string }[];
+    };
+    expect(decoded.chunks[0]?.text).not.toContain("Bob");
+    expect(decoded.chunks[0]?.text).not.toContain("Alice");
+    expect(result.unappliedSpans).toEqual([]);
+  });
+
+  it("does not let a precise span with the wrong chunkIndex fall back to a coincidental match elsewhere", async () => {
+    // Two chunks both contain the word "Bob" — a precise span scoped to chunk 1 must not
+    // accidentally redact chunk 0's occurrence via the substring-search fallback.
+    const { buildRedaction: buildRedactionFn, sealVault: sealVaultFn } = await import("@xberg-io/wasm-pipeline-real");
+    const textA = "Bob said hello.";
+    const textB = "Then Bob left.";
+    const a = buildRedactionFn(textA, [], "C0", DOC_ID);
+    const b = buildRedactionFn(textB, [], "C1", DOC_ID);
+    const sealed = await sealVaultFn([...a.entries, ...b.entries], PASS);
+    const mirror = new TextEncoder().encode(
+      JSON.stringify({
+        version: 1,
+        index: [],
+        vault: Array.from(sealed.cipher),
+        vaultSalt: Array.from(sealed.salt),
+        pii: [],
+        chunks: [
+          { doc_id: DOC_ID, chunk_index: 0, text: a.redacted, page: 1, citation: `${DOC_ID}#0`, score: 1 },
+          { doc_id: DOC_ID, chunk_index: 1, text: b.redacted, page: 1, citation: `${DOC_ID}#1`, score: 1 },
+        ],
+      }),
+    );
+
+    const { reviewAndRepush } = await import("./adapter");
+    // "Bob" in chunk 1 ("Then Bob left.") is at [5, 8).
+    const result = await reviewAndRepush(
+      DOC_ID,
+      mirror,
+      { matterId: "matter-2c", scopeToken: "token", passphrase: PASS },
+      { rejectedKeys: [], newSpans: [{ text: "Bob", kind: "PERSON", chunkIndex: 1, start: 5, end: 8 }] },
+    );
+
+    const decoded = JSON.parse(new TextDecoder().decode(result.mirror)) as {
+      chunks: { text: string }[];
+    };
+    expect(decoded.chunks[0]?.text).toContain("Bob"); // chunk 0's occurrence must survive untouched
+    expect(decoded.chunks[1]?.text).not.toContain("Bob");
+    expect(result.unappliedSpans).toEqual([]);
+  });
+
   it("reports a missed span it could not find anywhere in the document", async () => {
     const text = "Hello Alice.";
     const { mirror } = await buildDocMirror(text, [{ kind: "PERSON", start: 6, end: 11 }]);

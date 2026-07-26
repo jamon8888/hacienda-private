@@ -322,10 +322,13 @@ export interface ReviewDecision {
   // across the whole document; a plain "<kind>-<start>-<end>" key is NOT, since start/end are
   // chunk-local and could collide between two different chunks' spans.
   rejectedKeys: string[];
-  // Missed spans the reviewer found still in plain text. Matched by exact substring against each
-  // chunk's reconstructed original text, in chunk order, first match wins — good enough for a
-  // human-reviewed correction without requiring the reviewer to pinpoint a chunk/offset by hand.
-  newSpans: { text: string; kind: string }[];
+  // Missed spans the reviewer found still in plain text. When chunkIndex/start/end are given
+  // (e.g. from a real text-selection UI, which already knows exactly where the selection is),
+  // they're used directly against that chunk's reconstructed original text — no searching. When
+  // omitted, falls back to matching by exact substring against each chunk's reconstructed original
+  // text in chunk order, first match wins — good enough for a manually-typed correction without
+  // requiring the reviewer to pinpoint a chunk/offset by hand.
+  newSpans: { text: string; kind: string; chunkIndex?: number; start?: number; end?: number }[];
 }
 
 export interface ReviewContext {
@@ -383,9 +386,28 @@ export async function reviewAndRepush(
       .filter((e) => !decision.rejectedKeys.includes(e.token))
       .map((e) => ({ kind: e.kind, start: e.start, end: e.end, text: originalText.slice(e.start, e.end) }));
 
+    // Precise spans (chunkIndex/start/end all given) are applied first, directly, for this chunk
+    // only — no searching, no ambiguity. Only falls through to the indexOf search below if the
+    // given offsets don't actually land inside this chunk's text or overlap an existing span.
     for (let i = remainingNewSpans.length - 1; i >= 0; i--) {
       const span = remainingNewSpans[i];
-      if (!span) continue;
+      if (!span || span.chunkIndex !== chunk.chunk_index || span.start === undefined || span.end === undefined) {
+        continue;
+      }
+      const { start, end } = span;
+      if (start < 0 || end > originalText.length || start >= end) continue;
+      const overlaps = survivors.some((s) => start < s.end && end > s.start);
+      if (overlaps) continue;
+      survivors.push({ kind: span.kind, start, end, text: originalText.slice(start, end) });
+      remainingNewSpans.splice(i, 1);
+    }
+
+    // Substring-search fallback for spans with no (or invalid) precise coordinates. Still scoped
+    // to the span's declared chunkIndex when given, so a bad precise span never silently lands in
+    // the wrong chunk via a coincidental text match — only chunkIndex-less callers search freely.
+    for (let i = remainingNewSpans.length - 1; i >= 0; i--) {
+      const span = remainingNewSpans[i];
+      if (!span || (span.chunkIndex !== undefined && span.chunkIndex !== chunk.chunk_index)) continue;
       const idx = originalText.indexOf(span.text);
       if (idx === -1) continue;
       const end = idx + span.text.length;

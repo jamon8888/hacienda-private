@@ -23,4 +23,13 @@ describe("engine adapter contract", () => {
   it("exposes chunkIndexFromToken", () => {
     expect(typeof engine.chunkIndexFromToken).toBe("function");
   });
+  it("exposes openVault", () => {
+    expect(typeof engine.openVault).toBe("function");
+  });
+  it("exposes rehydrate", () => {
+    expect(typeof engine.rehydrate).toBe("function");
+  });
+  it("exposes listPiiTypes", () => {
+    expect(typeof engine.listPiiTypes).toBe("function");
+  });
 });

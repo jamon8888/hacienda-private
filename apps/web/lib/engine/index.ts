@@ -17,3 +17,4 @@ export {
   type ReviewDecision,
   type ReviewResult,
 } from "./adapter";
+export { openVault, rehydrate, listPiiTypes, type RedactionEntry } from "@xberg-io/wasm-pipeline-real";

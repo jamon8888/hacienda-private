@@ -160,6 +160,7 @@ export default function DocumentView({ id: propId }: DocumentViewProps) {
               <PiiReviewPanel
                 pii={stored.pii}
                 mirror={stored.mirror}
+                passphrase={auth?.passphrase}
                 reviewedPii={stored.reviewedPii}
                 selectedKinds={selectedKinds}
                 onSave={async (decision) => {
