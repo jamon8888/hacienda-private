@@ -57,6 +57,16 @@ function newDb(): EdgeVec {
   config.metric = "cosine";
   const db = new EdgeVecClass(config);
   initHybridStorage(db);
+  // Enabling binary quantization here is safe and free of behavior change today: verified
+  // empirically that enableBQ() does not alter db.search()/hybridSearch()'s own (full-precision)
+  // results, so nothing downstream is affected. It is enabled unconditionally so a compressed
+  // representation exists if/when it's needed, but nothing queries it yet (searchBQ/
+  // searchBQRescored) — their recall could not be validated against real semantic embeddings in
+  // this sandbox (no network access to the real Granite model), and a synthetic-vector benchmark
+  // came back at 0% recall, well under the library's documented ~70-85%. Wire up an actual BQ
+  // query path only once that's verified against real embeddings, or a matter's index grows large
+  // enough that memory reduction is worth the unresolved recall risk.
+  db.enableBQ();
   return db;
 }
 

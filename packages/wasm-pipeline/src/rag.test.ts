@@ -36,6 +36,16 @@ vi.mock("edgevec", () => {
       // no-op: sparse storage is just this.sparse
     }
 
+    private bq = false;
+
+    enableBQ(): void {
+      this.bq = true;
+    }
+
+    hasBQ(): boolean {
+      return this.bq;
+    }
+
     insertWithMetadata(vector: Float32Array, metadata: Record<string, unknown>): number {
       this.dense.push({ vector, metadata });
       return this.dense.length; // 1-indexed, matches real edgevec
