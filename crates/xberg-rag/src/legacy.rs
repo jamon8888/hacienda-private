@@ -32,14 +32,16 @@ struct RawChunk {
     citation: Option<String>,
 }
 
-/// Parse the `chunks[]` of a Node-host `MirrorBundle` (`version: 1`).
+/// Parse the `chunks[]` of a Node-host/browser `MirrorBundle` (`version: 1` or `2`).
 ///
-/// `index`, `vault`, and `pii` are ignored — this reader exists only to recover
-/// enough text to re-index; PII and vault handling stay with their existing owners.
+/// `index`, `vault`, `vaultSalt`, `pii`, and (for `version: 2`) `embedding_identity` are ignored —
+/// this reader exists only to recover enough text to re-index; PII and vault handling stay with
+/// their existing owners. Both versions carry the same `chunks[]` shape (`RawChunk`'s fields are a
+/// strict subset of what version 2 also has), so accepting either is a version-number-only change.
 pub fn read_bundle_chunks(json: &[u8]) -> Result<Vec<LegacyChunk>> {
     let raw: RawBundle =
         serde_json::from_slice(json).map_err(|e| RagError::Legacy(format!("not a valid MirrorBundle: {e}")))?;
-    if raw.version != 1 {
+    if raw.version != 1 && raw.version != 2 {
         return Err(RagError::Legacy(format!("unsupported bundle version {}", raw.version)));
     }
     Ok(raw
@@ -81,8 +83,26 @@ mod tests {
     }
 
     #[test]
+    fn reads_version_2_bundles_ignoring_embedding_identity() {
+        let bundle = r#"{
+            "version": 2,
+            "embedding_identity": "ibm-granite/granite-embedding-97m-multilingual-r2",
+            "index": [1, 2, 3],
+            "vault": [],
+            "vaultSalt": [],
+            "pii": [],
+            "chunks": [
+                {"doc_id":"d1","chunk_index":0,"text":"first","page":1,"citation":"d1:0"}
+            ]
+        }"#;
+        let chunks = read_bundle_chunks(bundle.as_bytes()).unwrap();
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(chunks[0].text, "first");
+    }
+
+    #[test]
     fn rejects_unknown_bundle_version() {
-        let bad = r#"{"version": 2, "chunks": []}"#;
+        let bad = r#"{"version": 3, "chunks": []}"#;
         let err = read_bundle_chunks(bad.as_bytes()).unwrap_err();
         assert!(matches!(err, RagError::Legacy(_)));
     }
