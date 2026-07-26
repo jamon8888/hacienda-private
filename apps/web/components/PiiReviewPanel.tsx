@@ -108,6 +108,11 @@ export function PiiReviewPanel({ pii, mirror, passphrase, reviewedPii, onSave, s
       await onSave({ reviewedPii: out, rejectedKeys, newSpans });
       setRejectedKeys([]);
       setNewSpans([]);
+    } catch {
+      // onSave already surfaces the failure (DocumentView's reviewError banner) and rethrows —
+      // swallow here so this doesn't become an unhandled rejection from the button's onClick, and
+      // skip clearing state so the reviewer's pending rejections/new spans survive for a retry
+      // instead of being silently discarded.
     } finally {
       setSaving(false);
     }

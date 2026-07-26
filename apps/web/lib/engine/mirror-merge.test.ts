@@ -121,4 +121,39 @@ describe("mergeIntoAccumulator", () => {
     // Only the corrected entry should remain — the legacy one must be evicted, not duplicated.
     expect(entries.map((e) => e.original)).toEqual(["Alicia"]);
   });
+
+  it("refuses to backfill a legacy docId when two documents' entries share the same token", async () => {
+    // Tokens are chunk-scoped, not document-scoped — two different documents' chunk-0 first
+    // PERSON span both mint "{{C0_PERSON_1}}". Neither legacy entry carries its own docId (as if
+    // sealed before RedactionEntry.docId existed), so the backfill can't tell them apart and must
+    // refuse to resolve the token rather than risk evicting the wrong document's data.
+    const merged = await mergeIntoAccumulator(
+      undefined,
+      {
+        entries: [entry("{{C0_PERSON_1}}", "Alice", 0), entry("{{C0_PERSON_1}}", "Bob", 0)],
+        pii: [span("docA", "{{C0_PERSON_1}}", 0), span("docB", "{{C0_PERSON_1}}", 0)],
+        chunks: [chunk("docA", 0), chunk("docB", 0)],
+      },
+      PASS,
+    );
+
+    // Re-review docA: since the token is ambiguous (shared with docB), neither legacy entry
+    // should be evicted by the backfill — docB's data must never be silently dropped.
+    const corrected = await mergeIntoAccumulator(
+      merged,
+      {
+        entries: [{ ...entry("{{C0_PERSON_1}}", "Alicia", 0), docId: "docA" }],
+        pii: [span("docA", "{{C0_PERSON_1}}", 0)],
+        chunks: [chunk("docA", 0)],
+      },
+      PASS,
+      "docA",
+    );
+
+    const entries = await openVault(
+      { cipher: Uint8Array.from(corrected.vaultCipher), salt: Uint8Array.from(corrected.vaultSalt) },
+      PASS,
+    );
+    expect(entries.map((e) => e.original).sort()).toEqual(["Alice", "Alicia", "Bob"]);
+  });
 });

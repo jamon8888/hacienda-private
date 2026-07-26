@@ -171,12 +171,14 @@ export default function DocumentView({ id: propId }: DocumentViewProps) {
                   if (decision.rejectedKeys.length === 0 && decision.newSpans.length === 0) return;
 
                   if (!auth?.token || !auth.passphrase) {
-                    setReviewError("Set the matter passphrase before correcting PII.");
-                    return;
+                    const message = "Set the matter passphrase before correcting PII.";
+                    setReviewError(message);
+                    throw new Error(message);
                   }
                   if (!stored.mirror) {
-                    setReviewError("This document has no local mirror to re-redact — try re-ingesting it.");
-                    return;
+                    const message = "This document has no local mirror to re-redact — try re-ingesting it.";
+                    setReviewError(message);
+                    throw new Error(message);
                   }
                   try {
                     const result = await reviewAndRepush(
@@ -194,6 +196,7 @@ export default function DocumentView({ id: propId }: DocumentViewProps) {
                     }
                   } catch (err) {
                     setReviewError(err instanceof Error ? err.message : "Failed to save PII review.");
+                    throw err;
                   }
                 }}
               />

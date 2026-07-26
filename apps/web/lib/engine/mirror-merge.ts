@@ -51,9 +51,20 @@ export async function mergeIntoAccumulator(
     : [];
   // Vault entries sealed before this PR shipped have no `docId` of their own (it's a new,
   // optional field on RedactionEntry) — fall back to the doc_id already recorded on the matching
-  // `prior.pii` span (by token, which is unique per document) so a legacy entry can still be
-  // correctly evicted on replace instead of being kept alongside its corrected copy forever.
-  const priorPiiDocIdByToken = new Map((prior?.pii ?? []).map((p) => [p.token, p.doc_id]));
+  // `prior.pii` span (by token) so a legacy entry can still be correctly evicted on replace
+  // instead of being kept alongside its corrected copy forever. Tokens are chunk-scoped, not
+  // document-scoped (two different documents' chunk-0 first PERSON span both mint
+  // "{{C0_PERSON_1}}"), so only trust the backfill when a token maps to exactly one doc_id —
+  // otherwise it's ambiguous and must be left alone rather than risk evicting the wrong document.
+  const tokenDocIds = new Map<string, Set<string>>();
+  for (const p of prior?.pii ?? []) {
+    const set = tokenDocIds.get(p.token) ?? new Set<string>();
+    set.add(p.doc_id);
+    tokenDocIds.set(p.token, set);
+  }
+  const priorPiiDocIdByToken = new Map(
+    [...tokenDocIds].filter(([, ids]) => ids.size === 1).map(([token, ids]) => [token, [...ids][0] as string]),
+  );
   const keptEntries = replaceDocId
     ? priorEntries.filter((e) => (e.docId ?? priorPiiDocIdByToken.get(e.token)) !== replaceDocId)
     : priorEntries;

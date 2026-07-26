@@ -5,7 +5,7 @@ import CodeMirror from "@uiw/react-codemirror";
 import { markdown } from "@codemirror/lang-markdown";
 import { Decoration, EditorView, type DecorationSet, type ViewUpdate } from "@codemirror/view";
 import { RangeSetBuilder, type Extension } from "@codemirror/state";
-import { openVault, rehydrate, listPiiTypes, type RedactionEntry } from "@xberg-io/wasm-pipeline";
+import { openVault, rehydrate, listPiiTypes, chunkIndexFromToken, type RedactionEntry } from "@xberg-io/wasm-pipeline";
 import { Button } from "@/components/ui/button";
 
 interface MirrorChunkText {
@@ -43,11 +43,6 @@ interface Prepared {
   // Chunk boundaries in the global buffer, sorted by start — used to translate a selection's
   // global offset back into (chunkIndex, localOffset) for reviewAndRepush.
   chunkBounds: { chunkIndex: number; start: number; end: number }[];
-}
-
-function chunkIndexFromToken(token: string): number | null {
-  const match = /^\{\{C(\d+)_/.exec(token);
-  return match?.[1] ? Number.parseInt(match[1], 10) : null;
 }
 
 function globalToChunkLocal(
