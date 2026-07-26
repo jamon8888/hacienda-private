@@ -198,8 +198,28 @@ impl<E: Embedder> RagEngine<E> {
     /// only if a matter's chunk count grows large enough for this to matter in practice.
     fn sync_from_legacy_if_stale(&self, paths: &MatterPaths, matter_id: &str) -> Result<()> {
         let legacy_path = paths.legacy_bundle();
-        let Ok(legacy_meta) = std::fs::metadata(&legacy_path) else {
-            return Ok(());
+        // Cheap early exit for the common "never ingested" case, before paying for a lock
+        // acquisition (which also creates the matter directory). Re-checked authoritatively below,
+        // under the lock. Only a missing file is a legitimate no-op — a permission error or other
+        // I/O failure must propagate, not be silently treated as "nothing to import."
+        match std::fs::metadata(&legacy_path) {
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => return Err(RagError::Io(format!("stat {}: {e}", legacy_path.display()))),
+        }
+
+        // Hold the write lock for the whole stale-check-then-import sequence: `index_documents`
+        // mutates the snapshot under this same lock, and `import_legacy` fully rebuilds the
+        // snapshot from the legacy bundle alone. If the staleness decision were made outside the
+        // lock, chunks a concurrent `index_documents` appended between the check and the (by then
+        // stale) rebuild would be silently discarded when the rebuild overwrites a snapshot it
+        // never saw. Call the non-locking `import_legacy_locked` below, not `import_legacy` — the
+        // latter would try to re-acquire this same lock and deadlock.
+        let _write_lock = self.acquire_write_lock(paths)?;
+        let legacy_meta = match std::fs::metadata(&legacy_path) {
+            Ok(meta) => meta,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => return Err(RagError::Io(format!("stat {}: {e}", legacy_path.display()))),
         };
         let needs_import = match std::fs::metadata(paths.snapshot()) {
             Ok(snapshot_meta) => {
@@ -211,10 +231,11 @@ impl<E: Embedder> RagEngine<E> {
                     .map_err(|e| RagError::Io(format!("stat {}: {e}", paths.snapshot().display())))?;
                 legacy_modified > snapshot_modified
             }
-            Err(_) => true,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => true,
+            Err(e) => return Err(RagError::Io(format!("stat {}: {e}", paths.snapshot().display()))),
         };
         if needs_import {
-            self.import_legacy(matter_id)?;
+            self.import_legacy_locked(paths, matter_id)?;
         }
         Ok(())
     }
@@ -226,6 +247,14 @@ impl<E: Embedder> RagEngine<E> {
     pub fn import_legacy(&self, matter_id: &str) -> Result<usize> {
         let paths = self.paths(matter_id)?;
         let _write_lock = self.acquire_write_lock(&paths)?;
+        self.import_legacy_locked(&paths, matter_id)
+    }
+
+    /// Body of [`Self::import_legacy`], assuming the caller already holds `paths`' write lock.
+    /// Split out so [`Self::sync_from_legacy_if_stale`] can recheck freshness and perform the
+    /// rebuild under a single lock acquisition, instead of two (which would let another writer's
+    /// change slip in between the check and the rebuild).
+    fn import_legacy_locked(&self, paths: &MatterPaths, matter_id: &str) -> Result<usize> {
         let path = paths.legacy_bundle();
         if !path.exists() {
             return Err(RagError::MatterNotFound(matter_id.to_string()));
@@ -262,7 +291,7 @@ impl<E: Embedder> RagEngine<E> {
         let mut store = FlatStore::with_identity(self.embedder.identity().clone());
         store.ingest(&items)?;
         let count = store.len();
-        self.save(&paths, &store)?;
+        self.save(paths, &store)?;
         Ok(count)
     }
 }
@@ -379,6 +408,59 @@ mod tests {
 
         let hits = engine(&mirrors_dir).query("shared", "text", WRITER_COUNT).unwrap();
         assert_eq!(hits.len(), WRITER_COUNT);
+    }
+
+    #[test]
+    fn concurrent_index_documents_call_is_not_lost_to_a_racing_legacy_import() {
+        // Regression test for a race where `sync_from_legacy_if_stale`'s staleness decision was
+        // made outside the write lock: a concurrent `index_documents` call could append a chunk
+        // in the window between that check and `import_legacy`'s full rebuild, which then
+        // silently discarded it by rebuilding the snapshot from the legacy bundle alone. Fixed by
+        // holding the lock (and rechecking freshness under it) for the whole check-then-rebuild
+        // sequence — see `sync_from_legacy_if_stale`.
+        let tmp = tempfile::tempdir().unwrap();
+        let mirrors_dir = tmp.path().to_path_buf();
+        let paths = MatterPaths::new(&mirrors_dir, "m1").unwrap();
+
+        // No snapshot exists yet, so the staleness check is unconditionally "needs_import = true"
+        // (the "no snapshot" branch) no matter which thread below wins the lock race — this makes
+        // the scenario reproducible without depending on sub-second filesystem mtime resolution.
+        write_legacy_bundle(
+            &paths,
+            r#"{"doc_id":"legacy","chunk_index":0,"text":"legacy content","score":0.1,"citation":"legacy:0"}"#,
+        );
+
+        // Both threads embed (and hit the barrier) before either acquires the write lock — see
+        // `SynchronizedEmbedder` — maximizing the chance they contend for the lock in either order.
+        let barrier = Arc::new(Barrier::new(2));
+
+        let import_engine = RagEngine::new(
+            SynchronizedEmbedder {
+                inner: MockEmbedder::new(16),
+                barrier: Arc::clone(&barrier),
+            },
+            mirrors_dir.clone(),
+        );
+        let import_handle = std::thread::spawn(move || import_engine.query("m1", "legacy content", 5));
+
+        let index_engine = RagEngine::new(
+            SynchronizedEmbedder {
+                inner: MockEmbedder::new(16),
+                barrier: Arc::clone(&barrier),
+            },
+            mirrors_dir.clone(),
+        );
+        let index_handle =
+            std::thread::spawn(move || index_engine.index_documents("m1", &[doc("concurrent", &["concurrent content"])]));
+
+        import_handle.join().unwrap().unwrap();
+        index_handle.join().unwrap().unwrap();
+
+        let hits = engine(&mirrors_dir).query("m1", "content", 10).unwrap();
+        assert!(
+            hits.iter().any(|h| h.text == "concurrent content"),
+            "concurrent index_documents chunk was lost to a racing legacy import rebuild: {hits:?}"
+        );
     }
 
     #[test]
