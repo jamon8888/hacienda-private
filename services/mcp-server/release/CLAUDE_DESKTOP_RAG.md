@@ -19,17 +19,17 @@ been ingested.
 
 ## 1. Install the Rust CLI
 
-Any one of:
+Either of:
 
 ```sh
 brew install xberg-io/tap/xberg
 # or
 cargo install xberg
-# or
-docker pull ghcr.io/xberg-io/xberg:latest
 ```
 
-Confirm it works: `xberg --version`.
+Confirm it works: `xberg --version`. (Docker (`ghcr.io/xberg-io/xberg`) also
+ships the binary, but needs a different server entry below — step 3 covers
+both.)
 
 ## 2. Get the embedding model files
 
@@ -67,6 +67,39 @@ alongside it:
 
 `rag_query` is only registered when `XBERG_RAG_ENABLED=1` is set — without
 it, `xberg mcp` runs as an extraction-only server with no RAG tool at all.
+
+### Docker instead of a local binary
+
+If you installed via Docker rather than `brew`/`cargo`, there's no `xberg`
+binary on your `PATH` for Claude Desktop to invoke directly — use `docker run`
+as the command instead, with the model directory and data directory (see
+[Mirrors directory](#mirrors-directory) below) each mounted in:
+
+```json
+{
+  "mcpServers": {
+    "xberg": { "command": "xberg-mcp", "args": ["mcp"] },
+    "xberg-rag": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-v", "/absolute/path/to/granite-model:/model:ro",
+        "-v", "/absolute/path/to/.xberg:/data",
+        "-e", "XBERG_RAG_ENABLED=1",
+        "-e", "XBERG_GRANITE_MODEL_DIR=/model",
+        "-e", "XBERG_DATA_DIR=/data",
+        "ghcr.io/xberg-io/xberg:latest",
+        "mcp"
+      ]
+    }
+  }
+}
+```
+
+`-i` (interactive, no `-t`/tty) is required — MCP speaks JSON-RPC over raw
+stdio, and a tty would corrupt that stream. Mount your existing `~/.xberg`
+directory (or wherever `XBERG_DATA_DIR` points) to `/data` so the container
+sees the same mirrors the browser/`xberg-mcp` already wrote, not an empty one.
 
 ### Mirrors directory
 
