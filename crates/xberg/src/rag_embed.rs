@@ -283,6 +283,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg(feature = "embedding-presets")]
     fn empty_batch_needs_no_model() {
         // Constructed by hand so the test never touches a model: `new()` probes,
         // this does not.
@@ -320,6 +321,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "embedding-presets")]
     fn lightweight_identity_covers_the_complete_embedding_contract() {
         let config = EmbeddingConfig {
             model: EmbeddingModelType::Preset {
