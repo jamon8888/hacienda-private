@@ -21,6 +21,9 @@ The UI is served at **<http://localhost:8787**>. For Claude Desktop, copy
 `~/Library/Application Support/Claude/` (macOS) / `%APPDATA%\Claude\` (Windows) /
 `~/.config/Claude/` (Linux) config dir, then restart Claude Desktop.
 
+For live RAG search from Claude Desktop, see
+[CLAUDE_DESKTOP_RAG.md](./CLAUDE_DESKTOP_RAG.md).
+
 ## Install one-liner
 
 ```sh

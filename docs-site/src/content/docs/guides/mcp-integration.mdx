@@ -87,6 +87,17 @@ Xberg exposes MCP tools for extraction, cache operations, and metadata. All extr
 
 Full parameter schemas are discoverable at runtime via the MCP client's `list_tools` call.
 
+### Live RAG (`rag_query`)
+
+A tenth tool, `rag_query`, is registered when the server is started with `XBERG_RAG_ENABLED=1` — otherwise it's absent from `list_tools` entirely and rejected on call. It embeds the query and searches a matter's already-ingested chunks with a real Candle Granite embedder, returning the top-matching hits (`doc_id`, `chunk_index`, `text`, `score`, `citation`, `page`).
+
+Two environment variables configure it:
+
+- `XBERG_RAG_ENABLED` — `1`, `true`, or `TRUE` to enable; unset/anything else keeps it off.
+- `XBERG_GRANITE_MODEL_DIR` — required when enabled. Path to a directory containing `model.safetensors`, `tokenizer.json`, and `config.json` for the Granite embedding model.
+
+Matters are read from the mirrors directory (`$XBERG_DATA_DIR/mirrors`, else `~/.xberg/mirrors`) — the same one the browser/`xberg-mcp` ingestion path writes to. Every response is additionally scanned with a conservative, format-validated PII pattern detector before being returned; a hit that still looks like unredacted PII is refused. For the full Claude-Desktop dual-server setup (this host alongside `xberg-mcp`), see [`services/mcp-server/release/CLAUDE_DESKTOP_RAG.md`](https://github.com/xberg-io/xberg/blob/main/services/mcp-server/release/CLAUDE_DESKTOP_RAG.md).
+
 ---
 
 ## Prompts
