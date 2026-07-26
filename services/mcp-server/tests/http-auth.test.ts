@@ -7,6 +7,7 @@ import type { Server } from "node:http";
 import type { Matter } from "@xberg-io/core";
 import { buildConfig } from "../src/config.js";
 import { createAppContext, createHttpServer, type AppContext } from "../src/index.js";
+import { SHARED_EMBEDDING_IDENTITY } from "../src/mirror.js";
 
 const TOKEN = "b".repeat(64);
 let dir: string;
@@ -116,5 +117,42 @@ describe("HTTP auth surface", () => {
     const saveMirrorEntry = audit.find((a) => a.action === "save_mirror");
     expect(saveMirrorEntry).toBeDefined();
     expect(saveMirrorEntry?.actor).toBe("owner");
+  });
+
+  it("a realistic version-2 mirror pushed over HTTP can be read back via listPii/retrieve", async () => {
+    await start(["read", "ingest", "redact", "admin"]);
+    const matterRes = await fetch(`${base}/api/matters`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
+      body: JSON.stringify({ name: "Dossier C" }),
+    });
+    const matter = (await matterRes.json()) as Matter;
+
+    // Same shape the browser mirror push (apps/web/lib/engine/adapter.ts, via
+    // serializeMirrorToBytes) produces — this is the regression a version-1/version-2 mismatch
+    // between the browser and parseBundle() would break: saveMirror writes anything, but the
+    // subsequent read would throw "unexpected bundle shape" for a mismatched version.
+    const bundle = {
+      version: 2,
+      embedding_identity: SHARED_EMBEDDING_IDENTITY,
+      index: [1, 2, 3],
+      vault: [4, 5, 6],
+      vaultSalt: [7, 8],
+      pii: [{ doc_id: "d1", kind: "PERSON", start: 0, end: 4, token: "[P1]" }],
+      chunks: [{ doc_id: "d1", chunk_index: 0, text: "hello world", score: 0.9, citation: "d1:0" }],
+    };
+
+    const res = await fetch(`${base}/api/rag/mirror?matter_id=${matter.id}`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${TOKEN}` },
+      body: JSON.stringify(bundle),
+    });
+    expect(res.status).toBe(201);
+
+    await ctx.mirror.loadMirror(matter.id);
+    expect(ctx.mirror.listPii(matter.id, "d1")).toEqual([{ kind: "PERSON", start: 0, end: 4, text: "[P1]" }]);
+    expect(ctx.mirror.retrieve(matter.id, "unused query", 5)).toEqual([
+      { doc_id: "d1", chunk_index: 0, text: "hello world", score: 0.9, citation: "d1:0" },
+    ]);
   });
 });

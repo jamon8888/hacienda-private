@@ -38,6 +38,10 @@ export async function mergeIntoAccumulator(
   prior: MatterMirrorAccumulator | undefined,
   add: { entries: RedactionEntry[]; pii: MirrorPiiSpan[]; chunks: MirrorChunk[] },
   passphrase: string,
+  // When set, drops this document's prior pii/chunks/vault entries before merging in `add` —
+  // otherwise a re-review of an already-ingested document would duplicate it in the accumulator
+  // (stale + corrected copies both present) instead of replacing it.
+  replaceDocId?: string,
 ): Promise<MatterMirrorAccumulator> {
   const priorEntries = prior
     ? await openVault(
@@ -45,10 +49,33 @@ export async function mergeIntoAccumulator(
         passphrase,
       )
     : [];
-  const sealed = await sealVault([...priorEntries, ...add.entries], passphrase);
+  // Vault entries sealed before this PR shipped have no `docId` of their own (it's a new,
+  // optional field on RedactionEntry) — fall back to the doc_id already recorded on the matching
+  // `prior.pii` span (by token) so a legacy entry can still be correctly evicted on replace
+  // instead of being kept alongside its corrected copy forever. Tokens are chunk-scoped, not
+  // document-scoped (two different documents' chunk-0 first PERSON span both mint
+  // "{{C0_PERSON_1}}"), so only trust the backfill when a token maps to exactly one doc_id —
+  // otherwise it's ambiguous and must be left alone rather than risk evicting the wrong document.
+  const tokenDocIds = new Map<string, Set<string>>();
+  for (const p of prior?.pii ?? []) {
+    const set = tokenDocIds.get(p.token) ?? new Set<string>();
+    set.add(p.doc_id);
+    tokenDocIds.set(p.token, set);
+  }
+  const priorPiiDocIdByToken = new Map(
+    [...tokenDocIds].filter(([, ids]) => ids.size === 1).map(([token, ids]) => [token, [...ids][0] as string]),
+  );
+  const keptEntries = replaceDocId
+    ? priorEntries.filter((e) => (e.docId ?? priorPiiDocIdByToken.get(e.token)) !== replaceDocId)
+    : priorEntries;
+  const keptPii = replaceDocId ? (prior?.pii ?? []).filter((p) => p.doc_id !== replaceDocId) : (prior?.pii ?? []);
+  const keptChunks = replaceDocId
+    ? (prior?.chunks ?? []).filter((c) => c.doc_id !== replaceDocId)
+    : (prior?.chunks ?? []);
+  const sealed = await sealVault([...keptEntries, ...add.entries], passphrase);
   return {
-    pii: [...(prior?.pii ?? []), ...add.pii],
-    chunks: [...(prior?.chunks ?? []), ...add.chunks],
+    pii: [...keptPii, ...add.pii],
+    chunks: [...keptChunks, ...add.chunks],
     vaultCipher: Array.from(sealed.cipher),
     vaultSalt: Array.from(sealed.salt),
   };

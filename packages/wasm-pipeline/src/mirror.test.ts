@@ -36,7 +36,7 @@ describe("pushMirror", () => {
     const vault = new Uint8Array([9]);
     const vaultSalt = new Uint8Array([4]);
     const payload = serializeMirrorToBytes(index, vault, vaultSalt);
-    const matter = { id: "matter-42" } as never;
+    const matterId = "matter-42";
     let capturedUrl = "";
     let capturedBody: Uint8Array = new Uint8Array(0);
     let capturedContentType = "";
@@ -51,7 +51,7 @@ describe("pushMirror", () => {
       return new Response(null, { status: 200 });
     }) as unknown as typeof fetch);
 
-    await pushMirror(matter, payload, "tok");
+    await pushMirror(matterId, payload, "tok");
 
     expect(capturedUrl).toBe(`${API_BASE}/api/rag/mirror?matter_id=matter-42`);
     expect(capturedContentType).toBe("application/octet-stream");
@@ -71,10 +71,9 @@ describe("pushMirror", () => {
   });
 
   it("throws on non-ok response", async () => {
-    const matter = { id: "m-1" } as never;
     const payload = serializeMirrorToBytes(new Uint8Array([1]), new Uint8Array([2]), new Uint8Array([3]));
     vi.stubGlobal("fetch", (async () => new Response(null, { status: 500 })) as unknown as typeof fetch);
-    await expect(pushMirror(matter, payload, "tok")).rejects.toThrow("mirror failed: 500");
+    await expect(pushMirror("m-1", payload, "tok")).rejects.toThrow("mirror failed: 500");
     vi.unstubAllGlobals();
   });
 });
