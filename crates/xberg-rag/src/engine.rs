@@ -167,10 +167,18 @@ impl<E: Embedder> RagEngine<E> {
     /// Before searching, re-imports the legacy bundle if it's newer than the snapshot (or no
     /// snapshot exists yet) — see [`Self::sync_from_legacy_if_stale`] — so a caller never has to
     /// separately run `import_legacy` after every mirror push before new documents are searchable.
+    /// A sync failure only turns into an error when there's no existing snapshot to fall back on
+    /// (e.g. a legacy bundle written by a future, not-yet-understood version, or a transient
+    /// embedder failure) — otherwise every subsequent query for the matter would break on a single
+    /// bad legacy write, even though the last-known-good snapshot is still perfectly usable.
     pub fn query(&self, matter_id: &str, text: &str, top_k: usize) -> Result<Vec<RetrievedChunk>> {
         let paths = self.paths(matter_id)?;
-        self.sync_from_legacy_if_stale(&paths, matter_id)?;
         let path = paths.snapshot();
+        if let Err(sync_err) = self.sync_from_legacy_if_stale(&paths, matter_id) {
+            if !path.exists() {
+                return Err(sync_err);
+            }
+        }
         if !path.exists() {
             return Err(RagError::MatterNotFound(matter_id.to_string()));
         }
@@ -585,5 +593,40 @@ mod tests {
         // Must succeed: the newer, valid snapshot is used directly, the invalid bundle is never touched.
         let hits = e.query("m1", "indexed after the bad bundle", 1).unwrap();
         assert_eq!(hits[0].text, "indexed after the bad bundle");
+    }
+
+    #[test]
+    fn query_falls_back_to_the_stale_snapshot_when_a_newer_legacy_bundle_fails_to_import() {
+        let tmp = tempfile::tempdir().unwrap();
+        let e = engine(tmp.path());
+        e.index_documents("m1", &[doc("d1", &["last known good"])]).unwrap();
+
+        let paths = MatterPaths::new(tmp.path(), "m1").unwrap();
+        let snapshot_time = std::fs::metadata(paths.snapshot()).unwrap().modified().unwrap();
+        // Newer than the snapshot, but not a valid MirrorBundle at all -- import_legacy would error.
+        std::fs::write(paths.legacy_bundle(), "not a valid MirrorBundle at all").unwrap();
+        set_mtime(
+            &paths.legacy_bundle(),
+            snapshot_time + std::time::Duration::from_secs(1),
+        );
+
+        // Must succeed by falling back to the stale-but-usable snapshot, not error out entirely --
+        // and repeated queries must keep succeeding the same way, not get stuck erroring forever.
+        for _ in 0..2 {
+            let hits = e.query("m1", "last known good", 1).unwrap();
+            assert_eq!(hits[0].text, "last known good");
+        }
+    }
+
+    #[test]
+    fn query_errors_when_the_only_newer_legacy_bundle_fails_to_import_and_no_snapshot_exists() {
+        let tmp = tempfile::tempdir().unwrap();
+        let e = engine(tmp.path());
+        let paths = MatterPaths::new(tmp.path(), "m1").unwrap();
+        std::fs::create_dir_all(&paths.dir).unwrap();
+        std::fs::write(paths.legacy_bundle(), "not a valid MirrorBundle at all").unwrap();
+
+        // No snapshot to fall back on, so the sync failure is the only signal available.
+        assert!(matches!(e.query("m1", "anything", 1).unwrap_err(), RagError::Legacy(_)));
     }
 }
