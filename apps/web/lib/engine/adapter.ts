@@ -24,6 +24,7 @@ import {
   appendIndex,
   serializeIndex,
   pushMirror,
+  serializeMirrorToBytes,
   detectCapabilities,
   selectScenario,
   type IndexedChunk,
@@ -161,15 +162,15 @@ export async function ingestFolder(file: File, ctx: IngestContext): Promise<Inge
   );
   await set(accumulatorKey(ctx.matter.id), merged);
 
-  const cumulativePayload = new TextEncoder().encode(
-    JSON.stringify({
-      version: 1,
-      index: Array.from(indexBytes),
-      vault: merged.vaultCipher,
-      vaultSalt: merged.vaultSalt,
-      pii: merged.pii,
-      chunks: merged.chunks,
-    }),
+  // Cumulative server bundle: version 2, matching services/mcp-server/src/mirror.ts's parseBundle
+  // (server saveMirror replaces the whole matter dir, so every push must carry everything).
+  // Sequential upload (FolderView) makes this race-free.
+  const cumulativePayload = serializeMirrorToBytes(
+    indexBytes,
+    Uint8Array.from(merged.vaultCipher),
+    Uint8Array.from(merged.vaultSalt),
+    merged.pii,
+    merged.chunks,
   );
   await pushMirror(ctx.matter, cumulativePayload, ctx.scopeToken);
   emit(ctx, name, name, "index", 1);
