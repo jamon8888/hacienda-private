@@ -21,6 +21,28 @@ struct RawBundle {
     chunks: Vec<RawChunk>,
 }
 
+/// The sealed droit-des-affaires entity graph attached to a `MirrorBundle`
+/// (`packages/wasm-pipeline/src/entity-graph.ts`), present only when the browser opted into
+/// entity-graph extraction at ingest time. Opaque ciphertext — this crate never decrypts it; a
+/// future `graph_query` MCP tool does, passphrase-gated, in an ephemeral in-memory store.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SealedGraph {
+    pub cipher: Vec<u8>,
+    pub salt: Vec<u8>,
+}
+
+#[derive(Deserialize)]
+struct RawGraph {
+    cipher: Vec<u8>,
+    salt: Vec<u8>,
+}
+
+#[derive(Deserialize)]
+struct RawBundleGraph {
+    #[serde(default)]
+    graph: Option<RawGraph>,
+}
+
 #[derive(Deserialize)]
 struct RawChunk {
     doc_id: String,
@@ -55,6 +77,18 @@ pub fn read_bundle_chunks(json: &[u8]) -> Result<Vec<LegacyChunk>> {
             citation: c.citation,
         })
         .collect())
+}
+
+/// Read just the sealed entity-graph blob from a `MirrorBundle`, if present. `Ok(None)` is the
+/// common case — entity-graph extraction is opt-in, so most bundles carry no `graph` field at
+/// all — only a `graph` field that's present but malformed is an error.
+pub fn read_bundle_graph(json: &[u8]) -> Result<Option<SealedGraph>> {
+    let raw: RawBundleGraph =
+        serde_json::from_slice(json).map_err(|e| RagError::Legacy(format!("not a valid MirrorBundle: {e}")))?;
+    Ok(raw.graph.map(|g| SealedGraph {
+        cipher: g.cipher,
+        salt: g.salt,
+    }))
 }
 
 #[cfg(test)]
@@ -111,6 +145,31 @@ mod tests {
     fn rejects_non_json() {
         assert!(matches!(
             read_bundle_chunks(b"not json").unwrap_err(),
+            RagError::Legacy(_)
+        ));
+    }
+
+    #[test]
+    fn read_bundle_graph_is_none_when_the_bundle_has_no_graph_field() {
+        assert_eq!(read_bundle_graph(BUNDLE.as_bytes()).unwrap(), None);
+    }
+
+    #[test]
+    fn read_bundle_graph_reads_the_sealed_cipher_and_salt_when_present() {
+        let bundle = r#"{
+            "version": 2,
+            "chunks": [],
+            "graph": { "cipher": [1, 2, 3], "salt": [4, 5] }
+        }"#;
+        let graph = read_bundle_graph(bundle.as_bytes()).unwrap().unwrap();
+        assert_eq!(graph.cipher, vec![1, 2, 3]);
+        assert_eq!(graph.salt, vec![4, 5]);
+    }
+
+    #[test]
+    fn read_bundle_graph_rejects_non_json() {
+        assert!(matches!(
+            read_bundle_graph(b"not json").unwrap_err(),
             RagError::Legacy(_)
         ));
     }

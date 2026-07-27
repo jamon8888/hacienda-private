@@ -30,6 +30,15 @@ interface MirrorChunk {
   citation: string;
 }
 
+// The sealed droit-des-affaires entity graph (packages/wasm-pipeline/src/entity-graph.ts),
+// present only when the browser opted into entity-graph extraction at ingest time. Stored and
+// forwarded as opaque ciphertext — this server never decrypts it; a future graph_query MCP tool
+// (native host) does, passphrase-gated.
+interface MirrorGraph {
+  cipher: number[];
+  salt: number[];
+}
+
 interface MirrorBundle {
   version: number;
   embedding_identity: string;
@@ -38,6 +47,7 @@ interface MirrorBundle {
   vaultSalt: number[];
   pii: MirrorPiiSpan[];
   chunks: MirrorChunk[];
+  graph?: MirrorGraph;
 }
 
 export interface MirrorStatus {
@@ -180,6 +190,10 @@ export class MirrorStore {
       vaultSalt: existing.vaultSalt,
       pii: [...existing.pii, ...additions.pii],
       chunks: [...existing.chunks, ...additions.chunks],
+      // Browser-owned, opaque to this server (see the MirrorGraph note above) — must survive an
+      // incremental merge exactly like index/vault do, or a later per-document update would
+      // silently erase an already-sealed entity graph.
+      ...(existing.graph ? { graph: existing.graph } : {}),
     };
 
     return this.saveMirror(matterId, Buffer.from(JSON.stringify(merged), "utf8"));
@@ -218,6 +232,13 @@ export class MirrorStore {
       !Array.isArray((parsed as MirrorBundle).chunks)
     ) {
       throw new AppError("store", `mirror for matter ${matterId} has an unexpected bundle shape`);
+    }
+    // graph is optional (only present when the browser opted into entity-graph extraction), but
+    // if present it must have the expected shape — fail closed rather than silently forwarding a
+    // malformed blob a future graph_query tool would then fail to decrypt.
+    const graph = (parsed as MirrorBundle).graph;
+    if (graph != null && (!Array.isArray(graph.cipher) || !Array.isArray(graph.salt))) {
+      throw new AppError("store", `mirror for matter ${matterId} has a malformed graph field`);
     }
     return parsed as MirrorBundle;
   }

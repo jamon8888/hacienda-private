@@ -48,7 +48,10 @@ impl MatterPaths {
         self.dir.join("rag.snapshot")
     }
 
-    /// The legacy JSON `MirrorBundle` written by the Node host / browser mirror push.
+    /// The legacy JSON `MirrorBundle` written by the Node host / browser mirror push. Also the
+    /// on-disk home of the opt-in sealed entity-graph blob (`graph.cipher`/`graph.salt`, see
+    /// `crate::read_bundle_graph`) — the Node host writes the browser's mirror payload verbatim,
+    /// so no separate file or table is needed to keep the graph's opaque bytes alongside it.
     pub fn legacy_bundle(&self) -> PathBuf {
         self.dir.join("bundle.json")
     }

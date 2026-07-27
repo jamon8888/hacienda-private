@@ -16,7 +16,7 @@ pub use embed::Embedder;
 pub use engine::{ChunkInput, DocumentInput, RagEngine};
 pub use error::{RagError, Result};
 pub use flat::FlatStore;
-pub use legacy::{LegacyChunk, read_bundle_chunks};
+pub use legacy::{LegacyChunk, SealedGraph, read_bundle_chunks, read_bundle_graph};
 pub use paths::{MatterPaths, default_mirrors_dir, encode_uri_component};
 pub use snapshot::SNAPSHOT_VERSION;
 pub use store::SearchStore;
