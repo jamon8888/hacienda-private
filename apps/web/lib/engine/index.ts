@@ -18,3 +18,4 @@ export {
   type ReviewResult,
 } from "./adapter";
 export { openVault, rehydrate, listPiiTypes, type RedactionEntry } from "@xberg-io/wasm-pipeline-real";
+export { DROIT_DES_AFFAIRES_LABELS } from "@xberg-io/wasm-pipeline-real";

@@ -5,11 +5,11 @@ import { chunkExtraction, withChunking, chunkCitation, chunkPage, chunkBoundingB
 import { embedChunks } from "./embed";
 import { detectPii, listPiiTypes } from "./ner";
 import { buildIndex, serializeIndex, type IndexedChunk } from "./rag";
-import { buildRedaction, sealVault, sealPayload, type RedactionEntry } from "./redact";
+import { buildRedaction, sealVault, type RedactionEntry } from "./redact";
 import { pushMirror, serializeMirrorToBytes, type MirrorGraph } from "./mirror";
 import { detectCapabilities } from "./capabilities";
 import { selectScenario, type ModelScenario } from "./scenario";
-import { extractEntityGraph, mergeEntityGraphs, type EntityGraph } from "./entity-graph";
+import { extractEntityGraph, mergeEntityGraphs, sealEntityGraph, type EntityGraph } from "./entity-graph";
 
 function runPiiWhenIdle(text: string, piiTypes: readonly string[], scenario: ModelScenario): Promise<PiiEntity[]> {
   const run = () => detectPii(text, piiTypes, scenario);
@@ -123,11 +123,7 @@ export async function ingestFolder(
     );
     const merged = mergeEntityGraphs(graphs);
     if (merged.nodes.length > 0 || merged.edges.length > 0) {
-      const sealedGraph = await sealPayload(merged, options.passphrase);
-      graph = {
-        cipher: Array.from(sealedGraph.cipher),
-        salt: Array.from(sealedGraph.salt),
-      };
+      graph = await sealEntityGraph(merged, options.passphrase);
     }
   }
 

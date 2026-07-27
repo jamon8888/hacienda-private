@@ -17,6 +17,7 @@ export * from "./rag";
 export * from "./redact";
 export * from "./mirror";
 export * from "./ingest";
+export * from "./entity-graph";
 export * from "./query";
 export { BrowserVault } from "./vault";
 export type { CipherBundle } from "./vault";

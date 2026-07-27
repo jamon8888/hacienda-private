@@ -126,7 +126,11 @@ export async function sealVault(entries: RedactionEntry[], passphrase: string): 
   return sealPayload(entries, passphrase);
 }
 
-export async function openVault(sealed: SealedVault, passphrase: string): Promise<RedactionEntry[]> {
+// Inverse of sealPayload: decrypts an arbitrary JSON-serializable payload sealed with the same
+// PBKDF2/AES-256-GCM scheme. Reused by the entity-graph merge step (apps/web/lib/engine/
+// mirror-merge.ts), which must decrypt a matter's prior sealed graph to merge in a new document's
+// entities, the same way openVault already does for the PII vault.
+export async function openPayload<T>(sealed: SealedVault, passphrase: string): Promise<T> {
   const key = await deriveKey(passphrase, sealed.salt);
   const iv = sealed.cipher.slice(0, 12);
   const body = sealed.cipher.slice(12);
@@ -136,7 +140,11 @@ export async function openVault(sealed: SealedVault, passphrase: string): Promis
     body as unknown as BufferSource,
   );
   const json = new TextDecoder().decode(plainBuf);
-  return JSON.parse(json) as RedactionEntry[];
+  return JSON.parse(json) as T;
+}
+
+export async function openVault(sealed: SealedVault, passphrase: string): Promise<RedactionEntry[]> {
+  return openPayload<RedactionEntry[]>(sealed, passphrase);
 }
 
 export async function redactDocument(

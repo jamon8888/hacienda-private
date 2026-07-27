@@ -1,4 +1,13 @@
-import { sealVault, openVault, type RedactionEntry } from "@xberg-io/wasm-pipeline-real";
+import {
+  sealVault,
+  openVault,
+  mergeEntityGraphs,
+  sealEntityGraph,
+  openEntityGraph,
+  type RedactionEntry,
+  type EntityGraph,
+  type MirrorGraph,
+} from "@xberg-io/wasm-pipeline-real";
 
 export interface MirrorPiiSpan {
   doc_id: string;
@@ -28,6 +37,11 @@ export interface MatterMirrorAccumulator {
   chunks: MirrorChunk[];
   vaultCipher: number[];
   vaultSalt: number[];
+  // Sealed droit-des-affaires entity graph (packages/wasm-pipeline/src/entity-graph.ts), cumulative
+  // across the whole matter like pii/chunks/vault above. Optional: only present once a document is
+  // ingested with entityGraphLabels set. Carried through unchanged when a merge doesn't produce a
+  // new graph (e.g. a PII-only re-review) — see mergeIntoAccumulator's `add.graph` handling below.
+  graph?: MirrorGraph;
 }
 
 export function accumulatorKey(matterId: string): string {
@@ -36,7 +50,7 @@ export function accumulatorKey(matterId: string): string {
 
 export async function mergeIntoAccumulator(
   prior: MatterMirrorAccumulator | undefined,
-  add: { entries: RedactionEntry[]; pii: MirrorPiiSpan[]; chunks: MirrorChunk[] },
+  add: { entries: RedactionEntry[]; pii: MirrorPiiSpan[]; chunks: MirrorChunk[]; graph?: EntityGraph },
   passphrase: string,
   // When set, drops this document's prior pii/chunks/vault entries before merging in `add` —
   // otherwise a re-review of an already-ingested document would duplicate it in the accumulator
@@ -73,10 +87,31 @@ export async function mergeIntoAccumulator(
     ? (prior?.chunks ?? []).filter((c) => c.doc_id !== replaceDocId)
     : (prior?.chunks ?? []);
   const sealed = await sealVault([...keptEntries, ...add.entries], passphrase);
+
+  // Only touch the graph when this call actually produces one (entityGraphLabels was set at
+  // ingest time). A PII-only re-review (add.graph undefined) must carry prior.graph through
+  // completely unchanged — dropping this document's already-extracted entities on every review
+  // would be a real regression, not a no-op, since re-review never re-runs entity extraction.
+  let graph = prior?.graph;
+  if (add.graph) {
+    const priorGraph = prior?.graph ? await openEntityGraph(prior.graph, passphrase) : { nodes: [], edges: [] };
+    // Drop this document's own prior nodes/edges before merging in its freshly-extracted graph —
+    // the same replace-not-duplicate rule pii/chunks/vault entries already follow above.
+    const keptGraph: EntityGraph = replaceDocId
+      ? {
+          nodes: priorGraph.nodes.filter((n) => n.docId !== replaceDocId),
+          edges: priorGraph.edges.filter((e) => e.docId !== replaceDocId),
+        }
+      : priorGraph;
+    const merged = mergeEntityGraphs([keptGraph, add.graph]);
+    graph = await sealEntityGraph(merged, passphrase);
+  }
+
   return {
     pii: [...keptPii, ...add.pii],
     chunks: [...keptChunks, ...add.chunks],
     vaultCipher: Array.from(sealed.cipher),
     vaultSalt: Array.from(sealed.salt),
+    ...(graph ? { graph } : {}),
   };
 }

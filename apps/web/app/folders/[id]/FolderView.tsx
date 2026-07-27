@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { Document as DocumentType, Folder, Matter } from "@xberg-io/core";
-import { ingestFolder, type IngestProgress } from "@xberg-io/wasm-pipeline";
+import { ingestFolder, DROIT_DES_AFFAIRES_LABELS, type IngestProgress } from "@xberg-io/wasm-pipeline";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
@@ -42,6 +42,9 @@ export default function FolderView({ id: propId }: FolderViewProps) {
   const [documents, setDocuments] = useState<DocumentType[]>([]);
   const [uploads, setUploads] = useState<Record<string, UploadState>>({});
   const [passphraseInput, setPassphraseInput] = useState("");
+  // Opt-in droit-des-affaires entity-graph extraction (see entity-graph.ts) — off by default so
+  // ingest behavior/performance is unchanged for anyone not using this feature.
+  const [entityGraphEnabled, setEntityGraphEnabled] = useState(false);
 
   // Fetch folder details
   useEffect(() => {
@@ -107,6 +110,7 @@ export default function FolderView({ id: propId }: FolderViewProps) {
             docId,
             scopeToken: auth.token,
             passphrase: auth.passphrase as string,
+            entityGraphLabels: entityGraphEnabled ? DROIT_DES_AFFAIRES_LABELS : undefined,
             onProgress: (p) =>
               setUploads((prev) => ({
                 ...prev,
@@ -135,7 +139,7 @@ export default function FolderView({ id: propId }: FolderViewProps) {
         }
       }
     },
-    [auth, folder, folderId, matterId, refresh, modelStage],
+    [auth, folder, folderId, matterId, refresh, modelStage, entityGraphEnabled],
   );
 
   const vaultLocked = !auth?.passphrase;
@@ -171,7 +175,17 @@ export default function FolderView({ id: propId }: FolderViewProps) {
           Preparing on-device AI models before you can upload…
         </div>
       ) : (
-        <FileDropzone className="mb-6" onFilesAccepted={onFilesAccepted} />
+        <>
+          <label className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={entityGraphEnabled}
+              onChange={(e) => setEntityGraphEnabled(e.target.checked)}
+            />
+            Extract droit des affaires entity graph (sociétés, dirigeants, actionnaires)
+          </label>
+          <FileDropzone className="mb-6" onFilesAccepted={onFilesAccepted} />
+        </>
       )}
 
       {Object.values(uploads).length > 0 && (
