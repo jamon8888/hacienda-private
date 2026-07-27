@@ -52,6 +52,25 @@ export const DROIT_DES_AFFAIRES_LABELS = [
   "opération",
 ] as const;
 
+/**
+ * Droit commercial (Phase B) entity schema — same flat-label-list shape as Phase A, covering the
+ * core building blocks of a commercial-law document (a business's ownership/operation of its
+ * fonds de commerce, its commercial lease, its RCS registration) rather than the corporate-
+ * governance concerns Phase A covers. Same go/no-go caveat as Phase A: prompt-only for this first
+ * cut, real-text accuracy not yet validated (this sandbox can't run the real GLiNER2 model — see
+ * fixtures/legal-fr/droit-commercial/README.md).
+ */
+export const DROIT_COMMERCIAL_LABELS = [
+  "commerçant",
+  "société commerciale",
+  "fonds de commerce",
+  "bail commercial",
+  "immatriculation RCS",
+  "contrat commercial",
+  "clause de non-concurrence",
+  "tribunal de commerce",
+] as const;
+
 function normalizeType(kind: string): string {
   return kind
     .toLowerCase()
@@ -72,40 +91,91 @@ function canonicalKey(type: string, label: string): string {
 }
 
 /**
- * Very small, deliberately minimal rule set for the droit des affaires vertical — pattern-matching
- * over entity spans that co-occur in the same sentence-ish window. This is a first cut meant to be
- * extended against real fixture text, not a finished design (see the plan's honest risk
+ * One relation-inference rule: a `from`-typed node followed (within `maxGap` characters, no
+ * sentence boundary in between) by a `to`-typed node, with `connector` matching the text between
+ * them, produces a `type`-typed edge. Deliberately minimal pattern-matching — a first cut meant to
+ * be extended against real fixture text, not a finished design (see the plan's honest risk
  * assessment); low recall on real documents is an expected starting point, not a bug to silence.
  */
-function inferRelations(nodes: GraphNode[], text: string, docId: string, chunkIndex: number): GraphEdge[] {
+interface RelationRule {
+  type: string;
+  fromType: string;
+  toType: string;
+  connector: RegExp;
+  maxGap: number;
+}
+
+// Droit des affaires (Phase A) relation rules.
+const DROIT_DES_AFFAIRES_RULES: readonly RelationRule[] = [
+  // "<dirigeant>, gérant/président/... de <société>" — the dirigeant mention immediately precedes
+  // the société mention, separated only by a short connective phrase (no sentence boundary between).
+  { type: "dirige", fromType: "dirigeant", toType: "societe", connector: /\bde\b/i, maxGap: 60 },
+  // "<actionnaire> détient ... % ... <société>" — same co-occurrence-window heuristic.
+  {
+    type: "detient",
+    fromType: "actionnaire",
+    toType: "societe",
+    connector: /d[ée]tient|actionnaire de|associ[ée] de/i,
+    maxGap: 80,
+  },
+];
+
+// Droit commercial (Phase B) relation rules, same fromType ("commercant") across all three since
+// each captures a distinct thing a commerçant does: run a business, hold its lease, be registered.
+export const DROIT_COMMERCIAL_RULES: readonly RelationRule[] = [
+  // "<commerçant> exploite/est propriétaire du/gérant du <fonds de commerce>"
+  {
+    type: "exploite",
+    fromType: "commercant",
+    toType: "fonds_de_commerce",
+    connector: /exploite|propri[ée]taire|g[ée]rant/i,
+    maxGap: 60,
+  },
+  // "<commerçant> est titulaire d'un/locataire du/bénéficie d'un <bail commercial>"
+  {
+    type: "loue",
+    fromType: "commercant",
+    toType: "bail_commercial",
+    connector: /titulaire|locataire|b[ée]n[ée]ficie/i,
+    maxGap: 60,
+  },
+  // "<commerçant> est immatriculé ... sous le numéro d'<immatriculation RCS>"
+  {
+    type: "immatricule",
+    fromType: "commercant",
+    toType: "immatriculation_rcs",
+    connector: /immatricul/i,
+    maxGap: 80,
+  },
+];
+
+/**
+ * Applies a vertical's relation rules over entity spans that co-occur in the same sentence-ish
+ * window, generalizing what was originally a droit-des-affaires-only inferRelations() into a
+ * reusable engine now that a second vertical (droit commercial) needs the identical shape —
+ * extracting this once two real call sites exist, not speculatively ahead of them.
+ */
+function inferRelationsFromRules(
+  nodes: GraphNode[],
+  text: string,
+  docId: string,
+  chunkIndex: number,
+  rules: readonly RelationRule[],
+): GraphEdge[] {
   const edges: GraphEdge[] = [];
   let edgeCounter = 0;
 
-  const dirigeants = nodes.filter((n) => n.type === "dirigeant");
-  const societes = nodes.filter((n) => n.type === "societe");
-  const actionnaires = nodes.filter((n) => n.type === "actionnaire");
-
-  // "<dirigeant>, gérant/président/... de <société>" — the dirigeant mention immediately precedes
-  // the société mention, separated only by a short connective phrase (no sentence boundary between).
-  for (const d of dirigeants) {
-    for (const s of societes) {
-      if (d.end > s.start) continue; // société must follow the dirigeant mention
-      const between = text.slice(d.end, s.start);
-      if (between.length > 60) continue; // not the same clause
-      if (/\bde\b/i.test(between)) {
-        edges.push({ id: `e${edgeCounter++}`, type: "dirige", from: d.id, to: s.id, docId, chunkIndex });
-      }
-    }
-  }
-
-  // "<actionnaire> détient ... % ... <société>" — same co-occurrence-window heuristic.
-  for (const a of actionnaires) {
-    for (const s of societes) {
-      if (a.end > s.start) continue;
-      const between = text.slice(a.end, s.start);
-      if (between.length > 80) continue;
-      if (/d[ée]tient|actionnaire de|associ[ée] de/i.test(between)) {
-        edges.push({ id: `e${edgeCounter++}`, type: "detient", from: a.id, to: s.id, docId, chunkIndex });
+  for (const rule of rules) {
+    const froms = nodes.filter((n) => n.type === rule.fromType);
+    const tos = nodes.filter((n) => n.type === rule.toType);
+    for (const f of froms) {
+      for (const t of tos) {
+        if (f.end > t.start) continue; // "to" must follow the "from" mention
+        const between = text.slice(f.end, t.start);
+        if (between.length > rule.maxGap) continue; // not the same clause
+        if (rule.connector.test(between)) {
+          edges.push({ id: `e${edgeCounter++}`, type: rule.type, from: f.id, to: t.id, docId, chunkIndex });
+        }
       }
     }
   }
@@ -114,15 +184,18 @@ function inferRelations(nodes: GraphNode[], text: string, docId: string, chunkIn
 }
 
 /**
- * Extract a droit-des-affaires entity graph from one chunk's RAW (pre-redaction) text — must run
- * at the same point buildRedaction does, while the real text is still in memory, since this graph
- * needs real entity values to be useful to a lawyer (unlike the tokenized RAG path).
+ * Extract an entity graph (droit des affaires by default, or another vertical via `labels`/
+ * `relationRules` — see DROIT_COMMERCIAL_LABELS/DROIT_COMMERCIAL_RULES) from one chunk's RAW
+ * (pre-redaction) text — must run at the same point buildRedaction does, while the real text is
+ * still in memory, since this graph needs real entity values to be useful to a lawyer (unlike the
+ * tokenized RAG path).
  */
 export async function extractEntityGraph(
   text: string,
   docId: string,
   chunkIndex: number,
   labels: readonly string[] = DROIT_DES_AFFAIRES_LABELS,
+  relationRules: readonly RelationRule[] = DROIT_DES_AFFAIRES_RULES,
 ): Promise<EntityGraph> {
   const spans = await detectGliner2(text, labels);
 
@@ -141,7 +214,7 @@ export async function extractEntityGraph(
   // duplicate mentions into one node below — otherwise a later mention's proximity to an entity
   // would incorrectly be tested against an earlier, unrelated occurrence's position instead of its
   // own.
-  const rawEdges = inferRelations(rawNodes, text, docId, chunkIndex);
+  const rawEdges = inferRelationsFromRules(rawNodes, text, docId, chunkIndex, relationRules);
 
   // Exact-normalized-match canonicalization: merge duplicate mentions into one node (first mention
   // wins), remapping any edge endpoint that pointed at a since-merged duplicate.
