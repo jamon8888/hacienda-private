@@ -235,7 +235,9 @@ mod tests {
         // Redaction tokens themselves (e.g. `{{C0_PERSON_1}}`) must never trip the guard — this
         // is the normal, expected shape of every real `rag_query` response today.
         let hits = reject_unsafe_hits(
-            vec![hit("contact {{C0_PERSON_1}} at {{C0_EMAIL_1}} regarding the {{C0_ORGANIZATION_1}} matter")],
+            vec![hit(
+                "contact {{C0_PERSON_1}} at {{C0_EMAIL_1}} regarding the {{C0_ORGANIZATION_1}} matter",
+            )],
             "m1",
         )
         .unwrap();

@@ -450,8 +450,9 @@ mod tests {
             },
             mirrors_dir.clone(),
         );
-        let index_handle =
-            std::thread::spawn(move || index_engine.index_documents("m1", &[doc("concurrent", &["concurrent content"])]));
+        let index_handle = std::thread::spawn(move || {
+            index_engine.index_documents("m1", &[doc("concurrent", &["concurrent content"])])
+        });
 
         import_handle.join().unwrap().unwrap();
         index_handle.join().unwrap().unwrap();
