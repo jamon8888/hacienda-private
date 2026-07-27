@@ -1,6 +1,10 @@
 /// UTF-8 validation and safe decoding helpers.
 pub mod utf8_validation;
 
+#[cfg(feature = "entity-graph-vault")]
+/// Decrypts the browser's PBKDF2/AES-256-GCM vault wire format, for the entity-graph `graph_query` MCP tool.
+pub mod browser_vault;
+
 #[cfg(feature = "quality")]
 /// OCR quality scoring: noise detection, confidence aggregation, and artifact removal.
 pub mod quality;
