@@ -59,6 +59,7 @@ describe("MirrorStore", () => {
     expect(() => store.loadCipher(matterId, "doc:token")).toThrowError(
       expect.objectContaining({ code: "bad_request" }),
     );
+    expect(() => store.getSealedGraph(matterId)).toThrowError(expect.objectContaining({ code: "bad_request" }));
     expect(() => store.forget(matterId)).toThrowError(expect.objectContaining({ code: "bad_request" }));
   });
 
@@ -189,6 +190,10 @@ describe("MirrorStore", () => {
       graph?: { cipher: number[]; salt: number[] };
     };
     expect(raw.graph).toEqual({ cipher: [10, 20, 30], salt: [40, 50] });
+    expect(store.getSealedGraph("m")).toEqual({
+      cipher: new Uint8Array([10, 20, 30]),
+      salt: new Uint8Array([40, 50]),
+    });
   });
 
   it("omitting graph is unaffected — existing bundles without it still load", async () => {
@@ -196,6 +201,7 @@ describe("MirrorStore", () => {
     store.saveMirror("m", bundle("no graph here"));
     const result = await store.loadMirror("m");
     expect(result.loaded).toBe(true);
+    expect(store.getSealedGraph("m")).toBeNull();
   });
 
   function bundle(text: string) {

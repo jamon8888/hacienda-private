@@ -336,6 +336,19 @@ export class MirrorStore {
       });
   }
 
+  // Read-only accessor for the sealed graph's cipher/salt bytes, for a future graph_query MCP
+  // tool. Mirrors the native host's read_bundle_graph: returns null when the matter has no graph
+  // (the common case — entity-graph extraction is opt-in at ingest time), not an error.
+  getSealedGraph(matterId: string): { cipher: Uint8Array; salt: Uint8Array } | null {
+    this.validateMatterId(matterId);
+    const bundle = this.getBundle(matterId);
+    if (!bundle.graph) return null;
+    return {
+      cipher: new Uint8Array(bundle.graph.cipher),
+      salt: new Uint8Array(bundle.graph.salt),
+    };
+  }
+
   loadCipher(matterId: string, chunkId: string): Uint8Array {
     this.validateMatterId(matterId);
     const bundle = this.getBundle(matterId);
