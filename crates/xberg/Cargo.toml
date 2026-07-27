@@ -382,6 +382,12 @@ redaction-ml = ["redaction", "ner"] # Couple in NER for PERSON/ORG/LOC redaction
 # sealVault/openVault) — a different scheme from redaction-rehydrate's scrypt-based one, which protects
 # a separate, native-only rehydration map. Entity-graph work (server-side graph_query) needs this one.
 entity-graph-vault = ["dep:aes-gcm", "dep:pbkdf2", "dep:sha2", "dep:zeroize"]
+# graph_query MCP tool: decrypts the sealed entity graph (entity-graph-vault) into an ephemeral
+# in-memory rusqlite connection for a recursive-CTE traversal query, then discards it. Kept out of
+# `mcp`'s own feature list (unlike rag_query, which needs no new native dependency) because
+# rusqlite's `bundled` feature compiles SQLite's C sources — a real cross-compile cost this crate's
+# curated `android-target`/`windows-target` aggregates deliberately avoid taking on by default.
+graph-query = ["entity-graph-vault", "dep:rusqlite"]
 
 summarization = ["stopwords"] # TextRank extractive only; pure-Rust (uses stopword tables).
 summarization-llm = ["summarization", "liter-llm"]
@@ -772,6 +778,7 @@ rake = { version = "0.3.6", optional = true }
 rayon = { workspace = true }
 regex = "1.13.0"
 resvg = { workspace = true, optional = true }
+rusqlite = { workspace = true, optional = true }
 rmcp = { version = "2.2.0", features = [
     "server",
     "macros",

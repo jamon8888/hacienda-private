@@ -11626,6 +11626,7 @@ dependencies = [
  "rmp-serde",
  "roxmltree 0.21.1",
  "rqrr",
+ "rusqlite",
  "safetensors 0.8.0",
  "scrypt",
  "serde",
