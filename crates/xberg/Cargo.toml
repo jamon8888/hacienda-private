@@ -413,7 +413,9 @@ api = [
     "tokio?/signal",
     "chunking",
 ]
-mcp = ["tower-service", "dep:rmcp", "tokio-runtime"]
+# `redaction` powers the rag_query safety guard (crates/xberg/src/mcp/rag.rs) that scans
+# returned chunk text for apparent unredacted PII — defense in depth, always on for this host.
+mcp = ["tower-service", "dep:rmcp", "tokio-runtime", "redaction"]
 mcp-http = ["mcp", "api"]
 
 otel = ["dep:opentelemetry", "dep:opentelemetry_sdk", "dep:tracing-opentelemetry"]

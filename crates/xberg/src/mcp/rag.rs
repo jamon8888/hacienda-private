@@ -64,6 +64,39 @@ fn to_mcp_error(err: RagError) -> rmcp::ErrorData {
     }
 }
 
+/// Reject a query result if any hit's text still looks like unredacted PII — defense in depth
+/// against a redaction regression upstream (the browser's ingestion pipeline is what actually
+/// tokenizes chunk text before this tool ever sees it; nothing here would otherwise catch a
+/// mirror that skipped that step, e.g. one built via `xberg rag index` against raw files).
+///
+/// Reuses the same conservative, Luhn/format-validated regex scanner the extraction pipeline's
+/// own redaction engine uses (`crate::text::redaction::patterns::scan_text`) — no NER, no model
+/// loading, no new dependency. Fails the whole call on the first unsafe hit rather than silently
+/// dropping just that one: a partial, silently-filtered response is a worse failure mode for a
+/// legal tool than an explicit, loud error naming the doc/chunk (never the matched PII text).
+fn reject_unsafe_hits(
+    hits: Vec<super::schema::RagHit>,
+    matter_id: &str,
+) -> Result<Vec<super::schema::RagHit>, rmcp::ErrorData> {
+    for hit in &hits {
+        let matches = crate::text::redaction::patterns::scan_text(&hit.text, &[]);
+        if !matches.is_empty() {
+            let categories: Vec<String> = matches.iter().map(|m| format!("{:?}", m.category)).collect();
+            return Err(rmcp::ErrorData::internal_error(
+                format!(
+                    "rag_query refused: chunk {} of doc {} in matter {matter_id} contains apparent \
+                     unredacted PII ({}); the mirror may have been built without redaction",
+                    hit.chunk_index,
+                    hit.doc_id,
+                    categories.join(", ")
+                ),
+                None,
+            ));
+        }
+    }
+    Ok(hits)
+}
+
 /// Execute a live RAG query and shape it for MCP structured output.
 pub(crate) fn query(params: &super::params::RagQueryParams) -> Result<super::schema::RagQueryOutput, rmcp::ErrorData> {
     if params.matter_id.trim().is_empty() || matches!(params.matter_id.as_str(), "." | "..") {
@@ -82,19 +115,22 @@ pub(crate) fn query(params: &super::params::RagQueryParams) -> Result<super::sch
         .query(&params.matter_id, &params.query, top_k)
         .map_err(to_mcp_error)?;
 
+    let hits: Vec<super::schema::RagHit> = hits
+        .into_iter()
+        .map(|h| super::schema::RagHit {
+            doc_id: h.doc_id,
+            chunk_index: h.chunk_index,
+            text: h.text,
+            score: h.score,
+            citation: h.citation,
+            page: h.page,
+        })
+        .collect();
+    let hits = reject_unsafe_hits(hits, &params.matter_id)?;
+
     Ok(super::schema::RagQueryOutput {
         matter_id: params.matter_id.clone(),
-        hits: hits
-            .into_iter()
-            .map(|h| super::schema::RagHit {
-                doc_id: h.doc_id,
-                chunk_index: h.chunk_index,
-                text: h.text,
-                score: h.score,
-                citation: h.citation,
-                page: h.page,
-            })
-            .collect(),
+        hits,
     })
 }
 
@@ -157,5 +193,58 @@ mod tests {
         for enabled in ["1", "true", "TRUE"] {
             assert!(enabled_from_value(Some(enabled)), "{enabled} should enable RAG");
         }
+    }
+
+    // Safe RAG canary: a fixture-driven regression test proving `rag_query` never serves text
+    // that still looks like unredacted PII — this is the invariant this whole tool's safety model
+    // rests on (see `reject_unsafe_hits`'s doc comment), and nothing in the RAG engine itself would
+    // otherwise catch a regression here.
+    fn hit(text: &str) -> super::super::schema::RagHit {
+        super::super::schema::RagHit {
+            doc_id: "d1".to_string(),
+            chunk_index: 0,
+            text: text.to_string(),
+            score: 1.0,
+            citation: None,
+            page: None,
+        }
+    }
+
+    #[test]
+    fn reject_unsafe_hits_rejects_an_email_address() {
+        let err = reject_unsafe_hits(vec![hit("contact person@example.com for details")], "m1").unwrap_err();
+        assert!(err.message.contains("d1"), "got {}", err.message);
+        assert!(err.message.contains("m1"), "got {}", err.message);
+    }
+
+    #[test]
+    fn reject_unsafe_hits_rejects_a_luhn_valid_credit_card() {
+        // A known Luhn-valid test Visa number (also used by this crate's own credit_card tests) —
+        // the pattern engine only reports format-valid matches, so a random 16-digit run wouldn't
+        // trigger it.
+        assert!(reject_unsafe_hits(vec![hit("card on file: 4111111111111111")], "m1").is_err());
+    }
+
+    #[test]
+    fn reject_unsafe_hits_rejects_a_valid_ssn() {
+        assert!(reject_unsafe_hits(vec![hit("ssn 123-45-6789 on record")], "m1").is_err());
+    }
+
+    #[test]
+    fn reject_unsafe_hits_passes_already_tokenized_text() {
+        // Redaction tokens themselves (e.g. `{{C0_PERSON_1}}`) must never trip the guard — this
+        // is the normal, expected shape of every real `rag_query` response today.
+        let hits = reject_unsafe_hits(
+            vec![hit("contact {{C0_PERSON_1}} at {{C0_EMAIL_1}} regarding the {{C0_ORGANIZATION_1}} matter")],
+            "m1",
+        )
+        .unwrap();
+        assert_eq!(hits.len(), 1);
+    }
+
+    #[test]
+    fn reject_unsafe_hits_passes_ordinary_text_with_no_pii_shaped_substrings() {
+        let hits = reject_unsafe_hits(vec![hit("the parties agree to the terms set out in section 4")], "m1").unwrap();
+        assert_eq!(hits.len(), 1);
     }
 }
