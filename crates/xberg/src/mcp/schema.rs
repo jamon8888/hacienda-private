@@ -116,6 +116,49 @@ pub struct RagQueryOutput {
     pub hits: Vec<RagHit>,
 }
 
+/// One node in a `graph_query` result.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct GraphNodeOutput {
+    /// Stable node id, scoped to the source chunk it was extracted from.
+    pub id: String,
+    /// Normalized entity type (e.g. "societe", "dirigeant").
+    pub r#type: String,
+    /// The real surface text (e.g. a company name) — never a redacted token.
+    pub label: String,
+    /// Document the node was extracted from.
+    pub doc_id: String,
+    /// Chunk within that document.
+    pub chunk_index: u32,
+}
+
+/// One edge in a `graph_query` result.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct GraphEdgeOutput {
+    /// Stable edge id, scoped to the source chunk it was inferred from.
+    pub id: String,
+    /// Relation type (e.g. "dirige", "detient").
+    pub r#type: String,
+    /// Source node id.
+    pub from: String,
+    /// Target node id.
+    pub to: String,
+    /// Document the edge was inferred from.
+    pub doc_id: String,
+    /// Chunk within that document.
+    pub chunk_index: u32,
+}
+
+/// Structured output for `graph_query`.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct GraphQueryOutput {
+    /// Matter that was searched.
+    pub matter_id: String,
+    /// Matching nodes.
+    pub nodes: Vec<GraphNodeOutput>,
+    /// Edges between matching nodes (only present for `from_label` traversal queries).
+    pub edges: Vec<GraphEdgeOutput>,
+}
+
 /// Structured output for the model manifest.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct CacheManifestOutput {

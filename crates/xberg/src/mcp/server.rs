@@ -59,9 +59,9 @@ impl Clone for XbergMcp {
     }
 }
 
-fn serialize_rag_response<T: serde::Serialize>(dto: &T) -> Result<(String, serde_json::Value), rmcp::ErrorData> {
+fn serialize_structured_response<T: serde::Serialize>(dto: &T) -> Result<(String, serde_json::Value), rmcp::ErrorData> {
     let map_error = |error: serde_json::Error| {
-        rmcp::ErrorData::internal_error(format!("Failed to serialize RAG query response: {error}"), None)
+        rmcp::ErrorData::internal_error(format!("Failed to serialize tool response: {error}"), None)
     };
     let response = serde_json::to_string_pretty(dto).map_err(map_error)?;
     let structured_content = serde_json::to_value(dto).map_err(map_error)?;
@@ -99,17 +99,20 @@ impl XbergMcp {
     ///
     /// * `config` - Default extraction configuration for all tool calls
     pub(crate) fn with_config(config: ExtractionConfig) -> Self {
-        Self::with_config_and_rag_enabled(config, super::rag::is_enabled())
+        Self::with_config_and_flags(config, super::rag::is_enabled(), super::graph::is_enabled())
     }
 
-    fn with_config_and_rag_enabled(config: ExtractionConfig, rag_enabled: bool) -> Self {
+    fn with_config_and_flags(config: ExtractionConfig, rag_enabled: bool, graph_enabled: bool) -> Self {
         let extraction_service = ExtractionServiceBuilder::new().with_tracing().with_metrics().build();
 
-        // RAG is opt-in: a disabled route is absent from `tools/list` and
+        // RAG and graph_query are both opt-in: a disabled route is absent from `tools/list` and
         // rejected on call, so a default `xberg mcp` install is unchanged.
         let mut tool_router = Self::tool_router();
         if !rag_enabled {
             tool_router = tool_router.with_disabled(super::rag::RAG_QUERY_TOOL);
+        }
+        if !graph_enabled {
+            tool_router = tool_router.with_disabled(super::graph::GRAPH_QUERY_TOOL);
         }
 
         Self {
@@ -300,7 +303,28 @@ impl XbergMcp {
         Parameters(params): Parameters<super::params::RagQueryParams>,
     ) -> Result<CallToolResult, rmcp::ErrorData> {
         let dto = super::rag::query(&params)?;
-        let (response, structured_content) = serialize_rag_response(&dto)?;
+        let (response, structured_content) = serialize_structured_response(&dto)?;
+        let mut tool_result = CallToolResult::success(vec![ContentBlock::text(response)]);
+        tool_result.structured_content = Some(structured_content);
+        Ok(tool_result)
+    }
+
+    /// Query a matter's sealed entity graph.
+    #[tool(
+        description = "Query the sealed entity/relation graph extracted from a matter's documents \
+                       (droit des affaires, etc.). Requires the ingest-time passphrase to decrypt \
+                       the graph. Filter nodes by type/label, or traverse from a starting node's \
+                       label out to a given number of hops to see its relations.",
+        annotations(title = "Graph Query", read_only_hint = true, idempotent_hint = true),
+        output_schema = rmcp::handler::server::common::schema_for_output::<super::schema::GraphQueryOutput>()
+            .expect("GraphQueryOutput schema must be valid")
+    )]
+    fn graph_query(
+        &self,
+        Parameters(params): Parameters<super::params::GraphQueryParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        let dto = super::graph::query(&params)?;
+        let (response, structured_content) = serialize_structured_response(&dto)?;
         let mut tool_result = CallToolResult::success(vec![ContentBlock::text(response)]);
         tool_result.structured_content = Some(structured_content);
         Ok(tool_result)
@@ -1021,10 +1045,10 @@ mod tests {
     }
 
     #[test]
-    fn rag_serialization_failure_is_an_internal_error() {
-        let error = serialize_rag_response(&FailingSerialize).unwrap_err();
+    fn tool_response_serialization_failure_is_an_internal_error() {
+        let error = serialize_structured_response(&FailingSerialize).unwrap_err();
         assert_eq!(error.code.0, -32603);
-        assert!(error.message.contains("Failed to serialize RAG query response"));
+        assert!(error.message.contains("Failed to serialize tool response"));
     }
 
     #[tokio::test]
@@ -1179,11 +1203,10 @@ mod tests {
         let router = XbergMcp::tool_router();
         let tools = router.list_all();
 
-        // 9 pre-existing tools + rag_query (registered but disabled by default;
-        // `tool_router()` here is the raw macro-generated router, not the
-        // `with_config` instance that applies the default-off gate, so
-        // `rag_query` is still counted).
-        assert_eq!(tools.len(), 10, "Expected 10 tools, found {}", tools.len());
+        // 9 pre-existing tools + rag_query + graph_query (both registered but disabled by
+        // default; `tool_router()` here is the raw macro-generated router, not the
+        // `with_config` instance that applies the default-off gate, so both are still counted).
+        assert_eq!(tools.len(), 11, "Expected 11 tools, found {}", tools.len());
     }
 
     #[tokio::test]
@@ -1532,7 +1555,7 @@ mod rag_gate_tests {
         // disabled — it would return `false` and contradict `is_disabled`.
         // `ToolRouter::map` is a public field, so we check registration
         // directly against it instead.
-        let server = XbergMcp::with_config_and_rag_enabled(ExtractionConfig::default(), false);
+        let server = XbergMcp::with_config_and_flags(ExtractionConfig::default(), false, false);
         assert!(
             server.tool_router.map.contains_key(super::super::rag::RAG_QUERY_TOOL),
             "the route must be registered so it can be enabled at runtime"
@@ -1549,8 +1572,42 @@ mod rag_gate_tests {
 
     #[test]
     fn rag_query_route_can_be_enabled() {
-        let server = XbergMcp::with_config_and_rag_enabled(ExtractionConfig::default(), true);
+        let server = XbergMcp::with_config_and_flags(ExtractionConfig::default(), true, false);
         assert!(!server.tool_router.is_disabled(super::super::rag::RAG_QUERY_TOOL));
         assert!(server.tool_router.has_route(super::super::rag::RAG_QUERY_TOOL));
+    }
+}
+
+#[cfg(test)]
+mod graph_gate_tests {
+    use super::*;
+
+    #[test]
+    fn graph_query_route_exists_but_is_disabled_by_default() {
+        // See the identical NOTE in `rag_gate_tests` above: `has_route` can't prove
+        // "registered" for a route we expect disabled, so we check `tool_router.map` directly.
+        let server = XbergMcp::with_config_and_flags(ExtractionConfig::default(), false, false);
+        assert!(
+            server
+                .tool_router
+                .map
+                .contains_key(super::super::graph::GRAPH_QUERY_TOOL),
+            "the route must be registered so it can be enabled at runtime"
+        );
+        assert!(
+            server.tool_router.is_disabled(super::super::graph::GRAPH_QUERY_TOOL),
+            "graph_query must be opt-in — an extraction-only CLI user must not see it"
+        );
+        assert!(
+            !server.tool_router.has_route(super::super::graph::GRAPH_QUERY_TOOL),
+            "has_route is registered && !disabled, so a disabled route must report false"
+        );
+    }
+
+    #[test]
+    fn graph_query_route_can_be_enabled() {
+        let server = XbergMcp::with_config_and_flags(ExtractionConfig::default(), false, true);
+        assert!(!server.tool_router.is_disabled(super::super::graph::GRAPH_QUERY_TOOL));
+        assert!(server.tool_router.has_route(super::super::graph::GRAPH_QUERY_TOOL));
     }
 }

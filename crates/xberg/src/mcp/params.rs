@@ -94,6 +94,35 @@ pub struct RagQueryParams {
     pub top_k: Option<usize>,
 }
 
+#[cfg_attr(alef, alef(skip))]
+/// Request parameters for a query over a matter's sealed entity graph (droit des affaires, etc.
+/// — see `packages/wasm-pipeline/src/entity-graph.ts`). Requires the same passphrase used to seal
+/// the graph (and the PII vault) at ingest time; nothing here can honor a query without it, since
+/// the graph is exactly as sensitive as the PII vault.
+#[derive(Debug, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
+pub struct GraphQueryParams {
+    /// Matter id whose entity graph should be queried.
+    pub matter_id: String,
+    /// Passphrase used to seal the entity graph at ingest time.
+    pub passphrase: String,
+    /// Filter to nodes of this exact type (e.g. "societe", "dirigeant"). Ignored when `from_label` is set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub node_type: Option<String>,
+    /// Filter to nodes whose label contains this substring, case-insensitive. Ignored when `from_label` is set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label_contains: Option<String>,
+    /// Traverse the graph from the node with this exact label (case-insensitive), returning every
+    /// node/edge reached within `max_hops`, instead of a flat type/label filter.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub from_label: Option<String>,
+    /// Maximum traversal depth from `from_label` (default 2, clamped to 1..=6). Ignored otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_hops: Option<u32>,
+    /// Maximum number of nodes to return (default 50, clamped to 1..=500).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<usize>,
+}
+
 fn extract_input_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
     schemars::json_schema!({
         "type": "object",
