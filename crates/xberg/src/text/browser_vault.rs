@@ -28,6 +28,7 @@ use zeroize::Zeroizing;
 
 use crate::{Result, XbergError};
 
+const SALT_LEN: usize = 16;
 const IV_LEN: usize = 12;
 const TAG_LEN: usize = 16;
 const KEY_LEN: usize = 32;
@@ -47,6 +48,12 @@ fn derive_key(passphrase: &str, salt: &[u8]) -> Zeroizing<[u8; KEY_LEN]> {
 /// sealed), zeroized on drop since it holds sensitive plaintext (real entity
 /// names, for the entity-graph use case).
 pub fn decrypt_browser_vault(cipher: &[u8], salt: &[u8], passphrase: &str) -> Result<Zeroizing<Vec<u8>>> {
+    if salt.len() != SALT_LEN {
+        return Err(XbergError::validation(format!(
+            "browser vault salt must be exactly {SALT_LEN} bytes, got {}",
+            salt.len()
+        )));
+    }
     if cipher.len() < IV_LEN + TAG_LEN {
         return Err(XbergError::validation(
             "browser vault cipher is too short to contain an IV and GCM tag",
@@ -87,7 +94,9 @@ mod tests {
     fn decrypts_browser_vault_format() {
         let plaintext = decrypt_browser_vault(&CIPHER, &SALT, "correct horse battery staple")
             .expect("Rust decrypts a TS-sealed browser vault");
-        let json = String::from_utf8(plaintext.to_vec()).expect("plaintext is valid UTF-8");
+        // Decode in place rather than copying into a non-zeroized String — keeps the sensitive
+        // plaintext confined to the Zeroizing buffer for the lifetime of this test.
+        let json = std::str::from_utf8(&plaintext).expect("plaintext is valid UTF-8");
         assert!(json.contains("Jean Dupont"), "got {json}");
         assert!(json.contains("{{C0_PERSON_1}}"), "got {json}");
     }
@@ -102,5 +111,11 @@ mod tests {
     fn truncated_cipher_is_rejected_before_attempting_decryption() {
         let err = decrypt_browser_vault(&[1, 2, 3], &SALT, "anything").unwrap_err();
         assert!(err.to_string().contains("too short"), "got {err}");
+    }
+
+    #[test]
+    fn wrong_length_salt_is_rejected_before_attempting_decryption() {
+        let err = decrypt_browser_vault(&CIPHER, &[0u8; 8], "anything").unwrap_err();
+        assert!(err.to_string().contains("16 bytes"), "got {err}");
     }
 }

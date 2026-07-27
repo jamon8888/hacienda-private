@@ -8,22 +8,25 @@
 //! This is a throwaway proof, not production code — nothing here is wired
 //! into `RagEngine`/`FlatStore`.
 
+/// True C ABI of a SQLite extension's init entry point (db, pzErrMsg, pApi) -> status. Named so the
+/// `transmute` below has an explicit, auditable target type instead of an inline turbofish.
+type SqliteExtensionInit = unsafe extern "C" fn(
+    *mut rusqlite::ffi::sqlite3,
+    *mut *mut std::os::raw::c_char,
+    *const rusqlite::ffi::sqlite3_api_routines,
+) -> std::os::raw::c_int;
+
 #[allow(unsafe_code)]
 fn main() -> rusqlite::Result<()> {
     // SAFETY: sqlite3_auto_extension registers sqlite-vec's real init entry point (whose true C ABI
-    // takes db/pzErrMsg/pApi, even though this crate's own extern "C" binding declares it as
+    // is SqliteExtensionInit, even though this crate's own extern "C" binding declares it as
     // zero-arg) globally, before any connection is opened — the exact pattern sqlite-vec's own
     // upstream test uses. Must run exactly once, before `Connection::open_in_memory()` below.
-    unsafe {
-        rusqlite::ffi::sqlite3_auto_extension(Some(std::mem::transmute::<
-            *const (),
-            unsafe extern "C" fn(
-                *mut rusqlite::ffi::sqlite3,
-                *mut *mut std::os::raw::c_char,
-                *const rusqlite::ffi::sqlite3_api_routines,
-            ) -> std::os::raw::c_int,
-        >(sqlite_vec::sqlite3_vec_init as *const ())));
-    }
+    let rc = unsafe {
+        let init: SqliteExtensionInit = std::mem::transmute(sqlite_vec::sqlite3_vec_init as *const ());
+        rusqlite::ffi::sqlite3_auto_extension(Some(init))
+    };
+    assert_eq!(rc, 0, "sqlite3_auto_extension failed to register sqlite-vec (code {rc})");
 
     let db = rusqlite::Connection::open_in_memory()?;
 
@@ -61,10 +64,18 @@ fn main() -> rusqlite::Result<()> {
         let distance: f64 = row.get(1)?;
         Ok((id, distance))
     })?;
+    let results = rows.collect::<rusqlite::Result<Vec<_>>>()?;
 
-    println!("KNN results (partitioned to matter-a, so entity 3 in matter-b must not appear):");
-    for row in rows {
-        let (id, distance) = row?;
+    // The real assertion this whole spike exists to make: partitioning by matter_id must exclude
+    // entity 3 (matter-b) from a matter-a query, not just "usually" — verified, not eyeballed.
+    assert_eq!(
+        results.iter().map(|(id, _)| *id).collect::<Vec<_>>(),
+        vec![1, 2],
+        "KNN query must exclude vectors from other partitions"
+    );
+
+    println!("KNN results (partitioned to matter-a, entity 3 in matter-b correctly excluded):");
+    for (id, distance) in results {
         println!("  entity_id={id} distance={distance:.4}");
     }
 
