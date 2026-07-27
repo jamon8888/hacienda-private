@@ -8,7 +8,13 @@ vi.mock("./gliner2", () => ({
   detectGliner2: (...args: unknown[]) => mockDetect(...args),
 }));
 
-const { extractEntityGraph, mergeEntityGraphs, DROIT_DES_AFFAIRES_LABELS } = await import("./entity-graph");
+const {
+  extractEntityGraph,
+  mergeEntityGraphs,
+  DROIT_DES_AFFAIRES_LABELS,
+  DROIT_COMMERCIAL_LABELS,
+  DROIT_COMMERCIAL_RULES,
+} = await import("./entity-graph");
 
 function span(text: string, kind: string, start: number, end: number) {
   return { kind, start, end, text };
@@ -98,6 +104,102 @@ describe("extractEntityGraph", () => {
     const customLabels = ["contrat", "clause"];
     await extractEntityGraph("some text", "doc-1", 0, customLabels);
     expect(mockDetect).toHaveBeenCalledWith("some text", customLabels);
+  });
+});
+
+describe("extractEntityGraph (droit commercial vertical)", () => {
+  const text =
+    "Paul Lefèvre, commerçant, exploite un fonds de commerce de boulangerie. " +
+    "Paul Lefèvre est titulaire d'un bail commercial sur ces mêmes locaux. " +
+    "Paul Lefèvre est immatriculé sous le numéro RCS 456 789 123.";
+  const commercant1Start = text.indexOf("Paul Lefèvre");
+  const commercant1End = commercant1Start + "Paul Lefèvre".length;
+  const fondsStart = text.indexOf("fonds de commerce de boulangerie");
+  const fondsEnd = fondsStart + "fonds de commerce de boulangerie".length;
+  const commercant2Start = text.indexOf("Paul Lefèvre", commercant1End);
+  const commercant2End = commercant2Start + "Paul Lefèvre".length;
+  const bailStart = text.indexOf("bail commercial");
+  const bailEnd = bailStart + "bail commercial".length;
+  const commercant3Start = text.indexOf("Paul Lefèvre", commercant2End);
+  const commercant3End = commercant3Start + "Paul Lefèvre".length;
+  const rcsStart = text.indexOf("RCS 456 789 123");
+  const rcsEnd = rcsStart + "RCS 456 789 123".length;
+
+  it("infers an 'exploite' edge from a commerçant mention followed by a fonds de commerce", async () => {
+    mockDetect.mockResolvedValueOnce([
+      span("Paul Lefèvre", "commerçant", commercant1Start, commercant1End),
+      span("fonds de commerce de boulangerie", "fonds de commerce", fondsStart, fondsEnd),
+    ]);
+
+    const graph = await extractEntityGraph(text, "doc-1", 0, DROIT_COMMERCIAL_LABELS, DROIT_COMMERCIAL_RULES);
+    const commercant = graph.nodes.find((n) => n.type === "commercant");
+    const fonds = graph.nodes.find((n) => n.type === "fonds_de_commerce");
+    expect(graph.edges).toContainEqual(
+      expect.objectContaining({ type: "exploite", from: commercant?.id, to: fonds?.id }),
+    );
+  });
+
+  it("infers a 'loue' edge from a commerçant mention followed by a bail commercial", async () => {
+    mockDetect.mockResolvedValueOnce([
+      span("Paul Lefèvre", "commerçant", commercant2Start, commercant2End),
+      span("bail commercial", "bail commercial", bailStart, bailEnd),
+    ]);
+
+    const graph = await extractEntityGraph(text, "doc-1", 0, DROIT_COMMERCIAL_LABELS, DROIT_COMMERCIAL_RULES);
+    const commercant = graph.nodes.find((n) => n.type === "commercant");
+    const bail = graph.nodes.find((n) => n.type === "bail_commercial");
+    expect(graph.edges).toContainEqual(expect.objectContaining({ type: "loue", from: commercant?.id, to: bail?.id }));
+  });
+
+  it("infers an 'immatricule' edge from a commerçant mention followed by an immatriculation RCS", async () => {
+    mockDetect.mockResolvedValueOnce([
+      span("Paul Lefèvre", "commerçant", commercant3Start, commercant3End),
+      span("RCS 456 789 123", "immatriculation RCS", rcsStart, rcsEnd),
+    ]);
+
+    const graph = await extractEntityGraph(text, "doc-1", 0, DROIT_COMMERCIAL_LABELS, DROIT_COMMERCIAL_RULES);
+    const commercant = graph.nodes.find((n) => n.type === "commercant");
+    const rcs = graph.nodes.find((n) => n.type === "immatriculation_rcs");
+    expect(graph.edges).toContainEqual(
+      expect.objectContaining({ type: "immatricule", from: commercant?.id, to: rcs?.id }),
+    );
+  });
+
+  it("does not cross-wire droit des affaires entity types when using the droit commercial rule set", async () => {
+    // A "société"-typed span (droit des affaires) must not satisfy any droit commercial rule's
+    // fromType/toType — the two rule sets are independent per vertical, not a shared free-for-all.
+    mockDetect.mockResolvedValueOnce([
+      span("Paul Lefèvre", "commerçant", commercant1Start, commercant1End),
+      span("SASU Dupont Conseil", "société", fondsStart, fondsEnd),
+    ]);
+    const graph = await extractEntityGraph(text, "doc-1", 0, DROIT_COMMERCIAL_LABELS, DROIT_COMMERCIAL_RULES);
+    expect(graph.edges).toHaveLength(0);
+  });
+
+  // Regression test for a real gap this vertical's own fixture (fixtures/legal-fr/droit-commercial/
+  // acte_cession_fonds_extrait.txt) exposed: a commerçant's own mention is realistically followed
+  // by an inline address clause before the connecting verb, not immediately by it. maxGap must be
+  // generous enough to survive that, or these rules silently never fire on real legal prose.
+  it("infers an 'exploite' edge across an inline address clause between the commerçant and fonds de commerce mentions", async () => {
+    const addressText =
+      "Paul Lefèvre, commerçant, demeurant 3 rue des Halles, 69002 Lyon, " +
+      "exploite un fonds de commerce de boulangerie-pâtisserie sis 8 rue des Halles.";
+    const commercantStart = addressText.indexOf("Paul Lefèvre");
+    const commercantEnd = commercantStart + "Paul Lefèvre".length;
+    const fondsAddrStart = addressText.indexOf("fonds de commerce de boulangerie-pâtisserie");
+    const fondsAddrEnd = fondsAddrStart + "fonds de commerce de boulangerie-pâtisserie".length;
+
+    mockDetect.mockResolvedValueOnce([
+      span("Paul Lefèvre", "commerçant", commercantStart, commercantEnd),
+      span("fonds de commerce de boulangerie-pâtisserie", "fonds de commerce", fondsAddrStart, fondsAddrEnd),
+    ]);
+
+    const graph = await extractEntityGraph(addressText, "doc-1", 0, DROIT_COMMERCIAL_LABELS, DROIT_COMMERCIAL_RULES);
+    const commercant = graph.nodes.find((n) => n.type === "commercant");
+    const fonds = graph.nodes.find((n) => n.type === "fonds_de_commerce");
+    expect(graph.edges).toContainEqual(
+      expect.objectContaining({ type: "exploite", from: commercant?.id, to: fonds?.id }),
+    );
   });
 });
 
