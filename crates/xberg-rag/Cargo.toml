@@ -16,13 +16,23 @@ thiserror = { workspace = true }
 rkyv = { workspace = true }
 tempfile = { workspace = true }
 edgevec = { workspace = true, optional = true }
+rusqlite = { workspace = true, optional = true }
+sqlite-vec = { workspace = true, optional = true }
 
 [features]
 default = []
 # Compile-gate only in P1: proves edgevec builds for native + wasm (see examples/edgevec_smoke.rs).
 hnsw = ["dep:edgevec"]
+# Compile-gate + runnable smoke test only (entity-graph plan, Step 0): proves rusqlite + sqlite-vec
+# load together and a vec0 table + KNN query works in an in-memory connection (see
+# examples/sqlite_vec_smoke.rs). Not wired into RagEngine/FlatStore yet.
+sqlite-vec-store = ["dep:rusqlite", "dep:sqlite-vec"]
 # Exposes MockEmbedder so downstream crates can test engine wiring without a model.
 testing = []
+
+[[example]]
+name = "sqlite_vec_smoke"
+required-features = ["sqlite-vec-store"]
 
 [lints]
 workspace = true
