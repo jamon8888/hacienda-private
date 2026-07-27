@@ -1,4 +1,6 @@
 import { detectGliner2 } from "./gliner2";
+import { sealPayload, openPayload } from "./redact";
+import type { MirrorGraph } from "./mirror";
 
 // One extracted legal entity, with provenance back to its exact source span.
 export interface GraphNode {
@@ -173,4 +175,20 @@ export function mergeEntityGraphs(graphs: EntityGraph[]): EntityGraph {
     nodes: graphs.flatMap((g) => g.nodes),
     edges: graphs.flatMap((g) => g.edges),
   };
+}
+
+// Seals/opens an EntityGraph as a MirrorGraph (the number[]-based wire shape mirror.ts's
+// MirrorBundle carries), centralizing the sealPayload/openPayload <-> Array.from/Uint8Array.from
+// conversion so every caller that persists a sealed graph (this package's own ingestFolder, and
+// apps/web's cumulative matter accumulator) shares one implementation instead of hand-rolling it.
+export async function sealEntityGraph(graph: EntityGraph, passphrase: string): Promise<MirrorGraph> {
+  const sealed = await sealPayload(graph, passphrase);
+  return { cipher: Array.from(sealed.cipher), salt: Array.from(sealed.salt) };
+}
+
+export async function openEntityGraph(sealed: MirrorGraph, passphrase: string): Promise<EntityGraph> {
+  return openPayload<EntityGraph>(
+    { cipher: Uint8Array.from(sealed.cipher), salt: Uint8Array.from(sealed.salt) },
+    passphrase,
+  );
 }

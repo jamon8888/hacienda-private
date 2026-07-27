@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { openVault, openPayload, type EntityGraph } from "@xberg-io/wasm-pipeline-real";
+import { openVault, openEntityGraph, type EntityGraph } from "@xberg-io/wasm-pipeline-real";
 import { mergeIntoAccumulator, type MirrorPiiSpan, type MirrorChunk } from "./mirror-merge";
 
 const PASS = "correct horse battery staple";
@@ -165,10 +165,7 @@ describe("mergeIntoAccumulator", () => {
   }
 
   async function openGraph(acc: { graph?: { cipher: number[]; salt: number[] } }): Promise<EntityGraph> {
-    return openPayload<EntityGraph>(
-      { cipher: Uint8Array.from(acc.graph!.cipher), salt: Uint8Array.from(acc.graph!.salt) },
-      PASS,
-    );
+    return openEntityGraph(acc.graph!, PASS);
   }
 
   it("merges a new document's entity graph into the matter's sealed cumulative graph", async () => {

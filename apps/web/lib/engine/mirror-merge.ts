@@ -1,9 +1,9 @@
 import {
   sealVault,
   openVault,
-  sealPayload,
-  openPayload,
   mergeEntityGraphs,
+  sealEntityGraph,
+  openEntityGraph,
   type RedactionEntry,
   type EntityGraph,
   type MirrorGraph,
@@ -94,12 +94,7 @@ export async function mergeIntoAccumulator(
   // would be a real regression, not a no-op, since re-review never re-runs entity extraction.
   let graph = prior?.graph;
   if (add.graph) {
-    const priorGraph = prior?.graph
-      ? await openPayload<EntityGraph>(
-          { cipher: Uint8Array.from(prior.graph.cipher), salt: Uint8Array.from(prior.graph.salt) },
-          passphrase,
-        )
-      : { nodes: [], edges: [] };
+    const priorGraph = prior?.graph ? await openEntityGraph(prior.graph, passphrase) : { nodes: [], edges: [] };
     // Drop this document's own prior nodes/edges before merging in its freshly-extracted graph —
     // the same replace-not-duplicate rule pii/chunks/vault entries already follow above.
     const keptGraph: EntityGraph = replaceDocId
@@ -109,8 +104,7 @@ export async function mergeIntoAccumulator(
         }
       : priorGraph;
     const merged = mergeEntityGraphs([keptGraph, add.graph]);
-    const sealedGraph = await sealPayload(merged, passphrase);
-    graph = { cipher: Array.from(sealedGraph.cipher), salt: Array.from(sealedGraph.salt) };
+    graph = await sealEntityGraph(merged, passphrase);
   }
 
   return {
