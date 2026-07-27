@@ -122,6 +122,11 @@ const DROIT_DES_AFFAIRES_RULES: readonly RelationRule[] = [
 
 // Droit commercial (Phase B) relation rules, same fromType ("commercant") across all three since
 // each captures a distinct thing a commerçant does: run a business, hold its lease, be registered.
+// maxGap is deliberately more generous here than the droit des affaires rules: a commerçant's own
+// mention is realistically followed by an inline address/qualifier clause ("demeurant 3 rue des
+// Halles, 69002 Lyon,") before the connecting verb, per fixtures/legal-fr/droit-commercial's real
+// text — a tighter window (as a first draft of this rule set had) would silently fail to fire on
+// exactly the fixture this vertical exists to validate against.
 export const DROIT_COMMERCIAL_RULES: readonly RelationRule[] = [
   // "<commerçant> exploite/est propriétaire du/gérant du <fonds de commerce>"
   {
@@ -129,7 +134,7 @@ export const DROIT_COMMERCIAL_RULES: readonly RelationRule[] = [
     fromType: "commercant",
     toType: "fonds_de_commerce",
     connector: /exploite|propri[ée]taire|g[ée]rant/i,
-    maxGap: 60,
+    maxGap: 90,
   },
   // "<commerçant> est titulaire d'un/locataire du/bénéficie d'un <bail commercial>"
   {
@@ -137,7 +142,7 @@ export const DROIT_COMMERCIAL_RULES: readonly RelationRule[] = [
     fromType: "commercant",
     toType: "bail_commercial",
     connector: /titulaire|locataire|b[ée]n[ée]ficie/i,
-    maxGap: 60,
+    maxGap: 90,
   },
   // "<commerçant> est immatriculé ... sous le numéro d'<immatriculation RCS>"
   {
@@ -145,7 +150,7 @@ export const DROIT_COMMERCIAL_RULES: readonly RelationRule[] = [
     fromType: "commercant",
     toType: "immatriculation_rcs",
     connector: /immatricul/i,
-    maxGap: 80,
+    maxGap: 100,
   },
 ];
 

@@ -175,6 +175,32 @@ describe("extractEntityGraph (droit commercial vertical)", () => {
     const graph = await extractEntityGraph(text, "doc-1", 0, DROIT_COMMERCIAL_LABELS, DROIT_COMMERCIAL_RULES);
     expect(graph.edges).toHaveLength(0);
   });
+
+  // Regression test for a real gap this vertical's own fixture (fixtures/legal-fr/droit-commercial/
+  // acte_cession_fonds_extrait.txt) exposed: a commerçant's own mention is realistically followed
+  // by an inline address clause before the connecting verb, not immediately by it. maxGap must be
+  // generous enough to survive that, or these rules silently never fire on real legal prose.
+  it("infers an 'exploite' edge across an inline address clause between the commerçant and fonds de commerce mentions", async () => {
+    const addressText =
+      "Paul Lefèvre, commerçant, demeurant 3 rue des Halles, 69002 Lyon, " +
+      "exploite un fonds de commerce de boulangerie-pâtisserie sis 8 rue des Halles.";
+    const commercantStart = addressText.indexOf("Paul Lefèvre");
+    const commercantEnd = commercantStart + "Paul Lefèvre".length;
+    const fondsAddrStart = addressText.indexOf("fonds de commerce de boulangerie-pâtisserie");
+    const fondsAddrEnd = fondsAddrStart + "fonds de commerce de boulangerie-pâtisserie".length;
+
+    mockDetect.mockResolvedValueOnce([
+      span("Paul Lefèvre", "commerçant", commercantStart, commercantEnd),
+      span("fonds de commerce de boulangerie-pâtisserie", "fonds de commerce", fondsAddrStart, fondsAddrEnd),
+    ]);
+
+    const graph = await extractEntityGraph(addressText, "doc-1", 0, DROIT_COMMERCIAL_LABELS, DROIT_COMMERCIAL_RULES);
+    const commercant = graph.nodes.find((n) => n.type === "commercant");
+    const fonds = graph.nodes.find((n) => n.type === "fonds_de_commerce");
+    expect(graph.edges).toContainEqual(
+      expect.objectContaining({ type: "exploite", from: commercant?.id, to: fonds?.id }),
+    );
+  });
 });
 
 describe("mergeEntityGraphs", () => {
