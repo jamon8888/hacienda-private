@@ -6,6 +6,7 @@ import { authorize } from "./scopes.js";
 import { requireConsent } from "./consent.js";
 import { ingestFile, walkFolder } from "@xberg-io/node-pipeline";
 import type { Principal } from "../principal.js";
+import { queryGraph } from "../graph-query.js";
 
 // NOTE: the current @modelcontextprotocol/sdk ContentBlock union has no `type: "json"` variant, so
 // JSON payloads are returned as a `type: "text"` block carrying `JSON.stringify(...)`. The intent
@@ -59,6 +60,15 @@ export interface RedactArgs {
   matter_id: string;
   doc_id: string;
   entity_ids?: string[];
+}
+export interface GraphQueryArgs {
+  matter_id: string;
+  passphrase: string;
+  node_type?: string;
+  label_contains?: string;
+  from_label?: string;
+  max_hops?: number;
+  limit?: number;
 }
 
 const NODE_RAG_QUERY_UNAVAILABLE_MESSAGE =
@@ -173,6 +183,33 @@ export function redact(ctx: AppContext, principal: Principal, args: RedactArgs):
   });
 }
 
+// The entity graph is exactly as sensitive as the PII vault (real entity names, not tokens) — see
+// the entity-graph plan's own design rationale — so it reuses the "pii_read" consent kind rather
+// than defining a new one.
+export function graphQuery(ctx: AppContext, principal: Principal, args: GraphQueryArgs): ToolResult {
+  return wrap(() => {
+    const matter = getMatter(ctx, args.matter_id);
+    authorize(principal.scopes, "read");
+    requireConsent(ctx.store, matter, "pii_read", principal.subject);
+    const sealed = ctx.mirror.getSealedGraph(args.matter_id);
+    if (!sealed) {
+      throw new AppError(
+        "not_found",
+        `matter ${args.matter_id} has no entity graph — entityGraphLabels must be set at ingest time`,
+      );
+    }
+    const result = queryGraph(sealed, args.passphrase, {
+      nodeType: args.node_type,
+      labelContains: args.label_contains,
+      fromLabel: args.from_label,
+      maxHops: args.max_hops,
+      limit: args.limit,
+    });
+    ctx.store.recordAudit(principal.subject, "read", "graph_query", args.matter_id);
+    return jsonResult({ matter_id: args.matter_id, ...result });
+  });
+}
+
 export function listMatters(ctx: AppContext, principal: Principal): ToolResult {
   return wrap(() => {
     authorize(principal.scopes, "read");
@@ -222,6 +259,20 @@ export function registerTools(server: McpServer, ctx: AppContext, principal: Pri
       entity_ids: z.array(z.string()).optional(),
     },
     async (args) => redact(ctx, principal, args),
+  );
+
+  server.tool(
+    "graph_query",
+    {
+      matter_id: z.string(),
+      passphrase: z.string(),
+      node_type: z.string().optional(),
+      label_contains: z.string().optional(),
+      from_label: z.string().optional(),
+      max_hops: z.number().int().min(1).max(6).optional(),
+      limit: z.number().int().min(1).max(500).optional(),
+    },
+    async (args) => graphQuery(ctx, principal, args),
   );
 
   server.tool("list_matters", {}, async () => listMatters(ctx, principal));
