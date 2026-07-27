@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { warmupState, useModelWarmupMock } from "@/test-utils/warmup-store-mock";
 
 // jsdom doesn't implement window.matchMedia. The real FileDropzone (rendered here once
@@ -44,6 +44,7 @@ vi.mock("@/lib/route-id", () => ({
 
 vi.mock("@xberg-io/wasm-pipeline", () => ({
   ingestFolder: vi.fn(),
+  DROIT_DES_AFFAIRES_LABELS: ["société", "dirigeant"],
 }));
 
 vi.mock("@/lib/engine/warmup-store", () => ({
@@ -71,5 +72,14 @@ describe("FolderView ingest gating", () => {
     render(<FolderView id="f1" />);
     expect(await screen.findByText(/On-device AI models are unavailable/i)).toBeInTheDocument();
     expect(screen.queryByText(/Preparing on-device AI models/i)).not.toBeInTheDocument();
+  });
+
+  it("shows the entity-graph opt-in unchecked by default, toggleable once models are ready", async () => {
+    warmupState.current = { stage: "ready" };
+    render(<FolderView id="f1" />);
+    const checkbox = await screen.findByRole("checkbox", { name: /extract droit des affaires entity graph/i });
+    expect(checkbox).not.toBeChecked();
+    fireEvent.click(checkbox);
+    expect(checkbox).toBeChecked();
   });
 });

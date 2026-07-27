@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { openVault } from "@xberg-io/wasm-pipeline-real";
+import { openVault, openPayload, type EntityGraph } from "@xberg-io/wasm-pipeline-real";
 import { mergeIntoAccumulator, type MirrorPiiSpan, type MirrorChunk } from "./mirror-merge";
 
 const PASS = "correct horse battery staple";
@@ -155,5 +155,74 @@ describe("mergeIntoAccumulator", () => {
       PASS,
     );
     expect(entries.map((e) => e.original).sort()).toEqual(["Alice", "Alicia", "Bob"]);
+  });
+
+  function graphOf(docId: string, label: string): EntityGraph {
+    return {
+      nodes: [{ id: `${docId}:n1`, type: "societe", label, attrs: {}, docId, chunkIndex: 0, start: 0, end: 5 }],
+      edges: [],
+    };
+  }
+
+  async function openGraph(acc: { graph?: { cipher: number[]; salt: number[] } }): Promise<EntityGraph> {
+    return openPayload<EntityGraph>(
+      { cipher: Uint8Array.from(acc.graph!.cipher), salt: Uint8Array.from(acc.graph!.salt) },
+      PASS,
+    );
+  }
+
+  it("merges a new document's entity graph into the matter's sealed cumulative graph", async () => {
+    const a = await mergeIntoAccumulator(
+      undefined,
+      { entries: [], pii: [], chunks: [], graph: graphOf("docA", "SASU Dupont") },
+      PASS,
+    );
+    expect(a.graph).toBeDefined();
+    expect((await openGraph(a)).nodes.map((n) => n.label)).toEqual(["SASU Dupont"]);
+
+    const b = await mergeIntoAccumulator(
+      a,
+      { entries: [], pii: [], chunks: [], graph: graphOf("docB", "SCI Martin") },
+      PASS,
+    );
+    const merged = await openGraph(b);
+    expect(merged.nodes.map((n) => n.label).sort()).toEqual(["SASU Dupont", "SCI Martin"]);
+  });
+
+  it("leaves the matter graph untouched when a merge doesn't produce a new one (e.g. a PII-only re-review)", async () => {
+    const a = await mergeIntoAccumulator(
+      undefined,
+      { entries: [], pii: [], chunks: [], graph: graphOf("docA", "SASU Dupont") },
+      PASS,
+    );
+
+    // Re-review docA's PII with no re-extraction: must not drop docA's already-extracted entities.
+    const reviewed = await mergeIntoAccumulator(a, { entries: [], pii: [], chunks: [] }, PASS, "docA");
+    expect(reviewed.graph).toEqual(a.graph);
+    expect((await openGraph(reviewed)).nodes.map((n) => n.label)).toEqual(["SASU Dupont"]);
+  });
+
+  it("replaces a document's own graph contribution instead of duplicating it, when replaceDocId is given", async () => {
+    const a = await mergeIntoAccumulator(
+      undefined,
+      { entries: [], pii: [], chunks: [], graph: graphOf("docA", "SASU Dupont") },
+      PASS,
+    );
+    const b = await mergeIntoAccumulator(
+      a,
+      { entries: [], pii: [], chunks: [], graph: graphOf("docB", "SCI Martin") },
+      PASS,
+    );
+
+    // Re-extraction for docA (e.g. re-ingest) with a corrected label — its prior nodes must be
+    // dropped, not kept alongside the new ones.
+    const corrected = await mergeIntoAccumulator(
+      b,
+      { entries: [], pii: [], chunks: [], graph: graphOf("docA", "SASU Dupont Conseil") },
+      PASS,
+      "docA",
+    );
+    const merged = await openGraph(corrected);
+    expect(merged.nodes.map((n) => n.label).sort()).toEqual(["SASU Dupont Conseil", "SCI Martin"]);
   });
 });

@@ -30,8 +30,11 @@ import {
   serializeMirrorToBytes,
   detectCapabilities,
   selectScenario,
+  extractEntityGraph,
+  mergeEntityGraphs,
   EMBED_DIM,
   type IndexedChunk,
+  type EntityGraph,
 } from "@xberg-io/wasm-pipeline-real";
 import {
   mergeIntoAccumulator,
@@ -76,6 +79,11 @@ export interface IngestContext {
   scopeToken: string;
   passphrase: string;
   onProgress?: (p: IngestProgress) => void;
+  // Opt-in entity-graph extraction (droit des affaires, etc. — see
+  // packages/wasm-pipeline/src/entity-graph.ts). Off by default: omitting this leaves ingestFolder's
+  // behavior and performance identical to before this existed. Pass a label list (e.g.
+  // DROIT_DES_AFFAIRES_LABELS) to enable it.
+  entityGraphLabels?: readonly string[];
 }
 
 function emit(ctx: IngestContext, name: string, docId: string, stage: IngestProgress["stage"], progress: number) {
@@ -135,10 +143,17 @@ export async function ingestFolder(file: File, ctx: IngestContext): Promise<Inge
   const docId = ctx.docId ?? ctx.folder.id;
   const items: IndexedChunk[] = [];
   const allEntries: RedactionEntry[] = [];
+  const chunkGraphs: EntityGraph[] = [];
   for (const [i, c] of chunks.entries()) {
     const v = vectors[i];
     if (!v) continue;
     const pii = await detectPii(c.content, piiTypes, scenario);
+    // Runs on c.content, the RAW pre-redaction chunk text — buildRedaction below returns a new
+    // `redacted` string rather than mutating c.content, so this is still the one window a real
+    // entity value is in memory, the same one buildRedaction itself relies on.
+    if (ctx.entityGraphLabels) {
+      chunkGraphs.push(await extractEntityGraph(c.content, docId, c.metadata.chunkIndex, ctx.entityGraphLabels));
+    }
     const { redacted, entries } = buildRedaction(c.content, pii, `C${i}`, docId);
     for (const e of entries) allEntries.push(e);
     items.push({
@@ -152,6 +167,7 @@ export async function ingestFolder(file: File, ctx: IngestContext): Promise<Inge
     });
   }
   emit(ctx, name, name, "pii", 0.8);
+  const thisGraph = ctx.entityGraphLabels ? mergeEntityGraphs(chunkGraphs) : undefined;
 
   const thisPii = mirrorPiiSpans(items, allEntries);
   const thisChunks: MirrorChunk[] = items.map((it, i) => ({
@@ -183,7 +199,7 @@ export async function ingestFolder(file: File, ctx: IngestContext): Promise<Inge
     // matter dir, so every push must carry everything).
     const merged = await mergeIntoAccumulator(
       prior,
-      { entries: allEntries, pii: thisPii, chunks: thisChunks },
+      { entries: allEntries, pii: thisPii, chunks: thisChunks, graph: thisGraph },
       ctx.passphrase,
     );
     await set(accumulatorKey(ctx.matter.id), merged);
@@ -196,6 +212,7 @@ export async function ingestFolder(file: File, ctx: IngestContext): Promise<Inge
       Uint8Array.from(merged.vaultSalt),
       merged.pii,
       merged.chunks,
+      merged.graph,
     );
     await pushMirror(ctx.matter.id, cumulativePayload, ctx.scopeToken);
   });
@@ -483,6 +500,7 @@ export async function reviewAndRepush(
       Uint8Array.from(merged.vaultSalt),
       merged.pii,
       merged.chunks,
+      merged.graph,
     );
     await pushMirror(ctx.matterId, payload, ctx.scopeToken);
   });
