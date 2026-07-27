@@ -1,21 +1,42 @@
 import type { Matter, Folder, PiiEntity } from "@xberg-io/core";
 import { extractDocument, firstDocument } from "./runtime";
 import { defaultExtractionConfig, withTesseractOcr } from "./ocr";
-import { chunkExtraction, withChunking, chunkCitation, chunkPage, chunkBoundingBox } from "./chunk";
+import {
+  chunkExtraction,
+  withChunking,
+  chunkCitation,
+  chunkPage,
+  chunkBoundingBox,
+} from "./chunk";
 import { embedChunks } from "./embed";
 import { detectPii, listPiiTypes } from "./ner";
 import { buildIndex, serializeIndex, type IndexedChunk } from "./rag";
-import { buildRedaction, sealVault, sealPayload, type RedactionEntry } from "./redact";
+import {
+  buildRedaction,
+  sealVault,
+  sealPayload,
+  type RedactionEntry,
+} from "./redact";
 import { pushMirror, serializeMirrorToBytes, type MirrorGraph } from "./mirror";
 import { detectCapabilities } from "./capabilities";
 import { selectScenario, type ModelScenario } from "./scenario";
-import { extractEntityGraph, mergeEntityGraphs, type EntityGraph } from "./entity-graph";
+import {
+  extractEntityGraph,
+  mergeEntityGraphs,
+  type EntityGraph,
+} from "./entity-graph";
 
-function runPiiWhenIdle(text: string, piiTypes: readonly string[], scenario: ModelScenario): Promise<PiiEntity[]> {
+function runPiiWhenIdle(
+  text: string,
+  piiTypes: readonly string[],
+  scenario: ModelScenario,
+): Promise<PiiEntity[]> {
   const run = () => detectPii(text, piiTypes, scenario);
   const w =
     typeof window !== "undefined"
-      ? (window as Window & { requestIdleCallback?: (cb: () => void) => number })
+      ? (window as Window & {
+          requestIdleCallback?: (cb: () => void) => number;
+        })
       : undefined;
   if (w?.requestIdleCallback) {
     const ric = w.requestIdleCallback;
@@ -87,7 +108,12 @@ export async function ingestFolder(
       ? runPiiWhenIdle(c.content, piiTypes, scenario)
       : detectPii(c.content, piiTypes, scenario);
     const entityGraphPromise = options.entityGraphLabels
-      ? extractEntityGraph(c.content, folder.id, c.metadata.chunkIndex, options.entityGraphLabels)
+      ? extractEntityGraph(
+          c.content,
+          folder.id,
+          c.metadata.chunkIndex,
+          options.entityGraphLabels,
+        )
       : undefined;
     const entry: IndexedChunk = {
       docId: folder.id,
@@ -105,7 +131,11 @@ export async function ingestFolder(
   await Promise.all(piiTasks.map((t) => t.piiPromise));
   for (const t of piiTasks) {
     const pii = await t.piiPromise;
-    const { redacted, entries } = buildRedaction(t.item.text, pii, `C${t.index}`);
+    const { redacted, entries } = buildRedaction(
+      t.item.text,
+      pii,
+      `C${t.index}`,
+    );
     for (const e of entries) allEntries.push(e);
     t.item.text = redacted;
   }
@@ -116,13 +146,30 @@ export async function ingestFolder(
 
   let graph: MirrorGraph | undefined;
   if (options.entityGraphLabels) {
-    const graphs = await Promise.all(piiTasks.map((t) => t.entityGraphPromise ?? Promise.resolve({ nodes: [], edges: [] })));
+    const graphs = await Promise.all(
+      piiTasks.map(
+        (t) =>
+          t.entityGraphPromise ?? Promise.resolve({ nodes: [], edges: [] }),
+      ),
+    );
     const merged = mergeEntityGraphs(graphs);
-    const sealedGraph = await sealPayload(merged, options.passphrase);
-    graph = { cipher: Array.from(sealedGraph.cipher), salt: Array.from(sealedGraph.salt) };
+    if (merged.nodes.length > 0 || merged.edges.length > 0) {
+      const sealedGraph = await sealPayload(merged, options.passphrase);
+      graph = {
+        cipher: Array.from(sealedGraph.cipher),
+        salt: Array.from(sealedGraph.salt),
+      };
+    }
   }
 
-  const payload = serializeMirrorToBytes(indexBytes, sealed.cipher, sealed.salt, [], [], graph);
+  const payload = serializeMirrorToBytes(
+    indexBytes,
+    sealed.cipher,
+    sealed.salt,
+    [],
+    [],
+    graph,
+  );
   await pushMirror(matter.id, payload, options.scopeToken);
 
   return { accepted: items.length };
