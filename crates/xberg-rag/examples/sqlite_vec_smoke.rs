@@ -49,18 +49,30 @@ fn main() -> rusqlite::Result<()> {
         [],
     )?;
     db.execute(
-        "insert into vec_entities (entity_id, matter_id, embedding) values (2, 'matter-a', '[0.0, 1.0, 0.0, 0.0]')",
+        "insert into vec_entities (entity_id, matter_id, embedding) values (2, 'matter-a', '[0.9, 0.1, 0.0, 0.0]')",
         [],
     )?;
-    db.execute(
-        "insert into vec_entities (entity_id, matter_id, embedding) values (3, 'matter-b', '[1.0, 0.1, 0.0, 0.0]')",
-        [],
-    )?;
+    // Several matter-b vectors, all placed *closer* to the query than either matter-a vector. If
+    // partition filtering only happened after top-k selection (rather than pruning matter-b out
+    // before/alongside it), these would crowd matter-a's own rows out of a `k`-limited result
+    // entirely — a real correctness bug (a lawyer's own matter starved out by another matter's
+    // data), not just a performance concern. `k = 2` (sqlite-vec's own KNN limit, not a plain SQL
+    // LIMIT) forces that interaction to actually be exercised.
+    for (id, vector) in [
+        (3, "[1.0, 0.01, 0.0, 0.0]"),
+        (4, "[1.0, 0.02, 0.0, 0.0]"),
+        (5, "[1.0, 0.03, 0.0, 0.0]"),
+    ] {
+        db.execute(
+            "insert into vec_entities (entity_id, matter_id, embedding) values (?1, 'matter-b', ?2)",
+            rusqlite::params![id, vector],
+        )?;
+    }
 
     let mut stmt = db.prepare(
         "select entity_id, distance from vec_entities
-         where matter_id = 'matter-a' and embedding match '[1.0, 0.0, 0.0, 0.0]'
-         order by distance limit 5",
+         where matter_id = 'matter-a' and embedding match '[1.0, 0.0, 0.0, 0.0]' and k = 2
+         order by distance",
     )?;
     let rows = stmt.query_map([], |row| {
         let id: i64 = row.get(0)?;
@@ -70,14 +82,18 @@ fn main() -> rusqlite::Result<()> {
     let results = rows.collect::<rusqlite::Result<Vec<_>>>()?;
 
     // The real assertion this whole spike exists to make: partitioning by matter_id must exclude
-    // entity 3 (matter-b) from a matter-a query, not just "usually" — verified, not eyeballed.
+    // every matter-b entity from a matter-a query even though entities 3-5 (matter-b) are all
+    // geometrically closer to the query than matter-a's own entity 2 — not just "usually excluded
+    // when nothing competes for the k-limit", but excluded even under real cross-tenant contention.
     assert_eq!(
         results.iter().map(|(id, _)| *id).collect::<Vec<_>>(),
         vec![1, 2],
-        "KNN query must exclude vectors from other partitions"
+        "KNN query must exclude vectors from other partitions, even ones closer than the matter's own"
     );
 
-    println!("KNN results (partitioned to matter-a, entity 3 in matter-b correctly excluded):");
+    println!(
+        "KNN results (partitioned to matter-a; entities 3-5 in matter-b, despite being closer, correctly excluded):"
+    );
     for (id, distance) in results {
         println!("  entity_id={id} distance={distance:.4}");
     }

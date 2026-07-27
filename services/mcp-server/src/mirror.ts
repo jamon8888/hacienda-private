@@ -3,6 +3,14 @@ import { randomUUID } from "node:crypto";
 import type { PiiEntity, RetrievedChunk } from "@xberg-io/core";
 import { AppError } from "./error.js";
 
+// serde_json's Vec<u8> deserialization (the native host's read_bundle_graph) already rejects
+// negatives, floats, nulls, and values > 255 — this mirrors that same byte-range check here, so a
+// malformed graph field is rejected at the same point everything else in parseBundle is, not
+// discovered later as a confusing Rust-side deserialize failure.
+function isByteArray(value: unknown): value is number[] {
+  return Array.isArray(value) && value.every((n) => Number.isInteger(n) && n >= 0 && n <= 255);
+}
+
 export const SHARED_EMBEDDING_IDENTITY =
   "ibm-granite/granite-embedding-97m-multilingual-r2@835ad14087e140460703cf0fae09f97d469d65c2;bf16->f32;modernbert-384;cls;normalize=true";
 
@@ -237,7 +245,7 @@ export class MirrorStore {
     // if present it must have the expected shape — fail closed rather than silently forwarding a
     // malformed blob a future graph_query tool would then fail to decrypt.
     const graph = (parsed as MirrorBundle).graph;
-    if (graph != null && (!Array.isArray(graph.cipher) || !Array.isArray(graph.salt))) {
+    if (graph != null && (!isByteArray(graph.cipher) || !isByteArray(graph.salt))) {
       throw new AppError("store", `mirror for matter ${matterId} has a malformed graph field`);
     }
     return parsed as MirrorBundle;

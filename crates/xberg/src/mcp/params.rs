@@ -99,7 +99,10 @@ pub struct RagQueryParams {
 /// — see `packages/wasm-pipeline/src/entity-graph.ts`). Requires the same passphrase used to seal
 /// the graph (and the PII vault) at ingest time; nothing here can honor a query without it, since
 /// the graph is exactly as sensitive as the PII vault.
-#[derive(Debug, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
+///
+/// `Debug` is implemented manually (not derived) so `passphrase` never appears in logs/tracing
+/// that print params via `{:?}` — see the impl below.
+#[derive(serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
 pub struct GraphQueryParams {
     /// Matter id whose entity graph should be queried.
     pub matter_id: String,
@@ -121,6 +124,20 @@ pub struct GraphQueryParams {
     /// Maximum number of nodes to return (default 50, clamped to 1..=500).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<usize>,
+}
+
+impl std::fmt::Debug for GraphQueryParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GraphQueryParams")
+            .field("matter_id", &self.matter_id)
+            .field("passphrase", &"[REDACTED]")
+            .field("node_type", &self.node_type)
+            .field("label_contains", &self.label_contains)
+            .field("from_label", &self.from_label)
+            .field("max_hops", &self.max_hops)
+            .field("limit", &self.limit)
+            .finish()
+    }
 }
 
 fn extract_input_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
@@ -199,6 +216,23 @@ pub struct ListGrammarsParams {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn graph_query_params_debug_redacts_the_passphrase() {
+        let params = GraphQueryParams {
+            matter_id: "matter-1".to_string(),
+            passphrase: "super-secret-value".to_string(),
+            node_type: None,
+            label_contains: None,
+            from_label: None,
+            max_hops: None,
+            limit: None,
+        };
+        let debug = format!("{params:?}");
+        assert!(!debug.contains("super-secret-value"), "got {debug}");
+        assert!(debug.contains("REDACTED"), "got {debug}");
+        assert!(debug.contains("matter-1"), "got {debug}");
+    }
 
     #[test]
     fn test_extract_params_defaults() {

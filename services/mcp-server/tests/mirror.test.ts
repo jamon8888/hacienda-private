@@ -115,6 +115,34 @@ describe("MirrorStore", () => {
     expect(result.reason).toContain("malformed graph");
   });
 
+  it.each([
+    ["a negative number", [-1, 2]],
+    ["a fractional number", [1.5, 2]],
+    ["a value above 255", [256, 2]],
+    ["a null element", [null, 2]],
+  ])("rejects a graph cipher/salt containing %s", async (_label, badBytes) => {
+    const store = new MirrorStore(dir);
+    store.saveMirror(
+      "m",
+      Buffer.from(
+        JSON.stringify({
+          version: 2,
+          embedding_identity: SHARED_EMBEDDING_IDENTITY,
+          index: [1, 2, 3],
+          vault: [4, 5, 6],
+          vaultSalt: [7, 8],
+          pii: [],
+          chunks: [],
+          graph: { cipher: badBytes, salt: [1, 2] },
+        }),
+      ),
+    );
+
+    const result = await store.loadMirror("m");
+    expect(result.loaded).toBe(false);
+    expect(result.reason).toContain("malformed graph");
+  });
+
   it("rejects a bundle with graph explicitly set to null without throwing an uncaught TypeError", async () => {
     const store = new MirrorStore(dir);
     store.saveMirror(

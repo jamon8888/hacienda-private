@@ -127,6 +127,14 @@ mod imp {
     /// `rusqlite` connection (no extension loading) is all a recursive-CTE traversal needs.
     fn build_graph_db(graph: &PlainGraph) -> SqlResult<Connection> {
         let conn = Connection::open_in_memory()?;
+        // The main database is already `:memory:`, but SQLite's transient indices for UNION,
+        // DISTINCT, and ORDER BY (all used by the queries below) can still spill to a temp file
+        // on disk unless temp_store is forced to memory — decrypted node/edge data must never
+        // touch disk in any form. `-DSQLITE_TEMP_STORE=3` at the bundled-SQLite build level would
+        // enforce this compile-time too, but that flag is workspace-shared (rusqlite is also used
+        // by xberg-rag's sqlite-vec-store feature) — this per-connection PRAGMA is sufficient and
+        // scoped to exactly the connection that touches decrypted data.
+        conn.execute_batch("PRAGMA temp_store = MEMORY;")?;
         conn.execute_batch(
             "CREATE TABLE nodes (id TEXT PRIMARY KEY, type TEXT NOT NULL, label TEXT NOT NULL,
                                   doc_id TEXT NOT NULL, chunk_index INTEGER NOT NULL);
@@ -226,10 +234,9 @@ mod imp {
             sql_params.push(Box::new(node_type.to_string()));
         }
         if let Some(label_contains) = label_contains {
-            conditions.push(format!(
-                "lower(label) LIKE '%' || lower(?{}) || '%'",
-                sql_params.len() + 1
-            ));
+            // instr(), not LIKE — LIKE treats % and _ as wildcards, so a literal search for e.g.
+            // "100%" (a real capital-social figure) would match unrelated labels under LIKE.
+            conditions.push(format!("instr(lower(label), lower(?{})) > 0", sql_params.len() + 1));
             sql_params.push(Box::new(label_contains.to_string()));
         }
         let where_clause = if conditions.is_empty() {
@@ -382,6 +389,30 @@ mod imp {
             assert!(labels.contains(&"Jean Dupont"));
             assert!(labels.contains(&"SASU Dupont Conseil"));
             assert_eq!(labels.len(), 2);
+        }
+
+        #[test]
+        fn filter_by_label_substring_treats_percent_and_underscore_as_literal_characters() {
+            // Regression test: LIKE would treat "%"/"_" as wildcards, matching unrelated labels.
+            // instr() must treat them as ordinary characters in a real capital-social figure.
+            let mut graph = sample_graph();
+            graph.nodes.push(PlainNode {
+                id: "n4".to_string(),
+                r#type: "capital_social".to_string(),
+                label: "100% libere".to_string(),
+                attrs: HashMap::new(),
+                doc_id: "d1".to_string(),
+                chunk_index: 0,
+            });
+            let conn = build_graph_db(&graph).unwrap();
+
+            let result = filter(&conn, None, Some("100%"), 50).unwrap();
+            assert_eq!(result.nodes.len(), 1, "got {:?}", result.nodes);
+            assert_eq!(result.nodes[0].label, "100% libere");
+
+            // A literal "_" (as opposed to LIKE's single-char wildcard) must not match "Dupont".
+            let result = filter(&conn, None, Some("du_ont"), 50).unwrap();
+            assert!(result.nodes.is_empty(), "got {:?}", result.nodes);
         }
 
         #[test]
