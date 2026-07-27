@@ -97,7 +97,7 @@ function canonicalKey(type: string, label: string): string {
  * be extended against real fixture text, not a finished design (see the plan's honest risk
  * assessment); low recall on real documents is an expected starting point, not a bug to silence.
  */
-interface RelationRule {
+export interface RelationRule {
   type: string;
   fromType: string;
   toType: string;
