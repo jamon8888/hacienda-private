@@ -47,6 +47,20 @@ describe("queryGraph", () => {
     expect(() => queryGraph(sealed, "", {})).toThrow(/passphrase/);
   });
 
+  it("rejects a payload whose nodes/edges are array-shaped but individual elements are malformed", () => {
+    // A node missing a required field (docId) — JSON.parse succeeds and nodes/edges are arrays,
+    // but the individual element doesn't match PlainNode's shape. Must fail with a clear error,
+    // not surface a raw exception from buildGraphDb's SQLite bind parameters.
+    const malformed = sealForTest(
+      JSON.stringify({
+        nodes: [{ id: "n1", type: "dirigeant", label: "Jean Dupont", chunkIndex: 0 }],
+        edges: [],
+      }),
+      PASSPHRASE,
+    );
+    expect(() => queryGraph(malformed, PASSPHRASE, {})).toThrow(/unexpected shape/);
+  });
+
   it("filters by exact node type", () => {
     const sealed = sealedSample();
     const result = queryGraph(sealed, PASSPHRASE, { nodeType: "societe" });

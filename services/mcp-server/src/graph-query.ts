@@ -62,12 +62,43 @@ export interface GraphQueryOptions {
   limit?: number;
 }
 
+// serde's derive(Deserialize) on the Rust host's PlainNode/PlainEdge structs already rejects a
+// node/edge missing a required field or holding the wrong type — these two guards give the same
+// strictness here, so a malformed-but-array-shaped payload fails with a clear "unexpected shape"
+// error instead of surfacing as a confusing raw exception out of buildGraphDb's bind parameters.
+function isPlainNode(value: unknown): value is PlainNode {
+  if (typeof value !== "object" || value === null) return false;
+  const n = value as PlainNode;
+  return (
+    typeof n.id === "string" &&
+    typeof n.type === "string" &&
+    typeof n.label === "string" &&
+    typeof n.docId === "string" &&
+    typeof n.chunkIndex === "number"
+  );
+}
+
+function isPlainEdge(value: unknown): value is PlainEdge {
+  if (typeof value !== "object" || value === null) return false;
+  const e = value as PlainEdge;
+  return (
+    typeof e.id === "string" &&
+    typeof e.type === "string" &&
+    typeof e.from === "string" &&
+    typeof e.to === "string" &&
+    typeof e.docId === "string" &&
+    typeof e.chunkIndex === "number"
+  );
+}
+
 function isPlainGraph(value: unknown): value is PlainGraph {
   return (
     typeof value === "object" &&
     value !== null &&
     Array.isArray((value as PlainGraph).nodes) &&
-    Array.isArray((value as PlainGraph).edges)
+    Array.isArray((value as PlainGraph).edges) &&
+    (value as PlainGraph).nodes.every(isPlainNode) &&
+    (value as PlainGraph).edges.every(isPlainEdge)
   );
 }
 
