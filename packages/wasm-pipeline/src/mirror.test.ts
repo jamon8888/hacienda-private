@@ -28,6 +28,17 @@ describe("serializeMirror", () => {
       chunks: [],
     });
   });
+
+  it("omits the graph field entirely when not provided (unchanged wire shape for existing callers)", () => {
+    const bundle = serializeMirror(new Uint8Array([1]), new Uint8Array([2]), new Uint8Array([3]));
+    expect(bundle).not.toHaveProperty("graph");
+  });
+
+  it("includes a sealed graph field when provided", () => {
+    const graph = { cipher: [1, 2, 3], salt: [4, 5] };
+    const bundle = serializeMirror(new Uint8Array([1]), new Uint8Array([2]), new Uint8Array([3]), [], [], graph);
+    expect(bundle.graph).toEqual(graph);
+  });
 });
 
 describe("pushMirror", () => {

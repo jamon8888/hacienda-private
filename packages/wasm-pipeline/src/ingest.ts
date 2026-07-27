@@ -5,16 +5,19 @@ import { chunkExtraction, withChunking, chunkCitation, chunkPage, chunkBoundingB
 import { embedChunks } from "./embed";
 import { detectPii, listPiiTypes } from "./ner";
 import { buildIndex, serializeIndex, type IndexedChunk } from "./rag";
-import { buildRedaction, sealVault, type RedactionEntry } from "./redact";
-import { pushMirror, serializeMirrorToBytes } from "./mirror";
+import { buildRedaction, sealVault, sealPayload, type RedactionEntry } from "./redact";
+import { pushMirror, serializeMirrorToBytes, type MirrorGraph } from "./mirror";
 import { detectCapabilities } from "./capabilities";
 import { selectScenario, type ModelScenario } from "./scenario";
+import { extractEntityGraph, mergeEntityGraphs, type EntityGraph } from "./entity-graph";
 
 function runPiiWhenIdle(text: string, piiTypes: readonly string[], scenario: ModelScenario): Promise<PiiEntity[]> {
   const run = () => detectPii(text, piiTypes, scenario);
   const w =
     typeof window !== "undefined"
-      ? (window as Window & { requestIdleCallback?: (cb: () => void) => number })
+      ? (window as Window & {
+          requestIdleCallback?: (cb: () => void) => number;
+        })
       : undefined;
   if (w?.requestIdleCallback) {
     const ric = w.requestIdleCallback;
@@ -36,6 +39,10 @@ export interface IngestOptions {
   scopeToken: string;
   maxCharacters?: number;
   language?: string[];
+  // Opt-in entity-graph extraction (droit des affaires, etc. — see entity-graph.ts). Off by default:
+  // omitting this leaves ingestFolder's behavior and performance identical to before this existed.
+  // Pass a label list (e.g. DROIT_DES_AFFAIRES_LABELS) to enable it for a given vertical.
+  entityGraphLabels?: readonly string[];
 }
 
 export async function ingestFolder(
@@ -68,6 +75,10 @@ export async function ingestFolder(
   interface PiiTask {
     item: IndexedChunk;
     piiPromise: Promise<PiiEntity[]>;
+    // Runs on the same RAW (pre-redaction) chunk text as piiPromise, and must be read before
+    // t.item.text is overwritten with the redacted form below — this is the one window where a
+    // real entity value is in memory, the same one buildRedaction relies on.
+    entityGraphPromise?: Promise<EntityGraph>;
     index: number;
   }
   const piiTasks: PiiTask[] = [];
@@ -77,6 +88,9 @@ export async function ingestFolder(
     const piiPromise = scenario.deferPii
       ? runPiiWhenIdle(c.content, piiTypes, scenario)
       : detectPii(c.content, piiTypes, scenario);
+    const entityGraphPromise = options.entityGraphLabels
+      ? extractEntityGraph(c.content, folder.id, c.metadata.chunkIndex, options.entityGraphLabels)
+      : undefined;
     const entry: IndexedChunk = {
       docId: folder.id,
       chunkIndex: c.metadata.chunkIndex,
@@ -87,7 +101,7 @@ export async function ingestFolder(
       vector: v,
     };
     items.push(entry);
-    piiTasks.push({ item: entry, piiPromise, index: i });
+    piiTasks.push({ item: entry, piiPromise, entityGraphPromise, index: i });
   }
 
   await Promise.all(piiTasks.map((t) => t.piiPromise));
@@ -101,7 +115,23 @@ export async function ingestFolder(
   const db = await buildIndex(matter.id, items);
   const indexBytes = await serializeIndex(db);
   const sealed = await sealVault(allEntries, options.passphrase);
-  const payload = serializeMirrorToBytes(indexBytes, sealed.cipher, sealed.salt);
+
+  let graph: MirrorGraph | undefined;
+  if (options.entityGraphLabels) {
+    const graphs = await Promise.all(
+      piiTasks.map((t) => t.entityGraphPromise ?? Promise.resolve({ nodes: [], edges: [] })),
+    );
+    const merged = mergeEntityGraphs(graphs);
+    if (merged.nodes.length > 0 || merged.edges.length > 0) {
+      const sealedGraph = await sealPayload(merged, options.passphrase);
+      graph = {
+        cipher: Array.from(sealedGraph.cipher),
+        salt: Array.from(sealedGraph.salt),
+      };
+    }
+  }
+
+  const payload = serializeMirrorToBytes(indexBytes, sealed.cipher, sealed.salt, [], [], graph);
   await pushMirror(matter.id, payload, options.scopeToken);
 
   return { accepted: items.length };

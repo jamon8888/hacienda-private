@@ -100,11 +100,16 @@ export function rehydrate(redacted: string, entries: RedactionEntry[]): string {
   return out;
 }
 
-export async function sealVault(entries: RedactionEntry[], passphrase: string): Promise<SealedVault> {
+// Seals an arbitrary JSON-serializable payload with the same PBKDF2/AES-256-GCM scheme sealVault
+// uses (100k-iteration PBKDF2-SHA256 key derivation, 12-byte IV prefix, WebCrypto's default 16-byte
+// GCM tag appended) — reused by the entity-graph payload (packages/wasm-pipeline/src/entity-graph.ts),
+// which is exactly as sensitive as the PII vault (real entity names) and must be sealed identically,
+// not via a second crypto scheme. crates/xberg/src/text/browser_vault.rs decrypts this exact format.
+export async function sealPayload(payload: unknown, passphrase: string): Promise<SealedVault> {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const key = await deriveKey(passphrase, salt);
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const data = new TextEncoder().encode(JSON.stringify(entries));
+  const data = new TextEncoder().encode(JSON.stringify(payload));
   const cipherBuf = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv: iv as unknown as BufferSource },
     key,
@@ -115,6 +120,10 @@ export async function sealVault(entries: RedactionEntry[], passphrase: string): 
   cipher.set(iv, 0);
   cipher.set(cipherBody, 12);
   return { cipher, salt };
+}
+
+export async function sealVault(entries: RedactionEntry[], passphrase: string): Promise<SealedVault> {
+  return sealPayload(entries, passphrase);
 }
 
 export async function openVault(sealed: SealedVault, passphrase: string): Promise<RedactionEntry[]> {

@@ -29,6 +29,17 @@ export interface MirrorChunk {
   citation: string;
 }
 
+// Sealed entity-graph payload (packages/wasm-pipeline/src/entity-graph.ts's EntityGraph, sealed via
+// redact.ts's sealPayload — same PBKDF2/AES-256-GCM scheme as `vault`/`vaultSalt`). Optional: only
+// present once the entity-graph extraction pass is wired into ingestFolder. Unknown top-level keys
+// are already ignored by the Rust legacy-bundle parser (crates/xberg-rag/src/legacy.rs's
+// RawBundle/RawChunk only declare `version`/`chunks`), so adding this field needs no Rust change —
+// it travels as an opaque blob until a future `graph_query` MCP tool decrypts it.
+export interface MirrorGraph {
+  cipher: number[];
+  salt: number[];
+}
+
 export interface MirrorBundle {
   version: 2;
   embedding_identity: string;
@@ -40,6 +51,7 @@ export interface MirrorBundle {
   vaultSalt: number[];
   pii: MirrorPiiSpan[]; // server answers list_pii from this
   chunks: MirrorChunk[]; // server answers rag_query from this (cited)
+  graph?: MirrorGraph;
 }
 
 export function serializeMirror(
@@ -48,6 +60,7 @@ export function serializeMirror(
   vaultSalt: Uint8Array,
   pii: MirrorPiiSpan[] = [],
   chunks: MirrorChunk[] = [],
+  graph?: MirrorGraph,
 ): MirrorBundle {
   return {
     version: 2,
@@ -57,6 +70,7 @@ export function serializeMirror(
     vaultSalt: Array.from(vaultSalt),
     pii,
     chunks,
+    ...(graph ? { graph } : {}),
   };
 }
 
@@ -66,8 +80,9 @@ export function serializeMirrorToBytes(
   vaultSalt: Uint8Array,
   pii: MirrorPiiSpan[] = [],
   chunks: MirrorChunk[] = [],
+  graph?: MirrorGraph,
 ): Uint8Array {
-  const bundle = serializeMirror(index, vault, vaultSalt, pii, chunks);
+  const bundle = serializeMirror(index, vault, vaultSalt, pii, chunks, graph);
   return new TextEncoder().encode(JSON.stringify(bundle));
 }
 
