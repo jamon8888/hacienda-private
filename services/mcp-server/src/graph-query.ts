@@ -247,6 +247,12 @@ export function queryGraph(
   try {
     const limit = Math.min(Math.max(opts.limit ?? 50, 1), 500);
     if (opts.fromLabel !== undefined) {
+      if (opts.nodeType !== undefined || opts.labelContains !== undefined) {
+        // traverse() has no filter parameters — silently ignoring nodeType/labelContains here
+        // would give a caller who combined them with fromLabel an unfiltered traversal instead
+        // of the filtered one they asked for, with no indication anything was dropped.
+        throw new AppError("bad_request", "from_label cannot be combined with node_type or label_contains");
+      }
       const maxHops = Math.min(Math.max(opts.maxHops ?? 2, 1), 6);
       return traverse(db, opts.fromLabel, maxHops, limit);
     }

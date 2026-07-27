@@ -128,4 +128,18 @@ describe("queryGraph", () => {
     expect(() => queryGraph(sealed, PASSPHRASE, { fromLabel: "Jean Dupont", maxHops: 999, limit: 999 })).not.toThrow();
     expect(() => queryGraph(sealed, PASSPHRASE, { fromLabel: "Jean Dupont", maxHops: 0, limit: 0 })).not.toThrow();
   });
+
+  it("rejects combining fromLabel with nodeType instead of silently ignoring the filter", () => {
+    const sealed = sealedSample();
+    expect(() => queryGraph(sealed, PASSPHRASE, { fromLabel: "Jean Dupont", nodeType: "societe" })).toThrow(
+      /from_label cannot be combined/,
+    );
+  });
+
+  it("rejects combining fromLabel with labelContains instead of silently ignoring the filter", () => {
+    const sealed = sealedSample();
+    expect(() => queryGraph(sealed, PASSPHRASE, { fromLabel: "Jean Dupont", labelContains: "dupont" })).toThrow(
+      /from_label cannot be combined/,
+    );
+  });
 });
