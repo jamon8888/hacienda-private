@@ -26,7 +26,10 @@ fn main() -> rusqlite::Result<()> {
         let init: SqliteExtensionInit = std::mem::transmute(sqlite_vec::sqlite3_vec_init as *const ());
         rusqlite::ffi::sqlite3_auto_extension(Some(init))
     };
-    assert_eq!(rc, 0, "sqlite3_auto_extension failed to register sqlite-vec (code {rc})");
+    assert_eq!(
+        rc, 0,
+        "sqlite3_auto_extension failed to register sqlite-vec (code {rc})"
+    );
 
     let db = rusqlite::Connection::open_in_memory()?;
 
