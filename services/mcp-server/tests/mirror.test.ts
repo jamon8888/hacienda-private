@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AppError } from "../src/error.js";
@@ -90,6 +90,62 @@ describe("MirrorStore", () => {
     const result = await store.loadMirror("m");
     expect(result.loaded).toBe(false);
     expect(result.reason).toContain("unexpected bundle shape");
+  });
+
+  it("rejects a bundle with a malformed graph field", async () => {
+    const store = new MirrorStore(dir);
+    store.saveMirror(
+      "m",
+      Buffer.from(
+        JSON.stringify({
+          version: 2,
+          embedding_identity: SHARED_EMBEDDING_IDENTITY,
+          index: [1, 2, 3],
+          vault: [4, 5, 6],
+          vaultSalt: [7, 8],
+          pii: [],
+          chunks: [],
+          graph: { cipher: "not-an-array", salt: [1] },
+        }),
+      ),
+    );
+
+    const result = await store.loadMirror("m");
+    expect(result.loaded).toBe(false);
+    expect(result.reason).toContain("malformed graph");
+  });
+
+  it("accepts and round-trips a bundle carrying a sealed entity graph", async () => {
+    const store = new MirrorStore(dir);
+    store.saveMirror(
+      "m",
+      Buffer.from(
+        JSON.stringify({
+          version: 2,
+          embedding_identity: SHARED_EMBEDDING_IDENTITY,
+          index: [1, 2, 3],
+          vault: [4, 5, 6],
+          vaultSalt: [7, 8],
+          pii: [],
+          chunks: [],
+          graph: { cipher: [10, 20, 30], salt: [40, 50] },
+        }),
+      ),
+    );
+
+    const result = await store.loadMirror("m");
+    expect(result.loaded).toBe(true);
+    const raw = JSON.parse(readFileSync(join(dir, "m", "bundle.json"), "utf8")) as {
+      graph?: { cipher: number[]; salt: number[] };
+    };
+    expect(raw.graph).toEqual({ cipher: [10, 20, 30], salt: [40, 50] });
+  });
+
+  it("omitting graph is unaffected — existing bundles without it still load", async () => {
+    const store = new MirrorStore(dir);
+    store.saveMirror("m", bundle("no graph here"));
+    const result = await store.loadMirror("m");
+    expect(result.loaded).toBe(true);
   });
 
   function bundle(text: string) {

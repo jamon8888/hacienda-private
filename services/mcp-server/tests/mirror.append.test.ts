@@ -55,6 +55,36 @@ describe("MirrorStore.appendMirror", () => {
     expect(bundle.vaultSalt).toEqual([3, 4]);
   });
 
+  it("preserves the sealed entity graph when appending to an existing browser mirror bundle", async () => {
+    const mirror = makeMirror();
+    mirror.saveMirror(
+      "m1",
+      Buffer.from(
+        JSON.stringify({
+          version: 2,
+          embedding_identity: SHARED_EMBEDDING_IDENTITY,
+          index: [1],
+          vault: [2],
+          vaultSalt: [3, 4],
+          pii: [],
+          chunks: [],
+          graph: { cipher: [9, 9, 9], salt: [1, 1] },
+        }),
+      ),
+    );
+
+    mirror.appendMirror("m1", {
+      pii: [{ doc_id: "d1", kind: "person", start: 0, end: 8, token: "PERSON_1" }],
+      chunks: [{ doc_id: "d1", chunk_index: 0, text: "redacted chunk", score: 1, citation: "d1#0" }],
+    });
+
+    await mirror.loadMirror("m1");
+    const bundle = JSON.parse(readFileSync(join(dirs[0]!, "m1", "bundle.json"), "utf8")) as {
+      graph?: { cipher: number[]; salt: number[] };
+    };
+    expect(bundle.graph).toEqual({ cipher: [9, 9, 9], salt: [1, 1] });
+  });
+
   it("merges a second document's data without dropping the first", async () => {
     const mirror = makeMirror();
     mirror.appendMirror("m1", {
