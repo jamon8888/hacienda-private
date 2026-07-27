@@ -237,7 +237,7 @@ export class MirrorStore {
     // if present it must have the expected shape — fail closed rather than silently forwarding a
     // malformed blob a future graph_query tool would then fail to decrypt.
     const graph = (parsed as MirrorBundle).graph;
-    if (graph !== undefined && (!Array.isArray(graph.cipher) || !Array.isArray(graph.salt))) {
+    if (graph != null && (!Array.isArray(graph.cipher) || !Array.isArray(graph.salt))) {
       throw new AppError("store", `mirror for matter ${matterId} has a malformed graph field`);
     }
     return parsed as MirrorBundle;

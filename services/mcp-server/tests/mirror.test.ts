@@ -115,6 +115,28 @@ describe("MirrorStore", () => {
     expect(result.reason).toContain("malformed graph");
   });
 
+  it("rejects a bundle with graph explicitly set to null without throwing an uncaught TypeError", async () => {
+    const store = new MirrorStore(dir);
+    store.saveMirror(
+      "m",
+      Buffer.from(
+        JSON.stringify({
+          version: 2,
+          embedding_identity: SHARED_EMBEDDING_IDENTITY,
+          index: [1, 2, 3],
+          vault: [4, 5, 6],
+          vaultSalt: [7, 8],
+          pii: [],
+          chunks: [],
+          graph: null,
+        }),
+      ),
+    );
+
+    const result = await store.loadMirror("m");
+    expect(result.loaded).toBe(true);
+  });
+
   it("accepts and round-trips a bundle carrying a sealed entity graph", async () => {
     const store = new MirrorStore(dir);
     store.saveMirror(
